@@ -6,9 +6,9 @@ project context; keep it accurate.
 ## 1. Project purpose
 
 Provena is an AI-assisted digital investigation management platform (university
-project: Software Engineering + AI). It centralizes the investigation lifecycle —
-cases, evidence, chain of custody, explainable analysis, human validation,
-reporting — while preserving evidence integrity, traceability, and human oversight.
+project: Software Engineering + AI). It centralizes the investigation lifecycle
+(cases, evidence, chain of custody, explainable analysis, human validation,
+reporting) while preserving evidence integrity, traceability, and human oversight.
 
 ## 2. Project constraints (non-negotiable)
 
@@ -80,6 +80,8 @@ sample-data/         # synthetic demo data only (see its README)
   keep `lint`, `typecheck`, and `build` green.
 - Update `README.md` / `docs/*` whenever you make an architectural or
   behavior-changing modification. Never present planned features as implemented.
+- Update Mermaid diagrams when the architecture materially changes. Prefer
+  Mermaid (text-based, GitHub-rendered, version-controlled) over binary images.
 
 ## 7. Dependencies and Git
 
@@ -96,3 +98,11 @@ sample-data/         # synthetic demo data only (see its README)
   architectural decisions (monolith, deterministic AI pipeline, Postgres) —
   raise them with the user first.
 - Do not expand scope beyond what is requested.
+
+## 9. Writing convention: no em dashes
+
+Never use the em dash character (Unicode U+2014) in project-authored
+text: docs, code comments, UI copy, commit messages, seed data. Use commas,
+periods, colons, semicolons, parentheses, or hyphens instead. Rewrite the
+sentence if substitution reads awkwardly. This rule does not apply to
+third-party dependency files.
