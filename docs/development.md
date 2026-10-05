@@ -61,6 +61,8 @@ The backend needs no database to start: `/api/health` reports
 | `CORS_ORIGINS`        | Backend | `http://localhost:5173`                        |
 | `SECRET_KEY`          | Backend | dev-only default; set a real value if shared   |
 | `SEED_DEV_PASSWORD`   | Seed    | `provena-dev` (local development only)         |
+| `EVIDENCE_STORAGE_ROOT` | Backend | `./evidence-storage` (`/evidence` in Compose) |
+| `EVIDENCE_MAX_UPLOAD_BYTES` | Backend | `104857600` (100 MiB)                    |
 | `VITE_API_URL`        | Frontend| `http://localhost:8000` (dev proxy covers `/api` anyway) |
 
 See `.env.example`. Never commit `.env` or any secrets.
@@ -72,6 +74,9 @@ python -m pytest                     # from backend/ (SQLite-backed, no Postgres
 npm run lint && npm run typecheck    # from frontend/
 npm run build                         # from frontend/ (production build)
 ```
+
+Backend evidence tests override `EVIDENCE_STORAGE_ROOT` with a temporary
+directory, so test uploads never touch real storage.
 
 CI (`.github/workflows/ci.yml`) runs backend tests plus frontend
 lint and build on every push/PR.
@@ -89,6 +94,16 @@ alembic revision --autogenerate -m "describe change"
 
 Backend tests use throwaway SQLite databases; Alembic remains the only
 schema-management strategy for PostgreSQL.
+
+## Evidence storage
+
+- Local filesystem storage under `EVIDENCE_STORAGE_ROOT`. Files are addressed
+  by generated internal keys; the database holds digests and metadata.
+- Uploads are capped by `EVIDENCE_MAX_UPLOAD_BYTES` (default 100 MiB) and
+  empty files are rejected.
+- In Docker Compose, the API service mounts the `provena_evidence` volume at
+  `/evidence`. Runtime uploads are git-ignored; synthetic demo logs live in
+  `sample-data/` and can be registered as evidence for walkthroughs.
 
 ## PostgreSQL ports
 

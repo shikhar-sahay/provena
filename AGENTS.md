@@ -48,8 +48,8 @@ backend/app/
   api/               # routers (mounted in api/router.py with /api prefix)
   core/              # config, errors, shared utilities
   db/                # engine, session, Base
-  modules/           # future domain modules: auth, users, cases, evidence,
-                     # custody, findings, audit, reports
+  modules/           # domain modules: auth, users, investigations, evidence,
+                     # audit (implemented); findings, reports (planned)
   ai/                # future analysis: extraction, correlation, reasoning,
                      # scoring, recommendations, reporting
   main.py            # create_app() + app
@@ -68,8 +68,14 @@ sample-data/         # synthetic demo data only (see its README)
   styling. API base URL from `VITE_API_URL` (dev proxy for `/api` in
   `vite.config.ts`). No unnecessary dependencies.
 - **Database:** PostgreSQL; schema changes via Alembic (`backend/alembic/`).
-  Planned default hash for evidence integrity is SHA-256. Do not invent
+  Evidence integrity uses SHA-256. Do not invent
   cryptographic/security mechanisms.
+- **Evidence:** only `app/modules/evidence/storage.py` touches the evidence
+  directory; files are stored under generated keys, never original filenames.
+  Storage keys and paths never appear in API responses. Baseline digests,
+  uploaders, and registration timestamps are immutable. Custody and audit
+  records are append-only with no update/delete endpoints. See
+  `docs/evidence-integrity.md`.
 - **Security/forensics:** Never commit `.env`, uploads, evidence, DB dumps,
   models, venvs, build artifacts. Real investigative evidence must never enter
   the repo. Never describe the project as certified forensic software.

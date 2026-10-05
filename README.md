@@ -27,8 +27,9 @@ human investigators validating findings before anything reaches a report.
 ## Current implementation status
 
 Working end-to-end slice: **authentication, users and roles, investigation
-management with team membership, audit logging, and a polished web UI**.
-Evidence handling and AI analysis are planned, not implemented.
+management with team membership, forensic evidence with SHA-256 integrity and
+chain of custody, audit logging, timelines, and a polished web UI**.
+AI analysis is planned, not implemented.
 
 ### Implemented now
 
@@ -41,15 +42,19 @@ Evidence handling and AI analysis are planned, not implemented.
 - Lifecycle rules: close sets `closed_at`, reopen clears it, archived work is
   read-only for non-admins
 - Append-only audit log with per-investigation history in the UI
-- Dashboard, investigation list, creation form, detail view with editing,
-  team management, and audit timeline
-- PostgreSQL persistence via Alembic migrations; 32 backend tests
+- Evidence registration with multipart upload and server-side SHA-256 baselines
+- Explicit integrity verification (`verified`, `mismatch`, `unavailable`)
+  with persistent verification history
+- Append-only chain of custody with transfers and current-holder tracking
+- Evidence, investigation, and custody timelines assembled from real records
+- Local evidence storage outside the repo, configurable size limits
+- Dashboard, investigation workspace (Overview, Evidence, Timeline, Custody,
+  Audit Log), evidence detail with integrity/custody sections
+- PostgreSQL persistence via Alembic migrations; 56 backend tests
 
 ### Planned
 
-- Evidence registration, upload, metadata, SHA-256 integrity verification
-- Chain of custody
-- Investigator findings and notes, investigation timeline
+- Investigator findings and notes
 - Explainable AI analysis: extraction, correlation, rule-based reasoning,
   weighted confidence scoring, recommendations
 - Investigator validation of AI findings, AI-assisted report generation
@@ -88,8 +93,9 @@ flowchart TB
     SPA -->|"HTTP /api/*"| API["FastAPI modular monolith"]
     API --> Auth["Auth / Users (implemented)"]
     API --> Inv["Investigations + Membership (implemented)"]
+    API --> Ev["Evidence + Integrity + Custody (implemented)"]
     API --> Audit["Audit log (implemented)"]
-    API --> PlannedBE["Evidence, Custody, Findings, Reports (planned)"]
+    API --> PlannedBE["Findings, Reports (planned)"]
     API --> AI["AI investigation engine, in-process (planned)"]
     API --> PG[("PostgreSQL")]
     style PlannedBE fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
@@ -111,19 +117,20 @@ flowchart LR
     I --> J[Archive Investigation]
 ```
 
-Create, Assign Team, Validation, and Archive are implemented; the evidence
-and analysis stages are planned.
+Create, Assign Team, Register Evidence, Verify Integrity, Maintain Custody,
+Validation, and Archive are implemented; analysis, AI insights, and report
+generation are planned.
 
 ## Repository structure
 
 ```text
 provena/
-├── frontend/        # React SPA: login, shell, dashboard, investigations
+├── frontend/        # React SPA: login, shell, dashboard, investigation workspace
 │   └── src/{api,auth,components,pages}/
 ├── backend/         # FastAPI modular monolith
-│   └── app/{api,core,db,modules/{auth,users,investigations,audit},ai}
-├── docs/            # architecture.md, ai-architecture.md, development.md
-├── sample-data/     # synthetic demo data policy (no real evidence, ever)
+│   └── app/{api,core,db,modules/{auth,users,investigations,evidence,audit},ai}
+├── docs/            # architecture.md, ai-architecture.md, development.md, evidence-integrity.md
+├── sample-data/     # synthetic exfiltration-scenario logs (fictional, committable)
 ├── .github/         # CI workflow
 ├── .env.example     # safe example config (never commit .env)
 ├── AGENTS.md        # instructions for AI coding agents
@@ -178,7 +185,7 @@ and records an audit event.
 ## Testing
 
 ```bash
-python -m pytest                     # from backend/ (32 tests, SQLite-backed)
+python -m pytest                     # from backend/ (56 tests, SQLite-backed)
 npm run lint && npm run typecheck    # from frontend/
 npm run build                         # from frontend/
 ```
@@ -188,6 +195,7 @@ CI runs backend tests plus frontend lint and build on every push/PR.
 ## Project documentation
 
 - `docs/architecture.md`: system design, auth/RBAC, domain model, diagrams
+- `docs/evidence-integrity.md`: ingestion, storage, verification, custody
 - `docs/ai-architecture.md`: hybrid AI design, explainability, course mapping
 - `docs/development.md`: setup, seed, migrations, ports, troubleshooting
 - `AGENTS.md`: conventions for AI coding agents working in this repo

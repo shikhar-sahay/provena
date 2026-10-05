@@ -1,9 +1,9 @@
 # AI Architecture
 
 > Status: architecture and design intent. **No AI analysis code is implemented
-> yet.** The platform slice that exists today (auth, investigations, audit) is
-> the foundation the AI layer will build on. Nothing below should be read as
-> working functionality.
+> yet.** The implemented platform slice (auth, investigations, evidence with
+> integrity and custody, audit) is the foundation the AI layer will build on.
+> Nothing below should be read as working functionality.
 
 ## The pipeline (planned)
 
@@ -42,6 +42,38 @@ The boundary is deliberate: everything that determines investigative truth
 lives in the explainable block; the generative block only turns
 already-validated findings into readable prose. Human validation happens
 **before** any generative step.
+
+## Evidence foundation (implemented) feeds the pipeline (planned)
+
+The evidence layer now provides what the future AI milestone will consume:
+
+- stable evidence identifiers (`E-001`) that findings can cite,
+- metadata, timestamps, source provenance, and original filenames,
+- evidence types (`log`, `network`, ...) for routing to the right parsers,
+- integrity state per item, plus controlled content access through the
+  storage service (`app/modules/evidence/storage.py`),
+- custody history showing how each item was handled.
+
+The intended consumption order is therefore:
+
+```mermaid
+flowchart LR
+    V[Verified evidence] --> P[Processing / Normalization]
+    P --> X[Artifact Extraction]
+    X --> C[Correlation]
+    C --> R[Rule-Based Reasoning]
+    R --> S[Confidence]
+    S --> Rec[Recommendations]
+    Rec --> H[Human Validation]
+    H --> L[LLM Report Generation]
+```
+
+One principle governs this handoff: **AI analysis should prefer evidence
+whose integrity state is known.** A `mismatch` or `unavailable` item must stay
+visible to investigators and must never be silently consumed as if it were
+sound. Verification status travels with the evidence into processing, and the
+synthetic logs in `sample-data/` exist so the first extraction work has
+realistic, committable input.
 
 ## A. Why Provena uses a hybrid AI architecture
 
