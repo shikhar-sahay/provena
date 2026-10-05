@@ -1,0 +1,42 @@
+# Local development stack: Postgres + API + Vite dev server.
+# The database is the only stateful service; everything else runs from source.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: provena
+      POSTGRES_PASSWORD: provena
+      POSTGRES_DB: provena
+    ports:
+      - "5432:5432"
+    volumes:
+      - provena_pgdata:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg2://provena:provena@db:5432/provena
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host --port 5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  provena_pgdata:
