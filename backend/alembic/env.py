@@ -13,6 +13,11 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.session import Base
 
+# Import all models so autogenerate sees every table.
+import app.modules.audit.models  # noqa: F401
+import app.modules.investigations.models  # noqa: F401
+import app.modules.users.models  # noqa: F401
+
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

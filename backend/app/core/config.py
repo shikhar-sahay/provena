@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     database_url: str = ""
     # Comma-separated origins allowed for browser CORS in development.
     cors_origins: str = "http://localhost:5173"
+    # Signing key for JWT access tokens. The default is development-only:
+    # set SECRET_KEY in real deployments (see .env.example).
+    secret_key: str = "local-dev-only-secret-key-not-for-production"
+    # Access token lifetime in minutes.
+    access_token_expire_minutes: int = 480
 
 
 @lru_cache

@@ -1,12 +1,12 @@
 """Database foundation: engine, session factory, declarative base.
 
-No application tables are defined yet. Future domain modules
-(auth, cases, evidence, ...) will add models under ``app/modules/``
-and import ``Base`` from here.
+Domain modules add models under ``app/modules/`` and import ``Base`` from here.
 """
 
+from collections.abc import Iterator
+
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
@@ -39,3 +39,14 @@ def check_database() -> dict:
         return {"configured": True, "reachable": True}
     except Exception:
         return {"configured": True, "reachable": False}
+
+
+def get_db() -> Iterator[Session]:
+    """FastAPI dependency yielding a database session per request."""
+    if SessionLocal is None:
+        raise RuntimeError("DATABASE_URL is not configured.")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
