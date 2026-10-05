@@ -84,7 +84,7 @@ provena/
 
 ```bash
 cp .env.example .env        # adjust if needed; .env is git-ignored
-docker compose up --build   # db :5432, api :8000, web :5173
+docker compose up --build   # db :5433, api :8000, web :5173
 ```
 
 Or run services individually (see `docs/development.md`):

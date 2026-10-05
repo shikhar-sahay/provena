@@ -8,7 +8,7 @@ Python 3.13+, Node 22+, Docker + Docker Compose.
 
 ```bash
 cp .env.example .env        # .env is git-ignored; adjust values if needed
-docker compose up --build   # db :5432, api :8000, web :5173
+docker compose up --build   # db :5433, api :8000, web :5173
 ```
 
 Open `http://localhost:5173` (frontend) and
@@ -34,7 +34,7 @@ The backend needs no database to start: `/api/health` reports
 | Variable       | Used by | Default (dev)                                              |
 | -------------- | ------- | ---------------------------------------------------------- |
 | `APP_ENV`      | Backend | `development`                                              |
-| `DATABASE_URL` | Backend | `postgresql+psycopg2://provena:provena@localhost:5432/provena` |
+| `DATABASE_URL` | Backend | `postgresql+psycopg2://provena:provena@localhost:5433/provena` |
 | `CORS_ORIGINS` | Backend | `http://localhost:5173`                                    |
 | `VITE_API_URL` | Frontend| `http://localhost:8000` (dev proxy covers `/api` anyway)   |
 
