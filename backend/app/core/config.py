@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     secret_key: str = "local-dev-only-secret-key-not-for-production"
     # Access token lifetime in minutes.
     access_token_expire_minutes: int = 480
+    # Root directory for stored evidence files. Runtime uploads only;
+    # never inside the Git repository working tree that gets committed.
+    evidence_storage_root: str = "./evidence-storage"
+    # Maximum accepted upload size in bytes (default 100 MiB).
+    evidence_max_upload_bytes: int = 100 * 1024 * 1024
 
 
 @lru_cache

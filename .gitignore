@@ -1,9 +1,9 @@
 # Secrets / local config
 .env
 
-# Evidence and case data must never be committed
+# Evidence and case data must never be committed (runtime storage only)
 uploads/
-evidence/
+evidence-storage/
 *.dump
 *.sql
 

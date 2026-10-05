@@ -19,8 +19,11 @@ services:
       APP_ENV: development
       DATABASE_URL: postgresql+psycopg2://provena:provena@db:5432/provena
       CORS_ORIGINS: http://localhost:5173
+      EVIDENCE_STORAGE_ROOT: /evidence
     ports:
       - "8000:8000"
+    volumes:
+      - provena_evidence:/evidence
     depends_on:
       - db
 
@@ -40,3 +43,4 @@ services:
 
 volumes:
   provena_pgdata:
+  provena_evidence:
