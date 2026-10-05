@@ -1,6 +1,13 @@
 // Shared presentation helpers: status/priority badges, role labels, form styles.
 
-import type { InvestigationStatus, Priority, Role } from "../api/client";
+import type {
+  CustodyAction,
+  EvidenceType,
+  IntegrityStatus,
+  InvestigationStatus,
+  Priority,
+  Role,
+} from "../api/client";
 
 export const STATUS_LABELS: Record<InvestigationStatus, string> = {
   open: "Open",
@@ -56,6 +63,62 @@ export function formatDate(value: string | null): string {
   if (!value) return "Not set";
   return new Date(value).toLocaleString();
 }
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let size = bytes / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(1)} ${units[unit]}`;
+}
+
+export const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
+  log: "Log",
+  document: "Document",
+  image: "Image",
+  network: "Network",
+  email: "Email",
+  device: "Device",
+  archive: "Archive",
+  other: "Other",
+};
+
+const INTEGRITY_STYLES: Record<IntegrityStatus, string> = {
+  not_verified: "bg-slate-800 text-slate-300 ring-slate-700",
+  verified: "bg-emerald-950 text-emerald-300 ring-emerald-800",
+  mismatch: "bg-red-950 text-red-300 ring-red-700",
+  unavailable: "bg-amber-950 text-amber-300 ring-amber-800",
+};
+
+export const INTEGRITY_LABELS: Record<IntegrityStatus, string> = {
+  not_verified: "Not verified",
+  verified: "Verified",
+  mismatch: "Integrity mismatch detected",
+  unavailable: "Unavailable",
+};
+
+export function IntegrityBadge({ status }: { status: IntegrityStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${INTEGRITY_STYLES[status]}`}
+    >
+      {INTEGRITY_LABELS[status]}
+    </span>
+  );
+}
+
+export const CUSTODY_ACTION_LABELS: Record<CustodyAction, string> = {
+  registered: "Registered",
+  transferred: "Transferred",
+  released_for_analysis: "Released for analysis",
+  returned_to_custody: "Returned to custody",
+  received: "Received",
+  other: "Other",
+};
 
 export const inputClass =
   "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none";

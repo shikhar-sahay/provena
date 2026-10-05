@@ -1,0 +1,9 @@
+# Synthetic file access log. Entirely fictional.
+2026-01-12 09:14:02 fs: m.okafor read \\fileserver\shared\Q4-roadmap.docx (48211 bytes)
+2026-01-12 12:07:22 fs: m.okafor read \\fileserver\shared\Q4-roadmap.docx (48211 bytes)
+2026-01-12 12:09:15 fs: m.okafor copied Q4-roadmap.docx to E: (48211 bytes)
+2026-01-13 02:19:31 fs: m.okafor read \\fileserver\restricted\vendor-pricing-2026.xlsx (193402 bytes)
+2026-01-13 02:22:08 fs: m.okafor copied vendor-pricing-2026.xlsx to E: (193402 bytes)
+2026-01-13 02:44:57 fs: m.okafor read \\fileserver\restricted\customer-list-2026.csv (88110 bytes)
+2026-01-13 02:45:40 fs: m.okafor copied customer-list-2026.csv to E: (88110 bytes)
+2026-01-14 10:11:03 fs: a.lindqvist read \\fileserver\shared\team-calendar.ics (12044 bytes)

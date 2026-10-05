@@ -1,17 +1,10 @@
-// Investigation detail: overview, permitted editing, team, audit history. The tab bar reserves space for future domains (Evidence, Findings, AI Analysis, Reports). Those tabs are visibly disabled, not fake screens.
+// Investigation overview tab: details, permitted editing, and team management.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useParams } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import { ApiError, api } from "../api/client";
-import type {
-  AuditEntry,
-  Investigation,
-  InvestigationStatus,
-  Priority,
-  User,
-} from "../api/client";
-import { useAuth } from "../auth/AuthContext";
+import type { Investigation, InvestigationStatus, Priority, User } from "../api/client";
 import {
   PriorityBadge,
   ROLE_LABELS,
@@ -23,89 +16,19 @@ import {
   inputClass,
   labelClass,
 } from "../components/ui";
-import { ErrorBlock } from "./DashboardPage";
+import type { WorkspaceContext } from "./InvestigationWorkspace";
 
 const STATUSES: InvestigationStatus[] = ["open", "in_progress", "under_review", "closed", "archived"];
 const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
 
-const ACTION_LABELS: Record<string, string> = {
-  INVESTIGATION_CREATED: "Investigation created",
-  INVESTIGATION_UPDATED: "Investigation updated",
-  INVESTIGATION_STATUS_CHANGED: "Status changed",
-  INVESTIGATION_MEMBER_ADDED: "Member added",
-  INVESTIGATION_MEMBER_REMOVED: "Member removed",
-};
-
-export default function InvestigationDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
-  const [inv, setInv] = useState<Investigation | null>(null);
-  const [audit, setAudit] = useState<AuditEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [detail, history] = await Promise.all([
-        api.getInvestigation(Number(id)),
-        api.investigationAudit(Number(id)),
-      ]);
-      setInv(detail);
-      setAudit(history);
-      setError(null);
-      setNotFound(false);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) setNotFound(true);
-      else setError(err instanceof ApiError ? err.message : "Could not load the investigation.");
-    }
-  }, [id]);
-
-  useEffect(() => {
-    setInv(null);
-    setAudit(null);
-    void load();
-  }, [load]);
-
-  if (notFound) {
-    return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-        <p className="font-medium">Investigation not found</p>
-        <p className="mt-1 text-sm text-slate-500">
-          It may not exist, or you may not have access to it.
-        </p>
-      </div>
-    );
-  }
-  if (error) return <ErrorBlock message={error} />;
-  if (!inv || !user) return <p className="text-sm text-slate-400">Loading investigation…</p>;
-
-  const canManage =
-    user.role === "admin" ||
-    user.id === inv.created_by.id ||
-    user.id === inv.lead_investigator.id;
-  const archivedLocked = inv.status === "archived" && user.role !== "admin";
+export default function InvestigationOverview() {
+  const { inv, setInv, canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
 
   return (
     <div>
-      <p className="font-mono text-xs text-slate-500">{inv.case_number}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{inv.title}</h1>
+      <div className="flex flex-wrap items-center gap-3">
         <StatusBadge status={inv.status} />
         <PriorityBadge priority={inv.priority} />
-      </div>
-
-      <div className="mt-4 flex gap-1 border-b border-slate-800 text-sm">
-        <span className="border-b-2 border-sky-500 px-3 py-2 font-medium text-sky-300">Overview</span>
-        {["Evidence", "Timeline", "Findings", "AI Analysis", "Reports"].map((tab) => (
-          <span
-            key={tab}
-            title="Planned, not implemented yet"
-            className="cursor-not-allowed px-3 py-2 text-slate-600"
-          >
-            {tab}
-          </span>
-        ))}
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -135,30 +58,6 @@ export default function InvestigationDetailPage() {
               </p>
             )
           )}
-
-          <section className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Audit history
-            </h2>
-            {!audit ? (
-              <p className="mt-3 text-sm text-slate-500">Loading history…</p>
-            ) : audit.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No audit events yet.</p>
-            ) : (
-              <ol className="mt-3 space-y-3">
-                {audit.map((entry) => (
-                  <li key={entry.id} className="border-l-2 border-slate-700 pl-3 text-sm">
-                    <p className="font-medium text-slate-200">
-                      {ACTION_LABELS[entry.action] ?? entry.action}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {entry.actor_username ?? "System"} · {formatDate(entry.created_at)}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
         </div>
 
         <div>

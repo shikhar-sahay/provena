@@ -1,0 +1,9 @@
+# Synthetic network activity log. Entirely fictional. Reserved documentation
+# addresses (RFC 5737) and example.com domains are used throughout.
+2026-01-12 12:10:02 net: ws-114 (192.0.2.14) https upload 48211 bytes to filesync.example.com
+2026-01-13 02:23:15 net: ws-114 (192.0.2.90) dns query archive-mirror.example.net
+2026-01-13 02:23:18 net: ws-114 (192.0.2.90) https upload 193402 bytes to 203.0.113.44
+2026-01-13 02:46:02 net: ws-114 (192.0.2.90) https upload 88110 bytes to 203.0.113.44
+2026-01-13 09:12:40 net: ws-207 (192.0.2.31) https download 12044 bytes from intranet.example.com
+2026-01-14 03:13:01 net: unknown host (198.51.100.7) ssh attempt on gateway, rejected
+2026-01-14 11:30:12 net: ws-114 (192.0.2.14) https upload 2048 bytes to filesync.example.com

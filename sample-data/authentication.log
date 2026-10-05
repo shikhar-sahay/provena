@@ -1,0 +1,12 @@
+# Synthetic authentication log. Entirely fictional. Reserved TEST-NET-1
+# addresses (RFC 5737) and example.com domains are used throughout.
+2026-01-12 08:02:11 auth: accepted login for m.okafor from 192.0.2.14
+2026-01-12 08:02:13 auth: session opened for m.okafor on ws-114
+2026-01-12 17:41:02 auth: failed login for m.okafor from 192.0.2.90
+2026-01-12 17:41:09 auth: failed login for m.okafor from 192.0.2.90
+2026-01-12 17:41:20 auth: accepted login for m.okafor from 192.0.2.90
+2026-01-13 02:14:55 auth: accepted login for m.okafor from 192.0.2.90
+2026-01-13 02:15:01 auth: session opened for m.okafor on ws-114
+2026-01-13 09:00:04 auth: accepted login for a.lindqvist from 192.0.2.31
+2026-01-14 03:12:44 auth: failed login for jdoe from 198.51.100.7
+2026-01-14 11:26:30 auth: accepted login for m.okafor from 192.0.2.14

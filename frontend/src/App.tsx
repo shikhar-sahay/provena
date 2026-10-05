@@ -4,11 +4,18 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import type { ReactNode } from "react";
 import Layout from "./components/Layout";
+import AuditTab from "./pages/AuditTab";
+import CustodyTab from "./pages/CustodyTab";
 import DashboardPage from "./pages/DashboardPage";
-import InvestigationDetailPage from "./pages/InvestigationDetailPage";
+import EvidenceDetailPage from "./pages/EvidenceDetailPage";
+import EvidenceTab from "./pages/EvidenceTab";
+import InvestigationOverview from "./pages/InvestigationOverview";
+import InvestigationWorkspace from "./pages/InvestigationWorkspace";
 import InvestigationsPage from "./pages/InvestigationsPage";
 import LoginPage from "./pages/LoginPage";
 import NewInvestigationPage from "./pages/NewInvestigationPage";
+import RegisterEvidencePage from "./pages/RegisterEvidencePage";
+import TimelineTab from "./pages/TimelineTab";
 import "./index.css";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -53,7 +60,15 @@ export default function App() {
             </RequireCreator>
           }
         />
-        <Route path="investigations/:id" element={<InvestigationDetailPage />} />
+        <Route path="investigations/:id" element={<InvestigationWorkspace />}>
+          <Route index element={<InvestigationOverview />} />
+          <Route path="evidence" element={<EvidenceTab />} />
+          <Route path="evidence/register" element={<RegisterEvidencePage />} />
+          <Route path="evidence/:eid" element={<EvidenceDetailPage />} />
+          <Route path="timeline" element={<TimelineTab />} />
+          <Route path="custody" element={<CustodyTab />} />
+          <Route path="audit" element={<AuditTab />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
