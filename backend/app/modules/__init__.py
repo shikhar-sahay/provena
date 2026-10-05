@@ -1,1 +1,1 @@
-"""Future domain modules (auth, users, cases, evidence, custody, findings, audit, reports)."""
+"""Domain modules: users, investigations, audit (planned: evidence, findings, reports)."""
