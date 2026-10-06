@@ -38,7 +38,7 @@ export function Avatar({ name }: { name: string }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-hover text-xs font-semibold text-ink2"
+      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-xs font-semibold text-ink shadow-xs"
     >
       {initials || "?"}
     </span>

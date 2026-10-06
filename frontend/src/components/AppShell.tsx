@@ -37,9 +37,8 @@ export default function AppShell() {
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <Link to="/" className="flex items-center gap-2.5 border-b border-line px-5 py-4">
-          <BrandMark size={24} />
-          <BrandLockup height={18} />
+        <Link to="/" className="flex items-center border-b border-line px-5 py-4" aria-label="Provena home">
+          <BrandLockup height={22} />
         </Link>
 
         <nav aria-label="Primary" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
@@ -100,59 +99,70 @@ export default function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur">
-          <div className="mx-auto flex h-13 max-w-6xl items-center gap-2 px-4 py-2 sm:px-6">
-            <Link to="/" className="shrink-0 lg:hidden" aria-label="Provena home">
-              <BrandMark size={22} />
-            </Link>
-            <nav aria-label="Primary" className="flex shrink-0 items-center gap-1 lg:hidden">
-              {NAV.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `rounded-md px-2 py-1.5 text-sm font-medium ${
-                      isActive ? "bg-hover text-ink" : "text-ink2"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-            <GlobalSearch />
-            {canCreate && (
-              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-                <span className="hidden sm:inline">New investigation</span>
-                <span className="sm:hidden">New</span>
-              </Button>
-            )}
-            <div className="lg:hidden">
-              <ThemeToggleCompact />
-            </div>
-            {user && (
-              <Menu
-                label="Account"
-                trigger={
-                  <button
-                    aria-label="Account menu"
-                    className="pv-transition flex cursor-pointer items-center gap-2 rounded-md p-1 hover:bg-hover"
+          <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center gap-2 lg:hidden">
+              <Link to="/" className="shrink-0" aria-label="Provena home">
+                <BrandMark size={22} />
+              </Link>
+              <nav aria-label="Primary" className="flex shrink-0 items-center gap-1">
+                {NAV.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `rounded-md px-2 py-1 text-sm font-medium ${
+                        isActive ? "bg-hover text-ink" : "text-ink2 hover:text-ink"
+                      }`
+                    }
                   >
-                    <Avatar name={user.username} />
-                  </button>
-                }
-                header={
-                  <div>
-                    <p className="truncate text-sm font-medium">{displayName(user)}</p>
-                    <p className="truncate text-xs text-ink3">{user.username}</p>
-                    <div className="mt-1.5">
-                      <RoleBadge role={user.role} />
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
+              <GlobalSearch />
+              {canCreate && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={() => setCreating(true)}
+                  className="h-8 shadow-xs"
+                >
+                  <span className="hidden sm:inline">New Investigation</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              )}
+              <div className="lg:hidden">
+                <ThemeToggleCompact />
+              </div>
+              {user && (
+                <Menu
+                  label="Account"
+                  trigger={
+                    <button
+                      aria-label="Account menu"
+                      className="pv-transition flex cursor-pointer items-center justify-center rounded-full p-0.5 hover:ring-2 hover:ring-line focus-visible:outline-none"
+                    >
+                      <Avatar name={user.username} />
+                    </button>
+                  }
+                  header={
+                    <div>
+                      <p className="truncate text-sm font-medium">{displayName(user)}</p>
+                      <p className="truncate text-xs text-ink3">{user.username}</p>
+                      <div className="mt-1.5">
+                        <RoleBadge role={user.role} />
+                      </div>
                     </div>
-                  </div>
-                }
-                items={[{ key: "logout", label: "Log out", icon: <LogOut size={14} />, onSelect: () => void onLogout() }]}
-              />
-            )}
+                  }
+                  items={[{ key: "logout", label: "Log out", icon: <LogOut size={14} />, onSelect: () => void onLogout() }]}
+                />
+              )}
+            </div>
           </div>
         </header>
 

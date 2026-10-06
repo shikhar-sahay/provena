@@ -156,10 +156,10 @@ runs use `localhost:5433` via `DATABASE_URL`.
 
 ## Docker workflow
 
-- `docker compose up --build` — full local stack.
-- `docker compose up db` — only Postgres (run API/web from source).
-- `docker compose down -v` — stop everything and delete the dev database volume.
-- `docker compose config` — validate the Compose file without starting anything.
+- `docker compose up --build`: full local stack.
+- `docker compose up db`: only Postgres (run API/web from source).
+- `docker compose down -v`: stop everything and delete the dev database volume.
+- `docker compose config`: validate the Compose file without starting anything.
 
 ## Local URLs
 
