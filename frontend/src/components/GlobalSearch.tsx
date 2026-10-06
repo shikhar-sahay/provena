@@ -55,7 +55,7 @@ export function GlobalSearch() {
   }
 
   return (
-    <div ref={rootRef} className="relative min-w-0 flex-1 sm:max-w-xs">
+    <div ref={rootRef} className="relative w-44 shrink-0 sm:w-60 md:w-64">
       <Search
         size={14}
         className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink3"
