@@ -44,11 +44,6 @@ export function formatBytes(bytes: number): string {
   return `${size.toFixed(1)} ${units[unit]}`;
 }
 
-export function shortDigest(digest: string, head = 12): string {
-  if (digest.length <= head + 4) return digest;
-  return `${digest.slice(0, head)}...${digest.slice(-4)}`;
-}
-
 export function displayName(user: { full_name: string; username: string }): string {
   return user.full_name || user.username;
 }

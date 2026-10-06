@@ -709,12 +709,7 @@ export function TimelineSpine({ entries }: { entries: TimelineEntry[] }) {
             aria-hidden="true"
             className="absolute top-1 -left-[5px] h-2.5 w-2.5 rounded-full border-2 border-surface bg-ink3"
           />
-          <p className="text-sm font-medium">
-            {entry.title}
-            {entry.evidence_number && (
-              <span className="ml-1.5 font-mono text-xs font-normal text-ink3">{entry.evidence_number}</span>
-            )}
-          </p>
+          <p className="text-sm font-medium">{entry.title}</p>
           {entry.detail && <p className="mt-0.5 text-[13px] text-ink2">{entry.detail}</p>}
           <p className="mt-0.5 text-xs text-ink3">
             {entry.actor_username ?? "System"} · {timeAgo(entry.occurred_at)}

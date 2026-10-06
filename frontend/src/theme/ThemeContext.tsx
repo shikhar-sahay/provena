@@ -10,6 +10,7 @@ export type ThemeChoice = "light" | "dark" | "system";
 const STORAGE_KEY = "provena-theme";
 
 function systemIsDark(): boolean {
+  if (typeof window.matchMedia !== "function") return true;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
