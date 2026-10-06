@@ -17,13 +17,6 @@ CONTENT = b"2026-01-14 03:12:44 auth: failed login for jdoe from 10.0.0.8\n"
 DIGEST = hashlib.sha256(CONTENT).hexdigest()
 
 
-@pytest.fixture()
-def storage_dir(tmp_path, monkeypatch):
-    target = tmp_path / "evidence-storage"
-    monkeypatch.setattr(settings, "evidence_storage_root", str(target))
-    return target
-
-
 def make_investigation(client, token, title="Exfiltration probe"):
     response = client.post(
         "/api/investigations", headers=auth_headers(token), json={"title": title}

@@ -15,6 +15,15 @@ from app.core.security import hash_password
 from app.db.session import Base, get_db
 from app.main import app
 from app.modules.users.models import Role, User
+from app.core.config import settings
+
+
+@pytest.fixture()
+def storage_dir(tmp_path, monkeypatch):
+    """Isolated evidence storage root so uploads never touch real storage."""
+    target = tmp_path / "evidence-storage"
+    monkeypatch.setattr(settings, "evidence_storage_root", str(target))
+    return target
 
 
 @pytest.fixture()
