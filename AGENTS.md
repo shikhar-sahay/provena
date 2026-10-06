@@ -64,9 +64,16 @@ sample-data/         # synthetic demo data only (see its README)
   `service.py`, `models.py` only as needed — do not create empty abstraction
   files to look "enterprise". Environment-based config in `app/core/config.py`;
   never hardcode credentials or URLs.
-- **Frontend:** Functional React components, TypeScript strict, Tailwind for
-  styling. API base URL from `VITE_API_URL` (dev proxy for `/api` in
-  `vite.config.ts`). No unnecessary dependencies.
+- **Frontend:** Functional React components, TypeScript strict, Tailwind v4
+  for styling. Design tokens live in `src/index.css` (`:root` light,
+  `.dark` overrides, utilities via `@theme inline`); do not scatter ad-hoc
+  colors. Approved monochrome brand in `frontend/public/brand/` (source pack
+  plus production copies); never recolor the logo. API base URL from
+  `VITE_API_URL` (dev proxy for `/api` in `vite.config.ts`). Auth state in
+  `AuthContext`, theme in `ThemeContext`, notifications in `ToastProvider`.
+  Shared primitives in `src/components/` (Button, Badge, Field, Dialog,
+  Drawer, Menu, Toast, states). Behavior tests under vitest (`npm test`).
+  No unnecessary dependencies.
 - **Database:** PostgreSQL; schema changes via Alembic (`backend/alembic/`).
   Evidence integrity uses SHA-256. Do not invent
   cryptographic/security mechanisms.

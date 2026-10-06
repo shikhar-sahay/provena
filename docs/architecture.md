@@ -103,12 +103,38 @@ Dashed boxes are planned modules. Everything else is implemented.
 | users           | Implemented | User model, admin creation, member listing      |
 | investigations  | Implemented | Lifecycle, team membership, authorization       |
 | evidence        | Implemented | Registration, storage, verification, custody, timelines |
+| dashboard       | Implemented | Scoped summary counts and recent activity       |
 | audit           | Implemented | Append-only application audit log               |
 | findings        | Planned     | Investigator notes, AI-finding validation       |
 | reports         | Planned     | Report generation from validated findings       |
 
 Each domain package exposes a router mounted in `app/api/router.py`. Domains
 communicate via direct Python calls (same process), not HTTP or queues.
+
+## Frontend interface (implemented)
+
+- React 19 + TypeScript + Tailwind v4 + React Router. All calls go through
+  `src/api/client.ts`; auth state lives in `AuthContext`, theme in
+  `ThemeContext`, notifications in `ToastProvider`.
+- Design tokens are CSS variables in `src/index.css` (`:root` for light,
+  `.dark` for dark) mapped to Tailwind utilities via `@theme inline`
+  (`bg-surface`, `text-ink`, `border-line`, semantic tones). No scattered
+  ad-hoc colors.
+- First-class light/dark/system themes, persisted in `localStorage`, applied
+  pre-paint by an inline script in `index.html`, following OS changes in
+  system mode, with `prefers-reduced-motion` respected.
+- Approved monochrome brand from `frontend/public/brand/provena-brand-pack/`;
+  production copies live in `frontend/public/brand/` (`mark-*.svg`,
+  `logo-*.svg`, theme-aware `favicon-*.svg`, PNG fallback, Apple touch icon).
+  The logo is never recolored by semantic colors.
+- Shell: compact sidebar (brand, Dashboard/Investigations, honest Planned
+  section, theme switch, user card) plus a topbar with global investigation
+  search, role-gated creation, and account menu. Dialogs for forms and
+  confirmations, a drawer for evidence registration, toasts for feedback,
+  skeletons/empty/error states on every async view. Findings, AI Analysis,
+  and Reports render as planned states, never fake content.
+- Behavior tests run under vitest (`npm test`): formatting, error semantics,
+  badges, theming, and sign-in validation.
 
 ## Evidence, integrity, and custody (implemented)
 

@@ -10,9 +10,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Pinned runner for reproducible builds; ubuntu-latest floats across releases.
+# Note: runs #4-6 (Oct 2026) failed with GitHub-hosted runner acquisition
+# errors ("job was not acquired by Runner of type hosted") plus an internal
+# server error. Those are GitHub infrastructure failures, not Provena failures.
+
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,7 +29,7 @@ jobs:
         working-directory: backend
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,6 +40,8 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - run: npm run lint
+        working-directory: frontend
+      - run: npm test
         working-directory: frontend
       - run: npm run build
         working-directory: frontend

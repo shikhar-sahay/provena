@@ -50,7 +50,10 @@ AI analysis is planned, not implemented.
 - Local evidence storage outside the repo, configurable size limits
 - Dashboard, investigation workspace (Overview, Evidence, Timeline, Custody,
   Audit Log), evidence detail with integrity/custody sections
-- PostgreSQL persistence via Alembic migrations; 56 backend tests
+- Light/dark/system themes, approved monochrome brand, global search,
+  dialogs, toasts, skeletons, and empty/error states throughout
+- PostgreSQL persistence via Alembic migrations; 64 backend tests,
+  16 frontend behavior tests
 
 ### Planned
 
@@ -74,7 +77,7 @@ in `docs/ai-architecture.md`.
 
 | Layer    | Choice                                                        |
 | -------- | ------------------------------------------------------------- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, React Router        |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Lucide icons, Vitest |
 | Backend  | Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2.0            |
 | Database | PostgreSQL 16 (Docker Compose for local dev)                  |
 | Auth     | bcrypt passwords, PyJWT bearer tokens                         |
@@ -125,44 +128,57 @@ generation are planned.
 
 ```text
 provena/
-├── frontend/        # React SPA: login, shell, dashboard, investigation workspace
-│   └── src/{api,auth,components,pages}/
+├── frontend/        # React SPA: themed shell, dashboard, investigation workspace
+│   └── src/{api,auth,components,lib,pages,theme}/
+│   └── public/brand/  # approved monochrome identity + production copies
 ├── backend/         # FastAPI modular monolith
-│   └── app/{api,core,db,modules/{auth,users,investigations,evidence,audit},ai}
+│   └── app/{api,core,db,modules/{auth,users,investigations,evidence,dashboard,audit},ai}
 ├── docs/            # architecture.md, ai-architecture.md, development.md, evidence-integrity.md
 ├── sample-data/     # synthetic exfiltration-scenario logs (fictional, committable)
-├── .github/         # CI workflow
+├── scripts/         # dev.ps1: canonical Windows local-development workflow
+├── .github/         # CI workflow (pinned ubuntu-24.04)
 ├── .env.example     # safe example config (never commit .env)
 ├── AGENTS.md        # instructions for AI coding agents
 └── docker-compose.yml
 ```
+
+## Interface
+
+The interface follows a restrained forensic visual language (monochrome-first,
+true-black dark surfaces, equally designed light theme) with the approved
+Provena mark: a geometric P with provenance nodes for lineage and custody.
+
+- Light, dark, and system themes with persistence and no first-paint flash
+- Compact shell: brand sidebar, global investigation search, role-gated
+  creation, account menu, theme control
+- Dashboard with live caseload figures from `GET /api/dashboard/summary`
+  (scoped counts, integrity issues, recent activity), never fabricated metrics
+- Investigation workspace: Overview, Evidence, Timeline, Custody, Audit Log;
+  Findings, AI Analysis, and Reports render as honest planned states
+- Evidence as a forensic record: baseline digest with copy, verification
+  stepper and history, custody flow, timeline, transfers via dialog
+- Dialogs, drawers, toasts, skeletons, empty/error states, keyboard support,
+  focus management, reduced-motion support, responsive layouts
 
 ## Local development
 
 Prerequisites: Python 3.13+, Node 22+, Docker + Docker Compose. Zero budget
 required; everything runs locally.
 
-```bash
-cp .env.example .env
-docker compose up --build     # db :5433, api :8000, web :5173
+Canonical Windows workflow from the repository root:
+
+```powershell
+./scripts/dev.ps1 setup    # db, venv, dependencies, migrations, user seed
+./scripts/dev.ps1 demo     # optional synthetic demo investigation
+./scripts/dev.ps1 api      # backend on :8000 (new terminal)
+./scripts/dev.ps1 web      # frontend on :5173 (new terminal)
 ```
 
-With the database up, migrate and seed (from `backend/`):
+Full-container alternative: `docker compose up --build` (db :5433,
+api :8000, web :5173). See `docs/development.md` for the manual equivalent,
+environment variables, and troubleshooting.
 
-```bash
-alembic upgrade head
-python -m app.seed
-```
-
-Or run services from source (see `docs/development.md` for details):
-
-```bash
-pip install -r backend/requirements.txt
-uvicorn app.main:app --reload          # from backend/
-npm install && npm run dev             # from frontend/
-```
-
-Open `http://localhost:5173` and log in. Health check:
+Open `http://localhost:5173` and sign in. Health check:
 `GET http://localhost:8000/api/health`.
 
 ## Database setup
@@ -175,22 +191,30 @@ outside tests. Verify with `alembic upgrade head` followed by
 
 ## Authentication and development users
 
-Log in with username or email. The seed (`python -m app.seed`, idempotent)
-creates `admin`, `investigator`, `analyst`, and `custodian` (password
-`provena-dev` by default, overridable via `SEED_DEV_PASSWORD`;
-**local development only**). Admins can create further users via
-`POST /api/users`. Tokens expire after 8 hours; logout discards the token
-and records an audit event.
+Log in with username or email. The user seed (`python -m app.seed` from
+`backend/`, idempotent) creates `admin`, `investigator`, `analyst`, and
+`custodian` (password `provena-dev` by default, overridable via
+`SEED_DEV_PASSWORD`; **local development only**). The demo seed
+(`python -m app.seed_demo`) builds a populated fictional exfiltration
+investigation from `sample-data/` for walkthroughs. Admins can create
+further users via `POST /api/users`. Tokens expire after 8 hours; logout
+discards the token and records an audit event. An expired session signs
+the UI out automatically.
 
 ## Testing
 
-```bash
-python -m pytest                     # from backend/ (56 tests, SQLite-backed)
-npm run lint && npm run typecheck    # from frontend/
+```powershell
+python -m pytest                     # from backend/ (SQLite-backed)
+npm run lint                         # from frontend/
+npm run typecheck                    # from frontend/
+npm test                             # from frontend/ (vitest behavior tests)
 npm run build                         # from frontend/
 ```
 
-CI runs backend tests plus frontend lint and build on every push/PR.
+CI (pinned `ubuntu-24.04`) runs backend tests plus frontend lint, tests, and
+build on every push/PR. Recent runs #4-6 failed on GitHub-hosted runner
+acquisition and an internal server error; those are infrastructure failures,
+not Provena failures (see `docs/development.md`).
 
 ## Project documentation
 
