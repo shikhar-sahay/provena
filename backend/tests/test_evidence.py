@@ -71,6 +71,49 @@ def test_evidence_numbers_sequence_per_investigation(evidence, client):
     assert second["evidence_number"] == "E-002"
 
 
+def test_evidence_list_returns_items(evidence, client):
+    inv, first, token = evidence
+    response = client.get(
+        f"/api/investigations/{inv['id']}/evidence", headers=auth_headers(token)
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [e["evidence_number"] for e in body] == ["E-001"]
+    assert body[0]["current_holder"]["username"] == "investigator"
+    assert "storage_key" not in response.text
+
+
+def test_evidence_list_filters(evidence, client):
+    inv, first, token = evidence
+    upload(client, token, inv["id"], filename="report.pdf",
+           **{"title": "Report", "evidence_type": "document"})
+    client.post(
+        f"/api/investigations/{inv['id']}/evidence/{first['id']}/verify",
+        headers=auth_headers(token),
+    )
+
+    def listed(**params):
+        response = client.get(
+            f"/api/investigations/{inv['id']}/evidence",
+            headers=auth_headers(token),
+            params=params,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    assert {e["evidence_number"] for e in listed()} == {"E-001", "E-002"}
+    assert [e["evidence_number"] for e in listed(evidence_type="document")] == ["E-002"]
+    assert [e["evidence_number"] for e in listed(integrity_status="verified")] == ["E-001"]
+    assert [e["evidence_number"] for e in listed(integrity_status="not_verified")] == ["E-002"]
+    assert [e["evidence_number"] for e in listed(q="report")] == ["E-002"]
+    assert listed(q="no-such-thing") == []
+    assert client.get(
+        f"/api/investigations/{inv['id']}/evidence",
+        headers=auth_headers(token),
+        params={"evidence_type": "bogus"},
+    ).status_code == 422
+
+
 def test_member_analyst_can_view_and_verify(evidence, client, analyst, db_session):
     inv, item, token = evidence
     client.post(

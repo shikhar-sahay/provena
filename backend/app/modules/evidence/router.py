@@ -49,7 +49,7 @@ def list_evidence(
     db: Session = Depends(get_db),
 ):
     inv = _investigation(db, investigation_id, user)
-    return [_to_read(db, e) for e in service.list_evidence(db, inv, evidence_type, integrity, q)]
+    return [_to_read(db, e) for e in service.list_evidence(db, inv, evidence_type, integrity_status, q)]
 
 
 @router.post("", response_model=EvidenceRead, status_code=201)
