@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Provena">
+  <g fill="none" stroke="#0A0A0A" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M34 104V33L63 16L96 35V64L65 82H34"/>
+    <path d="M34 82V108"/>
+  </g>
+  <circle cx="63" cy="29" r="8" fill="#0A0A0A"/>
+  <circle cx="34" cy="82" r="8" fill="#0A0A0A"/>
+  <circle cx="34" cy="110" r="8" fill="#0A0A0A"/>
+</svg>

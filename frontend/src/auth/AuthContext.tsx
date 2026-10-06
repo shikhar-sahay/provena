@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // A 401 from any non-login call means the session expired elsewhere.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      localStorage.removeItem("provena_token");
+      setUser(null);
+    };
+    window.addEventListener("provena:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("provena:unauthorized", onUnauthorized);
+  }, []);
+
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}

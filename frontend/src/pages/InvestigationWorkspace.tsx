@@ -1,14 +1,18 @@
-// Investigation workspace: header plus tab navigation for the product framework.
+// Investigation workspace: case header, section tabs, and shared context.
 // Overview, Evidence, Timeline, Custody, and Audit Log are functional.
-// Findings, AI Analysis, and Reports are visibly marked planned.
+// Findings, AI Analysis, and Reports are honestly marked as planned.
 
 import { useCallback, useEffect, useState } from "react";
-import { NavLink, Outlet, useParams } from "react-router-dom";
+import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import { ApiError, api } from "../api/client";
 import type { Investigation } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { PriorityBadge, StatusBadge } from "../components/ui";
-import { ErrorBlock } from "./DashboardPage";
+import { Avatar } from "../components/Brand";
+import { PriorityBadge, StatusBadge } from "../components/Badge";
+import { EmptyState, ErrorState, Skeleton } from "../components/StateViews";
+import { actionErrorMessage } from "../lib/errors";
+import { displayName, timeAgo } from "../lib/format";
 
 export interface WorkspaceContext {
   inv: Investigation;
@@ -25,7 +29,11 @@ const TABS = [
   { to: "audit", label: "Audit Log", end: true },
 ];
 
-const PLANNED_TABS = ["Findings", "AI Analysis", "Reports"];
+const PLANNED_TABS = [
+  { label: "Findings", note: "Investigator findings arrive with the analysis milestone." },
+  { label: "AI Analysis", note: "Explainable analysis arrives with the analysis milestone." },
+  { label: "Reports", note: "Report generation arrives with the analysis milestone." },
+];
 
 export default function InvestigationWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -43,7 +51,7 @@ export default function InvestigationWorkspace() {
       setNotFound(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(true);
-      else setError(err instanceof ApiError ? err.message : "Could not load the investigation.");
+      else setError(actionErrorMessage(err, "Could not load the investigation."));
     }
   }, [id]);
 
@@ -54,16 +62,24 @@ export default function InvestigationWorkspace() {
 
   if (notFound) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-8 text-center">
-        <p className="font-medium">Investigation not found</p>
-        <p className="mt-1 text-sm text-slate-500">
-          It may not exist, or you may not have access to it.
-        </p>
+      <EmptyState
+        title="Investigation not found"
+        body="It may not exist, or you may not have access to it. Non-members see this page instead of a permission error."
+        action={<Link to="/investigations" className="text-sm font-medium text-accentink hover:underline">Back to investigations</Link>}
+      />
+    );
+  }
+  if (error) return <ErrorState body={error} onRetry={() => void load()} />;
+  if (!inv || !user) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
-  if (error) return <ErrorBlock message={error} />;
-  if (!inv || !user) return <p className="text-sm text-slate-400">Loading investigation…</p>;
 
   const canManage =
     user.role === "admin" ||
@@ -73,42 +89,77 @@ export default function InvestigationWorkspace() {
 
   return (
     <div>
-      <p className="font-mono text-xs text-slate-500">{inv.case_number}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">{inv.title}</h1>
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-[13px] text-ink3">
+        <Link to="/investigations" className="hover:text-ink2 hover:underline">
+          Investigations
+        </Link>
+        <ChevronRight size={13} aria-hidden="true" />
+        <span className="font-mono" aria-current="page">
+          {inv.case_number}
+        </span>
+      </nav>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="text-xl font-semibold tracking-tight">{inv.title}</h1>
         <StatusBadge status={inv.status} />
         <PriorityBadge priority={inv.priority} />
       </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink2">
+        <span>
+          Lead <span className="font-medium text-ink">{displayName(inv.lead_investigator)}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="flex -space-x-1.5">
+            {inv.members.slice(0, 4).map((m) => (
+              <span key={m.user.id} className="rounded-full ring-2 ring-canvas">
+                <Avatar name={m.user.username} />
+              </span>
+            ))}
+          </span>
+          {inv.members.length} {inv.members.length === 1 ? "member" : "members"}
+        </span>
+        <span>Updated {timeAgo(inv.updated_at)}</span>
+      </div>
 
-      <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-800 text-sm">
+      <div
+        role="tablist"
+        aria-label="Investigation sections"
+        className="mt-4 flex gap-0.5 overflow-x-auto border-b border-line text-sm"
+      >
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
             to={tab.to}
             end={tab.end}
+            role="tab"
             className={({ isActive }) =>
-              `px-3 py-2 ${
+              `pv-transition -mb-px shrink-0 border-b-2 px-3 py-2 font-medium whitespace-nowrap ${
                 isActive
-                  ? "border-b-2 border-sky-500 font-medium text-sky-300"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-ink text-ink"
+                  : "border-transparent text-ink2 hover:border-linestrong hover:text-ink"
               }`
             }
           >
             {tab.label}
           </NavLink>
         ))}
-        {PLANNED_TABS.map((label) => (
+        {PLANNED_TABS.map((tab) => (
           <span
-            key={label}
-            title="Planned, not implemented yet"
-            className="cursor-not-allowed px-3 py-2 text-slate-600"
+            key={tab.label}
+            role="tab"
+            aria-disabled="true"
+            title={tab.note}
+            className="flex shrink-0 cursor-not-allowed items-center gap-1.5 border-b-2 border-transparent px-3 py-2 whitespace-nowrap text-ink3"
           >
-            {label}
+            {tab.label}
+            <span className="rounded border border-line px-1 py-px text-[10px] font-medium tracking-wide uppercase">
+              Planned
+            </span>
           </span>
         ))}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-5">
         <Outlet context={{ inv, setInv, canManage, archivedLocked } satisfies WorkspaceContext} />
       </div>
     </div>

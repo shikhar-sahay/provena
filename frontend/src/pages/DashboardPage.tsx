@@ -1,25 +1,43 @@
-// Dashboard: counts and recent investigations derived from backend data.
+// Investigator dashboard: live caseload context from the summary endpoint.
+// Every figure derives from records the user may see; nothing is fabricated.
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, api } from "../api/client";
-import type { Investigation } from "../api/client";
-import { PriorityBadge, StatusBadge, formatDate } from "../components/ui";
+import { AlertTriangle, FileSearch, FolderKanban, Plus } from "lucide-react";
+import { api } from "../api/client";
+import type { DashboardSummary, Investigation } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { StatusBadge } from "../components/Badge";
+import { Button } from "../components/Button";
+import { NewInvestigationDialog } from "../components/NewInvestigationDialog";
+import { EmptyState, ErrorState, PageHeader, Skeleton } from "../components/StateViews";
+import { actionErrorMessage } from "../lib/errors";
+import { actionLabel } from "../lib/activity";
+import { displayName, timeAgo } from "../lib/format";
 
 export default function DashboardPage() {
-  const [items, setItems] = useState<Investigation[] | null>(null);
+  const { user } = useAuth();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [recent, setRecent] = useState<Investigation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const canCreate = user?.role === "admin" || user?.role === "investigator";
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .listInvestigations()
-      .then((data) => {
-        if (!cancelled) setItems(data);
+    Promise.all([api.dashboardSummary(), api.listInvestigations()])
+      .then(([data, investigations]) => {
+        if (cancelled) return;
+        setSummary(data);
+        setRecent(
+          [...investigations]
+            .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+            .slice(0, 5),
+        );
+        setError(null);
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof ApiError ? err.message : "Could not load dashboard.");
+        if (!cancelled) setError(actionErrorMessage(err, "Could not load the dashboard."));
       });
     return () => {
       cancelled = true;
@@ -27,92 +45,174 @@ export default function DashboardPage() {
   }, []);
 
   if (error) {
-    return <ErrorBlock message={error} />;
-  }
-  if (items === null) {
-    return <p className="text-sm text-slate-400">Loading dashboard…</p>;
-  }
-
-  const open = items.filter((i) => i.status === "open").length;
-  const active = items.filter((i) => i.status === "in_progress" || i.status === "under_review").length;
-  const closed = items.filter((i) => i.status === "closed" || i.status === "archived").length;
-  const recent = [...items]
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-    .slice(0, 5);
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-400">
-        Your investigations at a glance. Evidence and AI analysis are planned for later.
-      </p>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total accessible" value={items.length} />
-        <StatCard label="Open" value={open} />
-        <StatCard label="In progress / review" value={active} />
+    return (
+      <div className="space-y-4">
+        <PageHeader title={`Welcome back${user ? `, ${displayName(user)}` : ""}`} />
+        <ErrorState body={error} onRetry={() => window.location.reload()} />
       </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Closed / archived" value={closed} />
-      </div>
+    );
+  }
 
-      <h2 className="mt-8 text-lg font-semibold">Recent investigations</h2>
-      {recent.length === 0 ? (
-        <div className="mt-3 rounded-lg border border-dashed border-slate-700 p-8 text-center">
-          <p className="text-sm font-medium text-slate-300">No investigations yet</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Create your first investigation to start tracking a case.
-          </p>
-          <Link
-            to="/investigations/new"
-            className="mt-4 inline-block rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
-          >
-            New investigation
-          </Link>
-        </div>
-      ) : (
-        <ul className="mt-3 divide-y divide-slate-800 rounded-lg border border-slate-800 bg-slate-900">
-          {recent.map((inv) => (
-            <li key={inv.id}>
-              <Link to={`/investigations/${inv.id}`} className="block px-4 py-3 hover:bg-slate-800/50">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      <span className="mr-2 font-mono text-xs text-slate-500">{inv.case_number}</span>
-                      {inv.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      Updated {formatDate(inv.updated_at)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <PriorityBadge priority={inv.priority} />
-                    <StatusBadge status={inv.status} />
-                  </div>
-                </div>
-              </Link>
-            </li>
+  if (!summary || !recent) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Dashboard" />
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16" />
           ))}
-        </ul>
+        </div>
+        <Skeleton className="h-48" />
+      </div>
+    );
+  }
+
+  const needsReview = summary.by_status["under_review"] ?? 0;
+  const active = summary.open_investigations.length;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={`Welcome back${user ? `, ${displayName(user)}` : ""}`}
+        description="Caseload context across the investigations you can access."
+        actions={
+          canCreate && (
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+              New investigation
+            </Button>
+          )
+        }
+      />
+
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
+        <Stat label="Active investigations" value={active} />
+        <Stat label="Needs review" value={needsReview} tone={needsReview > 0 ? "warning" : undefined} />
+        <Stat label="Evidence items" value={summary.evidence_total} />
+        <Stat
+          label="Integrity issues"
+          value={summary.integrity_issues}
+          tone={summary.integrity_issues > 0 ? "danger" : undefined}
+        />
+      </dl>
+
+      {summary.integrity_issues > 0 && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-bg px-3 py-2 text-sm text-danger-ink"
+        >
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          {summary.integrity_issues === 1
+            ? "One evidence item needs attention: its stored bytes do not match the baseline, or it cannot be read."
+            : `${summary.integrity_issues} evidence items need attention: stored bytes do not match baselines, or files cannot be read.`}
+        </p>
       )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-md border border-line bg-surface">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <h2 className="text-sm font-semibold">Recent investigations</h2>
+            <Link to="/investigations" className="text-[13px] font-medium text-accentink hover:underline">
+              View all
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={<FolderKanban size={22} />}
+                title="No investigations yet"
+                body="An investigation tracks a case, its team, its evidence, and its custody from open to archive."
+                action={
+                  canCreate ? (
+                    <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                      Create your first investigation
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-line">
+              {recent.map((inv) => (
+                <li key={inv.id}>
+                  <Link
+                    to={`/investigations/${inv.id}`}
+                    className="pv-transition flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-hover"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{inv.title}</span>
+                      <span className="block font-mono text-xs text-ink3">
+                        {inv.case_number} · updated {timeAgo(inv.updated_at)}
+                      </span>
+                    </span>
+                    <StatusBadge status={inv.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-md border border-line bg-surface">
+          <div className="border-b border-line px-4 py-2.5">
+            <h2 className="text-sm font-semibold">Recent activity</h2>
+          </div>
+          {summary.recent_activity.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={<FileSearch size={22} />}
+                title="No activity yet"
+                body="Actions on your investigations, evidence, and custody will appear here."
+              />
+            </div>
+          ) : (
+            <ul className="divide-y divide-line">
+              {summary.recent_activity.slice(0, 8).map((entry) => (
+                <li key={entry.id} className="px-4 py-2 text-sm">
+                  <p className="text-ink">
+                    {actionLabel(entry.action)}
+                    {entry.evidence_number && (
+                      <span className="ml-1.5 font-mono text-xs text-ink3">{entry.evidence_number}</span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-ink3">
+                    <Link
+                      to={`/investigations/${entry.investigation_id}`}
+                      className="hover:text-ink2 hover:underline"
+                    >
+                      {entry.investigation_title}
+                    </Link>
+                    {" · "}
+                    {entry.actor_username ?? "System"} · {timeAgo(entry.created_at)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <NewInvestigationDialog open={creating} onClose={() => setCreating(false)} />
     </div>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: "warning" | "danger";
+}) {
+  const valueClass =
+    tone === "danger" ? "text-danger-ink" : tone === "warning" ? "text-warning-ink" : "text-ink";
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-      <p className="text-3xl font-semibold">{value}</p>
-      <p className="mt-1 text-sm text-slate-400">{label}</p>
-    </div>
-  );
-}
-
-export function ErrorBlock({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-red-900 bg-red-950/40 p-6">
-      <p className="text-sm font-medium text-red-200">Something went wrong</p>
-      <p className="mt-1 text-sm text-red-300/80">{message}</p>
+    <div className="bg-surface px-4 py-3">
+      <dt className="text-[13px] text-ink2">{label}</dt>
+      <dd className={`mt-0.5 text-2xl font-semibold tracking-tight tabular-nums ${valueClass}`}>
+        {value}
+      </dd>
     </div>
   );
 }

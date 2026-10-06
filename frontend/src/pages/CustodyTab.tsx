@@ -1,11 +1,15 @@
-// Investigation custody tab: recent custody activity across all evidence.
+// Investigation custody tab: cross-evidence custody activity with links
+// into each item's full chain.
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ApiError, api } from "../api/client";
+import { ArrowRightLeft } from "lucide-react";
+import { api } from "../api/client";
 import type { InvestigationCustodyRow } from "../api/client";
-import { CUSTODY_ACTION_LABELS, formatDate } from "../components/ui";
-import { ErrorBlock } from "./DashboardPage";
+import { CUSTODY_ACTION_LABELS } from "../components/Badge";
+import { EmptyState, ErrorState, Skeleton } from "../components/StateViews";
+import { actionErrorMessage } from "../lib/errors";
+import { formatDate } from "../lib/format";
 
 export default function CustodyTab() {
   const { id } = useParams<{ id: string }>();
@@ -17,58 +21,64 @@ export default function CustodyTab() {
     api
       .investigationCustody(Number(id))
       .then((data) => {
-        if (!cancelled) setRows(data);
+        if (!cancelled) {
+          setRows(data);
+          setError(null);
+        }
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof ApiError ? err.message : "Could not load custody activity.");
+        if (!cancelled) setError(actionErrorMessage(err, "Could not load custody activity."));
       });
     return () => {
       cancelled = true;
     };
   }, [id]);
 
-  if (error) return <ErrorBlock message={error} />;
+  if (error) return <ErrorState body={error} onRetry={() => window.location.reload()} />;
 
   return (
-    <div>
-      <h2 className="text-lg font-semibold">Custody activity</h2>
-      <p className="mt-1 text-sm text-slate-400">
-        Recent chain-of-custody events across this investigation. Full per-item
-        history lives on each evidence page.
+    <div className="max-w-3xl">
+      <p className="text-sm text-ink2">
+        Recent chain-of-custody events across this investigation. The full
+        per-item history lives on each evidence page.
       </p>
       {!rows ? (
-        <p className="mt-4 text-sm text-slate-400">Loading custody activity…</p>
+        <div className="mt-4 space-y-3">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-16" />
+        </div>
       ) : rows.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-700 p-8 text-center">
-          <p className="text-sm font-medium text-slate-300">No custody events yet</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Custody events appear here once evidence is registered.
-          </p>
+        <div className="mt-4">
+          <EmptyState
+            icon={<ArrowRightLeft size={22} />}
+            title="No custody events yet"
+            body="Custody events appear here once evidence is registered."
+          />
         </div>
       ) : (
-        <ol className="mt-4 space-y-3">
+        <ol className="relative mt-4 space-y-4 border-l border-line">
           {rows.map((row) => (
-            <li
-              key={row.id}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm"
-            >
-              <div className="flex flex-wrap items-center gap-2">
+            <li key={row.id} className="relative pl-5">
+              <span
+                aria-hidden="true"
+                className="absolute top-1 -left-[5px] h-2.5 w-2.5 rounded-full border-2 border-surface bg-ink3"
+              />
+              <p className="text-sm">
+                <span className="font-medium">
+                  {CUSTODY_ACTION_LABELS[row.action as keyof typeof CUSTODY_ACTION_LABELS] ?? row.action}
+                </span>
                 <Link
                   to={`/investigations/${id}/evidence/${row.evidence_id}`}
-                  className="font-mono text-xs text-sky-300 hover:text-sky-200"
+                  className="ml-2 font-mono text-xs text-accentink hover:underline"
                 >
                   {row.evidence_number}
                 </Link>
-                <span className="font-medium text-slate-200">
-                  {CUSTODY_ACTION_LABELS[row.action as keyof typeof CUSTODY_ACTION_LABELS] ?? row.action}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
+              </p>
+              <p className="mt-0.5 text-[13px] text-ink2">
                 {row.from_user ?? "…"} → {row.to_user ?? "…"}
                 {row.notes ? ` · ${row.notes}` : ""}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-ink3">
                 {row.performed_by ?? "System"} · {formatDate(row.created_at)}
               </p>
             </li>

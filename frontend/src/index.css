@@ -1,1 +1,247 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Provena design tokens. Light theme is the default; .dark overrides.
+   Semantic colors carry meaning only: success, warning, danger, info. */
+
+:root {
+  color-scheme: light;
+
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --hover: #f4f4f5;
+  --active: #e4e4e7;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+
+  --ink: #09090b;
+  --ink-2: #52525b;
+  --ink-3: #a1a1aa;
+
+  --ink-invert: #fafafa;
+  --ink-invert-2: #d4d4d8;
+
+  --primary: #09090b;
+  --primary-ink: #fafafa;
+  --primary-hover: #27272a;
+
+  --accent: #0a66ff;
+  --accent-ink: #0a66ff;
+  --accent-soft: #e8f0fe;
+
+  --success-ink: #067647;
+  --success-bg: #ecfdf3;
+  --success-line: #a6f4c5;
+
+  --warning-ink: #b54708;
+  --warning-bg: #fffaeb;
+  --warning-line: #fedf89;
+
+  --danger-ink: #b42318;
+  --danger-bg: #fef3f2;
+  --danger-line: #fecdca;
+
+  --info-ink: #175cd3;
+  --info-bg: #eff8ff;
+  --info-line: #b2ddff;
+
+  --overlay: rgb(9 9 11 / 0.45);
+  --shadow: 0 8px 30px rgb(9 9 11 / 0.12);
+  --radius: 6px;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #000000;
+  --surface: #0a0a0a;
+  --raised: #111113;
+  --hover: #1a1a1c;
+  --active: #262628;
+  --line: #1f1f22;
+  --line-strong: #2e2e33;
+
+  --ink: #ededed;
+  --ink-2: #a1a1aa;
+  --ink-3: #63636b;
+
+  --ink-invert: #09090b;
+  --ink-invert-2: #3f3f46;
+
+  --primary: #ededed;
+  --primary-ink: #000000;
+  --primary-hover: #ffffff;
+
+  --accent: #4c8dff;
+  --accent-ink: #7aa8ff;
+  --accent-soft: #0e1a33;
+
+  --success-ink: #6ce9a6;
+  --success-bg: rgb(6 122 64 / 0.14);
+  --success-line: rgb(108 233 166 / 0.25);
+
+  --warning-ink: #fec84b;
+  --warning-bg: rgb(247 184 17 / 0.12);
+  --warning-line: rgb(254 200 75 / 0.25);
+
+  --danger-ink: #f97066;
+  --danger-bg: rgb(240 68 56 / 0.13);
+  --danger-line: rgb(249 112 102 / 0.28);
+
+  --info-ink: #84adff;
+  --info-bg: rgb(76 141 255 / 0.13);
+  --info-line: rgb(132 173 255 / 0.25);
+
+  --overlay: rgb(0 0 0 / 0.65);
+  --shadow: 0 8px 30px rgb(0 0 0 / 0.5);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-line: var(--line);
+  --color-linestrong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink-2);
+  --color-ink3: var(--ink-3);
+  --color-primary: var(--primary);
+  --color-primaryink: var(--primary-ink);
+  --color-primaryhover: var(--primary-hover);
+  --color-accent: var(--accent);
+  --color-accentink: var(--accent-ink);
+  --color-accentsoft: var(--accent-soft);
+  --color-success-ink: var(--success-ink);
+  --color-success-bg: var(--success-bg);
+  --color-success-line: var(--success-line);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-line: var(--warning-line);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-line: var(--danger-line);
+  --color-info-ink: var(--info-ink);
+  --color-info-bg: var(--info-bg);
+  --color-info-line: var(--info-line);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible keyboard focus everywhere. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Restrained motion: quick UI transitions, fully disabled on request. */
+.pv-transition {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+@keyframes pv-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pv-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pv-skeleton {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.pv-animate-fade {
+  animation: pv-fade-in 180ms ease both;
+}
+
+.pv-animate-rise {
+  animation: pv-rise 200ms ease both;
+}
+
+.pv-animate-toast {
+  animation: pv-toast-in 200ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Thin scrollbars that stay out of the way. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+}

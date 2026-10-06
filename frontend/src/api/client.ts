@@ -38,6 +38,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       body !== null && typeof body === "object" && "detail" in body
         ? String((body as { detail: unknown }).detail)
         : `Request failed (${response.status}).`;
+    // Session expiry: any authenticated 401 outside the login call itself
+    // means the token is dead. Broadcast so AuthContext can sign out.
+    if (response.status === 401 && !path.startsWith("/api/auth/login")) {
+      window.dispatchEvent(new CustomEvent("provena:unauthorized"));
+    }
     throw new ApiError(response.status, detail);
   }
   return body as T;
@@ -163,8 +168,26 @@ export interface TimelineEntry {
   evidence_number: string | null;
 }
 
-export interface InvestigationCustodyRow {
+export interface DashboardActivity {
   id: number;
+  action: string;
+  actor_username: string | null;
+  investigation_id: number;
+  investigation_title: string;
+  evidence_number: string | null;
+  created_at: string;
+}
+
+export interface DashboardSummary {
+  investigations_total: number;
+  by_status: Record<string, number>;
+  evidence_total: number;
+  integrity_issues: number;
+  open_investigations: number[];
+  recent_activity: DashboardActivity[];
+}
+
+export interface InvestigationCustodyRow {  id: number;
   evidence_id: number;
   evidence_number: string;
   evidence_title: string;
@@ -191,6 +214,9 @@ export const api = {
   },
   me() {
     return apiFetch<User>("/api/auth/me");
+  },
+  dashboardSummary() {
+    return apiFetch<DashboardSummary>("/api/dashboard/summary");
   },
   listUsers() {
     return apiFetch<User[]>("/api/users");

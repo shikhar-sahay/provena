@@ -1,19 +1,20 @@
-// Evidence tab: filterable evidence list with registration action.
+// Evidence tab: dense forensic table with search and filters, plus a
+// registration drawer. Registration is also deep-linkable via the
+// evidence/register route, which renders the same form.
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
-import { ApiError, api } from "../api/client";
+import { FileUp, Search, Upload } from "lucide-react";
+import { api } from "../api/client";
 import type { Evidence, EvidenceType, IntegrityStatus } from "../api/client";
-import {
-  EVIDENCE_TYPE_LABELS,
-  IntegrityBadge,
-  buttonPrimaryClass,
-  formatBytes,
-  formatDate,
-  inputClass,
-  labelClass,
-} from "../components/ui";
-import { ErrorBlock } from "./DashboardPage";
+import { EVIDENCE_TYPE_LABELS, INTEGRITY_LABELS, IntegrityBadge } from "../components/Badge";
+import { Button } from "../components/Button";
+import { Drawer } from "../components/Dialog";
+import { Input, Select } from "../components/Field";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/StateViews";
+import { RegisterEvidenceForm } from "../components/RegisterEvidenceForm";
+import { actionErrorMessage } from "../lib/errors";
+import { displayName, formatBytes, timeAgo } from "../lib/format";
 import type { WorkspaceContext } from "./InvestigationWorkspace";
 
 const TYPE_OPTIONS: (EvidenceType | "")[] = [
@@ -35,15 +36,16 @@ const INTEGRITY_OPTIONS: (IntegrityStatus | "")[] = [
   "unavailable",
 ];
 
-export default function EvidenceTab() {
+export default function EvidenceTab({ registerOpen = false }: { registerOpen?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const { canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
   const [items, setItems] = useState<Evidence[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<EvidenceType | "">("");
   const [integrityFilter, setIntegrityFilter] = useState<IntegrityStatus | "">("");
-  const [query, setQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [registering, setRegistering] = useState(registerOpen);
 
   const invId = Number(id);
 
@@ -57,7 +59,7 @@ export default function EvidenceTab() {
       setItems(data);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load evidence.");
+      setError(actionErrorMessage(err, "Could not load evidence."));
     }
   }, [invId, typeFilter, integrityFilter, query]);
 
@@ -69,18 +71,20 @@ export default function EvidenceTab() {
   const canRegister = canManage && !archivedLocked;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Evidence</h2>
-          <p className="text-sm text-slate-400">
-            Registered files with SHA-256 baselines and custody tracking.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-ink2">
+          Registered files with SHA-256 baselines and custody tracking.
+          {items !== null && items.length > 0 && (
+            <span className="ml-2 text-ink3">
+              {items.length} {items.length === 1 ? "item" : "items"}
+            </span>
+          )}
+        </p>
         {canRegister && (
-          <Link to="register" className={buttonPrimaryClass}>
+          <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => setRegistering(true)}>
             Register evidence
-          </Link>
+          </Button>
         )}
       </div>
 
@@ -89,118 +93,111 @@ export default function EvidenceTab() {
           e.preventDefault();
           setQuery(searchInput.trim());
         }}
-        className="mt-4 grid gap-3 sm:grid-cols-4"
+        className="flex flex-col gap-2 sm:flex-row"
       >
-        <div className="sm:col-span-2">
-          <label htmlFor="evidence-search" className={labelClass}>
-            Search
-          </label>
-          <input
-            id="evidence-search"
-            type="text"
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search
+            size={14}
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink3"
+          />
+          <Input
+            type="search"
+            aria-label="Search evidence"
+            placeholder="Title, number, or filename…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Title, number, or filename…"
-            className={inputClass}
+            className="pl-8"
           />
         </div>
-        <div>
-          <label htmlFor="evidence-type" className={labelClass}>
-            Type
-          </label>
-          <select
-            id="evidence-type"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as EvidenceType | "")}
-            className={inputClass}
-          >
-            {TYPE_OPTIONS.map((t) => (
-              <option key={t || "all"} value={t}>
-                {t ? EVIDENCE_TYPE_LABELS[t] : "All types"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="evidence-integrity" className={labelClass}>
-            Integrity
-          </label>
-          <select
-            id="evidence-integrity"
-            value={integrityFilter}
-            onChange={(e) => setIntegrityFilter(e.target.value as IntegrityStatus | "")}
-            className={inputClass}
-          >
-            {INTEGRITY_OPTIONS.map((s) => (
-              <option key={s || "all"} value={s}>
-                {s ? s.replace(/_/g, " ") : "All states"}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select
+          aria-label="Filter by type"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as EvidenceType | "")}
+          className="sm:w-36"
+        >
+          {TYPE_OPTIONS.map((t) => (
+            <option key={t || "all"} value={t}>
+              {t ? EVIDENCE_TYPE_LABELS[t] : "All types"}
+            </option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Filter by integrity"
+          value={integrityFilter}
+          onChange={(e) => setIntegrityFilter(e.target.value as IntegrityStatus | "")}
+          className="sm:w-44"
+        >
+          {INTEGRITY_OPTIONS.map((s) => (
+            <option key={s || "all"} value={s}>
+              {s ? INTEGRITY_LABELS[s] : "All states"}
+            </option>
+          ))}
+        </Select>
       </form>
 
-      {error && (
-        <div className="mt-4">
-          <ErrorBlock message={error} />
-        </div>
-      )}
-      {items === null && !error && (
-        <p className="mt-4 text-sm text-slate-400">Loading evidence…</p>
-      )}
+      {error && <ErrorState body={error} onRetry={() => void load()} />}
+      {items === null && !error && <TableSkeleton rows={5} />}
+
       {items !== null && items.length === 0 && (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-700 p-8 text-center">
-          <p className="text-sm font-medium text-slate-300">No evidence registered</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {canRegister
-              ? "Register the first evidence item for this investigation."
-              : "No evidence has been registered yet."}
-          </p>
-        </div>
+        <EmptyState
+          icon={<FileUp size={22} />}
+          title="No evidence registered"
+          body={
+            canRegister
+              ? "Upload the first file. Provena stores it under its control, records a SHA-256 baseline, and opens custody."
+              : "No evidence has been registered for this investigation yet."
+          }
+          action={
+            canRegister ? (
+              <Button variant="primary" size="sm" onClick={() => setRegistering(true)}>
+                Register evidence
+              </Button>
+            ) : undefined
+          }
+        />
       )}
+
       {items !== null && items.length > 0 && (
-        <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900 text-xs uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Item</th>
-                <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Integrity</th>
-                <th className="px-4 py-3 font-medium">Holder</th>
-                <th className="px-4 py-3 font-medium">Registered</th>
+        <div className="overflow-x-auto rounded-md border border-line">
+          <table className="w-full min-w-[56rem] text-left text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface text-[13px] text-ink2">
+                <th className="px-3 py-2 font-medium">Item</th>
+                <th className="px-3 py-2 font-medium">Title</th>
+                <th className="px-3 py-2 font-medium">Type</th>
+                <th className="px-3 py-2 font-medium">Integrity</th>
+                <th className="px-3 py-2 font-medium">Holder</th>
+                <th className="px-3 py-2 font-medium">Registered</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800 bg-slate-900/40">
+            <tbody className="divide-y divide-line bg-surface">
               {items.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/40">
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-300">
+                <tr key={item.id} className="pv-transition hover:bg-hover">
+                  <td className="px-3 py-2.5 font-mono text-xs whitespace-nowrap text-ink2">
                     {item.evidence_number}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="max-w-xs px-3 py-2.5">
                     <Link
                       to={`${item.id}`}
-                      className="font-medium text-sky-300 hover:text-sky-200"
+                      className="block truncate font-medium text-ink hover:underline"
                     >
                       {item.title}
                     </Link>
-                    <p className="text-xs text-slate-500">
+                    <span className="block truncate text-xs text-ink3">
                       {item.original_filename} · {formatBytes(item.file_size)}
-                    </p>
+                    </span>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-300">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-ink2">
                     {EVIDENCE_TYPE_LABELS[item.evidence_type]}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     <IntegrityBadge status={item.integrity_status} />
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-300">
-                    {item.current_holder
-                      ? item.current_holder.full_name || item.current_holder.username
-                      : "Unknown"}
+                  <td className="max-w-36 truncate px-3 py-2.5 whitespace-nowrap text-ink2">
+                    {item.current_holder ? displayName(item.current_holder) : "Unknown"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                    {formatDate(item.created_at)}
+                  <td className="px-3 py-2.5 text-[13px] whitespace-nowrap text-ink3">
+                    {timeAgo(item.created_at)}
                   </td>
                 </tr>
               ))}
@@ -208,6 +205,21 @@ export default function EvidenceTab() {
           </table>
         </div>
       )}
+
+      <Drawer
+        open={registering}
+        onClose={() => setRegistering(false)}
+        title="Register evidence"
+        description="The file is stored under Provena control and a SHA-256 baseline is recorded."
+      >
+        <RegisterEvidenceForm
+          invId={invId}
+          onDone={() => {
+            setRegistering(false);
+            void load();
+          }}
+        />
+      </Drawer>
     </div>
   );
 }

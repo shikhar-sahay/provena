@@ -1,17 +1,53 @@
-// Investigations list with create action, loading/empty/error states.
+// Investigation discovery: dense table with search, status filter, and
+// client-side sorting over the investigations the user may see.
 
-import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { ApiError, api } from "../api/client";
-import type { Investigation } from "../api/client";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowDown, ArrowUp, ArrowUpDown, FolderKanban, Plus, Search } from "lucide-react";
+import { api } from "../api/client";
+import type { Investigation, InvestigationStatus } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { PriorityBadge, StatusBadge, buttonPrimaryClass, formatDate } from "../components/ui";
-import { ErrorBlock } from "./DashboardPage";
+import { PriorityBadge, StatusBadge } from "../components/Badge";
+import { Button } from "../components/Button";
+import { Input, Select } from "../components/Field";
+import { NewInvestigationDialog } from "../components/NewInvestigationDialog";
+import { EmptyState, ErrorState, PageHeader, TableSkeleton } from "../components/StateViews";
+import { actionErrorMessage } from "../lib/errors";
+import { displayName, timeAgo } from "../lib/format";
+
+type SortKey = "updated" | "title" | "case" | "status" | "priority";
+type SortDir = "asc" | "desc";
+
+const STATUS_FILTERS: (InvestigationStatus | "")[] = [
+  "",
+  "open",
+  "in_progress",
+  "under_review",
+  "closed",
+  "archived",
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  "": "All statuses",
+  open: "Open",
+  in_progress: "In progress",
+  under_review: "Under review",
+  closed: "Closed",
+  archived: "Archived",
+};
+
+const PRIORITY_RANK: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
 
 export default function InvestigationsPage() {
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<Investigation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState(params.get("q") ?? "");
+  const [status, setStatus] = useState<InvestigationStatus | "">("");
+  const [sortKey, setSortKey] = useState<SortKey>("updated");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const canCreate = user?.role === "admin" || user?.role === "investigator";
 
@@ -20,89 +56,171 @@ export default function InvestigationsPage() {
     api
       .listInvestigations()
       .then((data) => {
-        if (!cancelled) setItems(data);
+        if (cancelled) return;
+        setItems(data);
+        setError(null);
       })
       .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof ApiError ? err.message : "Could not load investigations.");
+        if (!cancelled) setError(actionErrorMessage(err, "Could not load investigations."));
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  useEffect(() => {
+    setParams(search.trim() ? { q: search.trim() } : {}, { replace: true });
+  }, [search, setParams]);
+
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = (items ?? []).filter((inv) => {
+      if (status && inv.status !== status) return false;
+      if (!term) return true;
+      return (
+        inv.title.toLowerCase().includes(term) ||
+        inv.case_number.toLowerCase().includes(term) ||
+        displayName(inv.lead_investigator).toLowerCase().includes(term)
+      );
+    });
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "title":
+          return a.title.localeCompare(b.title) * dir;
+        case "case":
+          return a.case_number.localeCompare(b.case_number) * dir;
+        case "status":
+          return a.status.localeCompare(b.status) * dir;
+        case "priority":
+          return (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]) * dir;
+        case "updated":
+        default:
+          return a.updated_at.localeCompare(b.updated_at) * dir;
+      }
+    });
+  }, [items, search, status, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "title" || key === "case" ? "asc" : "desc");
+    }
+  }
+
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Investigations</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Investigations you participate in. Admins see all investigations.
-          </p>
+    <div className="space-y-4">
+      <PageHeader
+        title="Investigations"
+        description="Cases you participate in. Admins see every investigation."
+        actions={
+          canCreate && (
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
+              New investigation
+            </Button>
+          )
+        }
+      />
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search
+            size={14}
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink3"
+          />
+          <Input
+            type="search"
+            aria-label="Search investigations"
+            placeholder="Search title, case number, lead…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
         </div>
-        {canCreate && (
-          <Link to="/investigations/new" className={buttonPrimaryClass}>
-            New investigation
-          </Link>
-        )}
+        <Select
+          aria-label="Filter by status"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as InvestigationStatus | "")}
+          className="sm:w-44"
+        >
+          {STATUS_FILTERS.map((s) => (
+            <option key={s || "all"} value={s}>
+              {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </Select>
       </div>
 
-      {error && (
-        <div className="mt-6">
-          <ErrorBlock message={error} />
-        </div>
-      )}
-      {items === null && !error && (
-        <p className="mt-6 text-sm text-slate-400">Loading investigations…</p>
-      )}
+      {error && <ErrorState body={error} onRetry={() => window.location.reload()} />}
+      {items === null && !error && <TableSkeleton rows={6} />}
+
       {items !== null && items.length === 0 && (
-        <div className="mt-6 rounded-lg border border-dashed border-slate-700 p-8 text-center">
-          <p className="text-sm font-medium text-slate-300">No investigations found</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {canCreate
-              ? "Create one to get started."
-              : "You are not assigned to any investigation yet."}
-          </p>
-        </div>
+        <EmptyState
+          icon={<FolderKanban size={22} />}
+          title="No investigations yet"
+          body={
+            canCreate
+              ? "Create your first investigation to open a case with an assigned team."
+              : "You are not assigned to any investigation yet. Ask an investigator to add you to a team."
+          }
+          action={
+            canCreate ? (
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                New investigation
+              </Button>
+            ) : undefined
+          }
+        />
       )}
-      {items !== null && items.length > 0 && (
-        <div className="mt-6 overflow-hidden rounded-lg border border-slate-800">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900 text-xs uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Case</th>
-                <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Priority</th>
-                <th className="px-4 py-3 font-medium">Lead</th>
-                <th className="px-4 py-3 font-medium">Updated</th>
+
+      {items !== null && items.length > 0 && visible.length === 0 && (
+        <EmptyState
+          icon={<Search size={22} />}
+          title="No matching investigations"
+          body="Adjust the search term or status filter."
+        />
+      )}
+
+      {visible.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-line">
+          <table className="w-full min-w-[48rem] text-left text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface text-[13px] text-ink2">
+                <SortHeader label="Case" sortKey="case" current={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortHeader label="Title" sortKey="title" current={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortHeader label="Status" sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortHeader label="Priority" sortKey="priority" current={sortKey} dir={sortDir} onSort={toggleSort} />
+                <th className="px-3 py-2 font-medium">Lead</th>
+                <SortHeader label="Updated" sortKey="updated" current={sortKey} dir={sortDir} onSort={toggleSort} />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800 bg-slate-900/40">
-              {items.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-800/40">
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-400">
+            <tbody className="divide-y divide-line bg-surface">
+              {visible.map((inv) => (
+                <tr key={inv.id} className="pv-transition hover:bg-hover">
+                  <td className="px-3 py-2.5 font-mono text-xs whitespace-nowrap text-ink2">
                     {inv.case_number}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="max-w-xs px-3 py-2.5">
                     <Link
                       to={`/investigations/${inv.id}`}
-                      className="font-medium text-sky-300 hover:text-sky-200"
+                      className="block truncate font-medium text-ink hover:underline"
                     >
                       {inv.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     <StatusBadge status={inv.status} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     <PriorityBadge priority={inv.priority} />
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-300">
-                    {inv.lead_investigator.full_name || inv.lead_investigator.username}
+                  <td className="max-w-40 truncate px-3 py-2.5 whitespace-nowrap text-ink2">
+                    {displayName(inv.lead_investigator)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                    {formatDate(inv.updated_at)}
+                  <td className="px-3 py-2.5 text-[13px] whitespace-nowrap text-ink3">
+                    {timeAgo(inv.updated_at)}
                   </td>
                 </tr>
               ))}
@@ -110,6 +228,37 @@ export default function InvestigationsPage() {
           </table>
         </div>
       )}
+
+      <NewInvestigationDialog open={creating} onClose={() => setCreating(false)} />
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  current,
+  dir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = current === sortKey;
+  const Icon = !active ? ArrowUpDown : dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className="px-3 py-2 font-medium">
+      <button
+        onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${label.toLowerCase()}`}
+        className="pv-transition inline-flex cursor-pointer items-center gap-1 hover:text-ink"
+      >
+        {label}
+        <Icon size={12} className={active ? "text-ink" : "text-ink3"} />
+      </button>
+    </th>
   );
 }
