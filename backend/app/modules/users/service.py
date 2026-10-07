@@ -1,6 +1,6 @@
 """User service: creation and lookup. Password handling lives in core.security."""
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,28 @@ def get_by_login(db: Session, identifier: str) -> User | None:
 def list_active(db: Session) -> list[User]:
     stmt = select(User).where(User.is_active.is_(True)).order_by(User.username)
     return list(db.execute(stmt).scalars().all())
+
+
+def list_all(db: Session) -> list[User]:
+    stmt = select(User).order_by(User.username)
+    return list(db.execute(stmt).scalars().all())
+
+
+def set_active(db: Session, user: User, active: bool) -> User:
+    user.is_active = active
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def count_active_admins(db: Session) -> int:
+    from app.modules.users.models import Role
+
+    return db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(User.role == Role.ADMIN.value, User.is_active.is_(True))
+    ).scalar_one()
 
 
 def create_user(db: Session, payload: UserCreate) -> User:

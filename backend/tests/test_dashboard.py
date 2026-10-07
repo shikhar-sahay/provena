@@ -30,6 +30,9 @@ def test_empty_dashboard(client, investigator):
     assert body["evidence_total"] == 0
     assert body["integrity_issues"] == 0
     assert body["recent_activity"] == []
+    assert body["pending_analysis"] == 0
+    assert body["findings_pending_review"] == 0
+    assert body["last_analysis"] is None
 
 
 def test_dashboard_counts_and_scoping(client, investigator, analyst, admin, storage_dir):
@@ -82,3 +85,33 @@ def test_dashboard_counts_integrity_issues(client, investigator, db_session, sto
 
 def test_dashboard_requires_auth(client):
     assert client.get("/api/dashboard/summary").status_code == 401
+
+
+def test_dashboard_attention_fields(client, investigator, storage_dir):
+    token = login(client, "investigator")
+    inv = make_investigation(client, token)
+    item = upload(client, token, inv["id"])
+    client.post(
+        f"/api/investigations/{inv['id']}/evidence/{item['id']}/verify",
+        headers=auth_headers(token),
+    )
+    before = client.get("/api/dashboard/summary", headers=auth_headers(token)).json()
+    assert before["pending_analysis"] == 1
+    assert before["findings_pending_review"] == 0
+    assert before["last_analysis"] is None
+
+    run = client.post(
+        f"/api/investigations/{inv['id']}/analysis/runs",
+        headers=auth_headers(token),
+        json={"evidence_ids": [item["id"]]},
+    )
+    assert run.status_code == 201, run.text
+    client.post(
+        f"/api/investigations/{inv['id']}/analysis/findings/generate",
+        headers=auth_headers(token),
+    )
+    after = client.get("/api/dashboard/summary", headers=auth_headers(token)).json()
+    assert after["pending_analysis"] == 0
+    assert after["findings_pending_review"] >= 0
+    assert after["last_analysis"]["run_label"] == "RUN-0001"
+    assert after["last_analysis"]["investigation_id"] == inv["id"]

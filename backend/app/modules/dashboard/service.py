@@ -10,8 +10,16 @@ from sqlalchemy.orm import Session
 
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.service import ResourceTypes
-from app.modules.dashboard.schemas import ActivityItem, DashboardSummary
+from app.modules.dashboard.schemas import ActivityItem, DashboardSummary, LastAnalysis
 from app.modules.evidence.models import Evidence, IntegrityStatus
+from app.modules.intelligence.models import (
+    AnalysisRun,
+    AnalysisRunEvidence,
+    Finding,
+    FindingStatus,
+    RunEvidenceStatus,
+    RunStatus,
+)
 from app.modules.investigations import service as inv_service
 from app.modules.investigations.models import InvestigationStatus
 from app.modules.users.models import User
@@ -97,4 +105,72 @@ def get_summary(db: Session, user: User) -> DashboardSummary:
         integrity_issues=integrity_issues,
         open_investigations=[inv.id for inv in investigations if inv.status in OPEN_STATUSES],
         recent_activity=recent,
+        pending_analysis=_pending_analysis_count(db, ids),
+        findings_pending_review=_pending_findings_count(db, ids),
+        last_analysis=_last_completed_run(db, by_id),
+    )
+
+
+def _pending_analysis_count(db: Session, ids: list[int]) -> int:
+    """Verified items with no processed outcome in any completed run."""
+    if not ids:
+        return 0
+    verified_ids = set(
+        db.execute(
+            select(Evidence.id).where(
+                Evidence.investigation_id.in_(ids),
+                Evidence.integrity_status == IntegrityStatus.VERIFIED.value,
+            )
+        ).scalars().all()
+    )
+    if not verified_ids:
+        return 0
+    covered = set(
+        db.execute(
+            select(AnalysisRunEvidence.evidence_id)
+            .join(AnalysisRun, AnalysisRun.id == AnalysisRunEvidence.run_id)
+            .where(
+                AnalysisRun.status == RunStatus.COMPLETED.value,
+                AnalysisRunEvidence.status == RunEvidenceStatus.PROCESSED.value,
+                AnalysisRunEvidence.evidence_id.in_(verified_ids),
+            )
+        ).scalars().all()
+    )
+    return len(verified_ids - covered)
+
+
+def _pending_findings_count(db: Session, ids: list[int]) -> int:
+    if not ids:
+        return 0
+    return db.execute(
+        select(func.count())
+        .select_from(Finding)
+        .where(
+            Finding.investigation_id.in_(ids),
+            Finding.status == FindingStatus.PENDING_REVIEW.value,
+        )
+    ).scalar_one()
+
+
+def _last_completed_run(db: Session, by_id: dict) -> LastAnalysis | None:
+    if not by_id:
+        return None
+    run = db.execute(
+        select(AnalysisRun)
+        .where(AnalysisRun.investigation_id.in_(list(by_id)))
+        .order_by(AnalysisRun.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if run is None:
+        return None
+    inv = by_id[run.investigation_id]
+    return LastAnalysis(
+        run_id=run.id,
+        run_label=f"RUN-{run.run_number:04d}",
+        investigation_id=inv.id,
+        investigation_title=inv.title,
+        status=run.status,
+        completed_at=run.completed_at,
+        artifact_count=run.artifact_count,
+        correlation_count=run.correlation_count,
     )

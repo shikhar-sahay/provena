@@ -38,3 +38,26 @@ class UserCreate(BaseModel):
         if "@" not in value or " " in value or "." not in value.split("@")[-1]:
             raise ValueError("Enter a valid email address.")
         return value
+
+
+class UserMembership(BaseModel):
+    id: int
+    case_number: str
+    title: str
+
+
+class UserAdminRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    email: str
+    full_name: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+    investigations: list[UserMembership] = []
+
+
+class UserActiveUpdate(BaseModel):
+    is_active: bool
