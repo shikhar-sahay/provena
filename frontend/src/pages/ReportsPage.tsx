@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, Skeleton } from "../components/StateViews";
 import { useToast } from "../components/Toast";
 import { actionErrorMessage } from "../lib/errors";
 import { formatDate } from "../lib/format";
+import { presentReport } from "../lib/reports";
 
 export default function ReportsPage() {
   const { id } = useParams<{ id: string }>();
@@ -89,7 +90,9 @@ export default function ReportsPage() {
         />
       ) : (
         <ol className="space-y-2">
-          {reports.map((report) => (
+          {reports.map((report) => {
+            const presentation = presentReport(report);
+            return (
             <li key={report.id}>
               <button
                 onClick={() => setSelected(report)}
@@ -104,11 +107,12 @@ export default function ReportsPage() {
                   </span>
                 </div>
                 <p className="mt-0.5 font-mono text-xs break-all text-ink3">
-                  {report.content.generation_metadata.mode === "ai_enhanced" ? "AI-enhanced narrative" : "Deterministic fallback"} · sha256:{report.content_sha256.slice(0, 16)}...
+                  {presentation.modeLabel} · {report.content.accepted_findings?.length ?? 0} accepted findings · sha256:{report.content_sha256.slice(0, 16)}...
                 </p>
               </button>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
 
@@ -143,6 +147,12 @@ export default function ReportsPage() {
 
 function ReportView({ report }: { report: Report }) {
   const content = report.content;
+  const presentation = presentReport(report);
+  const team = content.investigation.team ?? [];
+  const evidence = content.evidence_summary ?? [];
+  const findings = content.accepted_findings ?? [];
+  const recommendations = content.recommendations ?? [];
+  const notes = content.investigator_notes ?? [];
   return (
     <div>
       <div className="flex justify-end print:hidden">
@@ -166,21 +176,22 @@ function ReportView({ report }: { report: Report }) {
         </header>
 
         <ReportSection title="Executive summary">
-          <p className="whitespace-pre-wrap text-ink2">{content.narrative.executive_summary}</p>
+          <p className="whitespace-pre-wrap text-ink2">{presentation.executiveSummary}</p>
           <p className="mt-1 text-xs text-ink3">
-            {content.generation_metadata.mode === "ai_enhanced"
-              ? `AI-enhanced narrative from ${content.generation_metadata.provider} / ${content.generation_metadata.model}`
+            {presentation.mode === "ai_enhanced"
+              ? `AI-enhanced narrative · Provider: ${presentation.provider ?? "local provider"} · Model: ${presentation.model ?? "not recorded"}`
               : "Deterministic fallback narrative"}
           </p>
+          {presentation.fallbackReason && <p className="mt-1 text-xs text-ink3">{presentation.fallbackReason}</p>}
         </ReportSection>
 
         <ReportSection title="Investigation narrative">
-          <p className="whitespace-pre-wrap text-ink2">{content.narrative.investigation_narrative}</p>
+          <p className="whitespace-pre-wrap text-ink2">{presentation.investigationNarrative}</p>
         </ReportSection>
 
         <ReportSection title="Team">
           <ul className="list-disc pl-5">
-            {content.investigation.team.map((member) => (
+            {team.map((member) => (
               <li key={member.username}>
                 {member.full_name || member.username} ({member.username}, {member.role}
                 {member.team_role === "lead" ? ", lead" : ""})
@@ -189,29 +200,29 @@ function ReportView({ report }: { report: Report }) {
           </ul>
         </ReportSection>
 
-        <ReportSection title={`Evidence summary (${content.evidence_summary.length} items)`}>
+        <ReportSection title={`Evidence and integrity summary (${evidence.length} items)`}>
           <ul className="space-y-1.5">
-            {content.evidence_summary.map((item) => (
+            {evidence.map((item) => (
               <li key={item.evidence_number}>
                 <span className="font-mono text-xs">{item.evidence_number}</span> {item.title} ·{" "}
                 {item.integrity_status} · <span className="font-mono text-xs">{item.sha256.slice(0, 16)}...</span>
               </li>
             ))}
-            {content.evidence_summary.length === 0 && <li>No evidence registered.</li>}
+            {evidence.length === 0 && <li>No evidence registered.</li>}
           </ul>
         </ReportSection>
 
         <ReportSection title="Accepted findings">
-          {content.accepted_findings.length === 0 ? (
+          {findings.length === 0 ? (
             <p>No accepted findings at generation time.</p>
           ) : (
             <ol className="list-decimal space-y-3 pl-5">
-              {content.accepted_findings.map((finding, index) => (
+              {findings.map((finding, index) => (
                 <li key={index}>
                   <p className="font-medium">{finding.title}</p>
                   <p className="text-ink2">{finding.summary}</p>
-                  {content.narrative.finding_narratives[String(finding.id)] && (
-                    <p className="mt-1 text-ink2">{content.narrative.finding_narratives[String(finding.id)]}</p>
+                  {presentation.findingNarratives[String(finding.id)] && (
+                    <p className="mt-1 text-ink2">{presentation.findingNarratives[String(finding.id)]}</p>
                   )}
                   <p className="text-xs text-ink3">
                     {finding.rule_id}-v{finding.rule_version} · {finding.severity} · confidence{" "}
@@ -223,10 +234,10 @@ function ReportView({ report }: { report: Report }) {
           )}
         </ReportSection>
 
-        {content.recommendations.length > 0 && (
+        {recommendations.length > 0 && (
           <ReportSection title="Recommendations and next actions">
             <ul className="list-disc pl-5">
-              {content.recommendations.map((item, index) => (
+              {recommendations.map((item, index) => (
                 <li key={index}>{item}</li>
               ))}
             </ul>
@@ -234,13 +245,13 @@ function ReportView({ report }: { report: Report }) {
         )}
 
         <ReportSection title="Conclusion">
-          <p className="whitespace-pre-wrap text-ink2">{content.narrative.conclusion}</p>
+          <p className="whitespace-pre-wrap text-ink2">{presentation.conclusion}</p>
         </ReportSection>
 
-        {content.investigator_notes.length > 0 && (
+        {notes.length > 0 && (
           <ReportSection title="Investigator notes">
             <ul className="space-y-1.5">
-              {content.investigator_notes.map((note, index) => (
+              {notes.map((note, index) => (
                 <li key={index}>
                   {note.body}
                   <span className="block text-xs text-ink3">
@@ -257,8 +268,8 @@ function ReportView({ report }: { report: Report }) {
           <p className="font-mono text-xs break-all">sha256:{report.content_sha256}</p>
           <p className="text-xs text-ink3">
             Generated by {content.generated_by} at {formatDate(content.generated_at)} from
-            validated structured data only. Narrative mode: {content.generation_metadata.mode}.
-            Context hash: {content.generation_metadata.context_sha256}.
+            validated structured data only. Narrative mode: {presentation.mode}.
+            {presentation.contextSha256 ? ` Context hash: ${presentation.contextSha256}.` : " Legacy snapshot without a recorded context hash."}
           </p>
         </ReportSection>
       </article>

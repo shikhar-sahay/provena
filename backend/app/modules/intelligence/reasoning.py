@@ -308,10 +308,12 @@ def _next_report_number(db: Session, investigation_id: int) -> int:
     return (current or 0) + 1
 
 
-def generate_report(db: Session, inv: Investigation, user: User) -> Report:
+def generate_report(
+    db: Session, inv: Investigation, user: User, *, force_deterministic: bool = False
+) -> Report:
     """Snapshot accepted findings, deterministic records, and grounded narrative."""
     from app.modules.intelligence.models import Report
-    from app.modules.intelligence.narrative import generate_narrative
+    from app.modules.intelligence.narrative import deterministic_narrative, generate_narrative
 
     full = inv_service.get_investigation(db, inv.id)
     assert full is not None
@@ -396,7 +398,11 @@ def generate_report(db: Session, inv: Investigation, user: User) -> Report:
             {"finding_id": n.finding_id, "body": n.body} for n in notes
         ],
     }
-    narrative_result = generate_narrative(grounded_context)
+    narrative_result = (
+        deterministic_narrative(grounded_context)
+        if force_deterministic
+        else generate_narrative(grounded_context)
+    )
     content = {
         "investigation": {
             "case_number": full.case_number,

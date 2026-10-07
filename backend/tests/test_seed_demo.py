@@ -1,24 +1,14 @@
-"""Demo seed tests: realistic synthetic investigation built only from real services."""
-
-from pathlib import Path
+"""Demo seed tests: rich synthetic state built through real services."""
 
 from sqlalchemy import func, select
 
 from app.modules.audit.models import AuditEvent
 from app.modules.evidence.models import CustodyEvent, Evidence, EvidenceVerification
+from app.modules.intelligence.models import AnalysisRun, Artifact, Correlation, Finding, Report
 from app.modules.investigations.models import Investigation
-from app.seed_demo import DEMO_FILES, DEMO_TITLE, find_demo, run_demo
-from tests.conftest import make_user
 from app.modules.users.models import Role
-
-
-def write_sample_files(sample_dir: Path):
-    sample_dir.mkdir(parents=True, exist_ok=True)
-    for filename, *_ in DEMO_FILES:
-        if filename.endswith(".pdf"):
-            (sample_dir / filename).write_bytes(b"%PDF-1.4\n%EOF\n")
-        else:
-            (sample_dir / filename).write_text(f"synthetic {filename}\nline two\n")
+from app.seed_demo import DEMO_TITLE, SAMPLE_DIR, find_demo, run_demo
+from tests.conftest import make_user
 
 
 def seed_roles(db_session):
@@ -27,45 +17,43 @@ def seed_roles(db_session):
     make_user(db_session, "custodian", Role.EVIDENCE_CUSTODIAN)
 
 
-def test_demo_seed_builds_genuine_records(db_session, storage_dir, tmp_path):
+def counts(db_session):
+    models = (Investigation, Evidence, EvidenceVerification, CustodyEvent, AnalysisRun, Artifact, Correlation, Finding, Report, AuditEvent)
+    return tuple(db_session.scalar(select(func.count()).select_from(model)) for model in models)
+
+
+def test_demo_seed_builds_real_pipeline_state(db_session, storage_dir):
     seed_roles(db_session)
-    sample_dir = tmp_path / "sample-data"
-    write_sample_files(sample_dir)
+    hero = run_demo(db_session, SAMPLE_DIR)
 
-    inv = run_demo(db_session, sample_dir)
+    assert hero.title == DEMO_TITLE
+    assert hero.status == "under_review"
+    investigations = db_session.scalars(select(Investigation).order_by(Investigation.case_number)).all()
+    assert len(investigations) == 5
+    assert {entry.status for entry in investigations} == {"open", "in_progress", "under_review", "closed"}
 
-    assert inv.title == DEMO_TITLE
-    assert inv.status == "in_progress"
-    items = db_session.execute(select(Evidence)).scalars().all()
-    assert len(items) == len(DEMO_FILES)
-    assert [e.evidence_number for e in items] == [
-        f"E-{i:03d}" for i in range(1, len(DEMO_FILES) + 1)
-    ]
-    assert all(e.integrity_status == "verified" for e in items)
-    assert db_session.execute(select(func.count()).select_from(EvidenceVerification)).scalar_one() == len(
-        DEMO_FILES
-    )
-    custody = db_session.execute(select(CustodyEvent)).scalars().all()
-    assert len(custody) == len(DEMO_FILES) + 1
-    assert any(c.action == "transferred" for c in custody)
-    actions = set(db_session.execute(select(AuditEvent.action)).scalars().all())
-    for expected in ("INVESTIGATION_CREATED", "INVESTIGATION_MEMBER_ADDED",
-                     "EVIDENCE_REGISTERED", "EVIDENCE_VERIFIED", "CUSTODY_TRANSFERRED",
-                     "INVESTIGATION_STATUS_CHANGED"):
+    hero_evidence = db_session.scalars(select(Evidence).where(Evidence.investigation_id == hero.id)).all()
+    assert len(hero_evidence) == 9
+    assert {entry.integrity_status for entry in hero_evidence} == {"verified", "not_verified", "mismatch"}
+    assert db_session.scalar(select(func.count(AnalysisRun.id)).where(AnalysisRun.investigation_id == hero.id)) == 2
+    assert db_session.scalar(select(func.count(Artifact.id)).where(Artifact.investigation_id == hero.id)) > 20
+    assert db_session.scalar(select(func.count(Correlation.id)).where(Correlation.investigation_id == hero.id)) >= 3
+    findings = db_session.scalars(select(Finding).where(Finding.investigation_id == hero.id)).all()
+    assert findings
+    assert "accepted" in {entry.status for entry in findings}
+    assert db_session.scalar(select(func.count(Report.id)).where(Report.investigation_id == hero.id)) == 1
+
+    actions = set(db_session.scalars(select(AuditEvent.action)).all())
+    for expected in ("INVESTIGATION_CREATED", "EVIDENCE_REGISTERED", "EVIDENCE_VERIFIED", "EVIDENCE_INTEGRITY_MISMATCH", "AI_ANALYSIS_COMPLETED", "AI_FINDING_GENERATED", "REPORT_GENERATED"):
         assert expected in actions
-    # No fake AI output anywhere in the audit trail.
-    assert not {a for a in actions if a.startswith("AI_") or "REPORT" in a}
 
 
-def test_demo_seed_is_idempotent(db_session, storage_dir, tmp_path):
+def test_demo_seed_is_idempotent_across_all_generated_state(db_session, storage_dir):
     seed_roles(db_session)
-    sample_dir = tmp_path / "sample-data"
-    write_sample_files(sample_dir)
-
-    first = run_demo(db_session, sample_dir)
-    second = run_demo(db_session, sample_dir)
+    first = run_demo(db_session, SAMPLE_DIR)
+    before = counts(db_session)
+    second = run_demo(db_session, SAMPLE_DIR)
 
     assert first.id == second.id
     assert find_demo(db_session) is not None
-    assert db_session.execute(select(func.count()).select_from(Investigation)).scalar_one() == 1
-    assert db_session.execute(select(func.count()).select_from(Evidence)).scalar_one() == len(DEMO_FILES)
+    assert counts(db_session) == before

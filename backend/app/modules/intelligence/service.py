@@ -376,10 +376,25 @@ def start_run(
         )
         db.commit()
     except Exception as exc:
+        failure = str(exc)[:1000]
+        run_number = run.run_number
+        evidence_count = run.evidence_count
         db.rollback()
-        run.status = RunStatus.FAILED.value
-        run.error = str(exc)[:1000]
-        run.completed_at = _now()
+        # The rollback removes a newly flushed run from the session. Persist a
+        # fresh failure record so an unexpected pipeline error never erases
+        # the explicit run history or triggers a refresh of a transient row.
+        run = AnalysisRun(
+            investigation_id=inv.id,
+            run_number=run_number,
+            initiated_by_id=user.id,
+            status=RunStatus.FAILED.value,
+            pipeline_version=PIPELINE_VERSION,
+            evidence_count=evidence_count,
+            error=failure,
+            completed_at=_now(),
+        )
+        db.add(run)
+        db.flush()
         record(
             db,
             action=Actions.AI_ANALYSIS_FAILED,

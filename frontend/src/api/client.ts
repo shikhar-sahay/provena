@@ -506,16 +506,16 @@ export interface ReportContent {
   generated_by: string;
   generated_at: string;
   generator: string;
-  narrative: {
+  narrative?: {
     executive_summary: string;
     investigation_narrative: string;
     finding_narratives: Record<string, string>;
     conclusion: string;
     used_finding_ids: number[];
   };
-  generation_metadata: {
+  generation_metadata?: {
     mode: "ai_enhanced" | "deterministic_fallback";
-    provider: string;
+    provider: string | null;
     model: string | null;
     generated_at: string;
     context_sha256: string;

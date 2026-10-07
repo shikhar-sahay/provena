@@ -105,14 +105,28 @@ Never use these credentials anywhere shared or production-like.
 
 ## Demo investigation (optional)
 
-`python -m app.seed_demo` (from `backend/`, after the user seed) builds the
-fictional "Suspected Internal Data Exfiltration" investigation from
-`sample-data/*.log` using only real application services: registration with
-genuine SHA-256 baselines, verification runs, a custody transfer, team
-membership, and an in-progress status. Every record, digest, and audit entry
-is real; no AI output is fabricated. Idempotent: reruns detect the existing
-demo investigation by title and stop. Refuses to run with
+`python -m app.seed_demo` (from `backend/`, after the user seed) builds five
+fully synthetic investigations at different stages. The hero exfiltration
+case includes verified, awaiting-verification, and controlled mismatch states,
+two real analysis runs, extracted artifacts, shared-value correlations,
+rule-generated findings with mixed review states, custody activity, notes, and
+an offline deterministic report. Supporting cases provide pending review,
+partial analysis, attention-required, and closed historical states. Every
+record is created through application services. No findings or analysis output
+are inserted directly, and the seed never calls Ollama. Reruns add only missing
+demo state and do not duplicate records. It refuses to run with
 `APP_ENV=production`.
+
+To rebuild all local development data from scratch, use the existing explicit
+reset flow, then run the demo seed:
+
+```powershell
+./scripts/dev.ps1 reset -Force
+./scripts/dev.ps1 demo
+```
+
+The reset command is destructive to the local development database and stored
+development evidence, so it always remains a separate, explicit operation.
 
 ## Running services without Docker
 

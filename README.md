@@ -213,9 +213,11 @@ Log in with username or email. The user seed (`python -m app.seed` from
 `backend/`, idempotent) creates `admin`, `investigator`, `analyst`, and
 `custodian` (password `provena-dev` by default, overridable via
 `SEED_DEV_PASSWORD`; **local development only**). All four belong to the
-`Provena Demo Workspace`. The demo seed
-(`python -m app.seed_demo`) builds a populated fictional exfiltration
-investigation from `sample-data/` for walkthroughs. Admins can create
+`Provena Demo Workspace`. The offline demo seed (`python -m app.seed_demo`)
+builds five synthetic investigations at different lifecycle stages. It uses
+the real integrity, custody, deterministic analysis, correlation, rule review,
+and immutable report workflows. Reruns are idempotent and never require
+Ollama. Admins can create
 further users via `POST /api/users`. Tokens expire after 8 hours; logout
 discards the token and records an audit event. An expired session signs
 the UI out automatically.

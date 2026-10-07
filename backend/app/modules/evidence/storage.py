@@ -88,3 +88,12 @@ def discard_staged(staging_path: Path) -> None:
 
 def open_stored(storage_key: str) -> BinaryIO:
     return open(resolve(storage_key), "rb")
+
+
+def replace_for_demo(storage_key: str, data: bytes) -> None:
+    """Replace stored bytes only for deterministic non-production integrity demos."""
+    if settings.app_env == "production":
+        raise RuntimeError("Demo storage mutation is disabled in production.")
+    path = resolve(storage_key)
+    with open(path, "wb") as handle:
+        handle.write(data)
