@@ -119,13 +119,18 @@ export default function DashboardPage() {
               </li>
             )}
             {summary.findings_pending_review > 0 && (
-              <li className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
-                <Inbox size={15} className="shrink-0 text-warning-ink" />
-                <span>
-                  <span className="font-semibold tabular-nums">{summary.findings_pending_review}</span>{" "}
-                  {summary.findings_pending_review === 1 ? "finding awaits" : "findings await"}{" "}
-                  investigator review
-                </span>
+              <li>
+                <Link
+                  to="/findings?status=pending_review"
+                  className="pv-transition flex items-center gap-2.5 px-4 py-2.5 hover:bg-hover"
+                >
+                  <Inbox size={15} className="shrink-0 text-warning-ink" />
+                  <span className="text-sm">
+                    <span className="font-semibold tabular-nums">{summary.findings_pending_review}</span>{" "}
+                    {summary.findings_pending_review === 1 ? "finding awaits" : "findings await"}{" "}
+                    investigator review
+                  </span>
+                </Link>
               </li>
             )}
           </ul>
