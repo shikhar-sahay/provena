@@ -4,13 +4,57 @@ Provena is a **modular monolith**: a React SPA, a FastAPI backend containing all
 domain and analysis logic, and PostgreSQL. No microservices, no message brokers,
 no separate AI service.
 
+## Workspace authorization boundary
+
+`Workspace` is the product organization boundary. `WorkspaceMembership`
+assigns one of four operational roles to a user, and `User.active_workspace_id`
+selects the workspace for the current session. Every investigation stores a
+non-null `workspace_id`. Investigation access first verifies the active
+workspace, then applies workspace-admin or investigation-team rules. Global
+findings and search query only investigations in the active workspace.
+
+An investigation team remains a separate `InvestigationMember` subset. This
+keeps workspace membership and case assignment conceptually distinct.
+
+```mermaid
+erDiagram
+    USER ||--o{ WORKSPACE_MEMBERSHIP : joins
+    WORKSPACE ||--o{ WORKSPACE_MEMBERSHIP : contains
+    WORKSPACE ||--o{ WORKSPACE_INVITE : issues
+    WORKSPACE ||--o{ INVESTIGATION : owns
+    INVESTIGATION ||--o{ INVESTIGATION_MEMBER : assigns
+    USER ||--o{ INVESTIGATION_MEMBER : participates
+```
+
+Administrators are workspace-scoped product administrators. There is no
+platform-wide super-administrator bypass. An administrator from one workspace
+cannot inspect another workspace's investigations, findings, evidence, or
+search results.
+
+## Workspace RBAC matrix
+
+| Capability | Administrator | Investigator | Forensic analyst | Evidence custodian |
+| --- | --- | --- | --- | --- |
+| Manage workspace members and invites | Yes | No | No | No |
+| Create and manage investigations | Yes | Yes | No | No |
+| Join an assigned investigation team | Yes | Yes | Yes | Yes |
+| Register and verify evidence | Yes | Team lead/creator | View | Assigned custodian |
+| Record custody transfers | Yes | Team lead/creator | No | Assigned custodian |
+| Run deterministic analysis | Yes | Team lead/creator | Assigned analyst | No |
+| Generate rule findings | Yes | Team lead/creator | Assigned analyst | No |
+| Accept or reject findings | Yes | Team lead/creator | No | No |
+| Generate immutable reports | Yes | Team lead/creator | No | No |
+
+The backend is the security boundary. The frontend hides actions when the
+selected workspace role cannot perform them.
+
 ## System overview
 
 ```mermaid
 flowchart TB
     Users --> SPA["React + TypeScript SPA"]
     SPA -->|"HTTP /api/*"| API["FastAPI modular monolith"]
-    API --> Auth["Auth / Users (implemented)"]
+    API --> Auth["Auth / Workspaces / Users (implemented)"]
     API --> Inv["Investigations + Membership (implemented)"]
     API --> Ev["Evidence (implemented)"]
     Ev --> Integ["Integrity Verification (implemented)"]
@@ -21,14 +65,12 @@ flowchart TB
     Intel --> Runs["Analysis runs + Artifacts (implemented)"]
     Intel --> Corr["Shared-value correlation (implemented)"]
     Intel --> Find["Rule findings + Validation (implemented)"]
-    Intel --> Rep["Deterministic reports (implemented)"]
-    API --> AI["AI investigation engine, in-process (partially implemented)"]
-    AI --> LLM["Local LLM via Ollama, report prose only (planned)"]
+    Intel --> Rep["Grounded immutable reports (implemented)"]
+    API --> AI["AI investigation engine, in-process (implemented)"]
+    AI --> LLM["Optional local Ollama narrative (implemented)"]
+    LLM --> Fall["Deterministic fallback"]
     API --> PG[("PostgreSQL")]
-    style LLM fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
-
-Dashed boxes are planned modules. Everything else is implemented.
 
 ## Frontend / backend / database relationship
 
@@ -207,7 +249,7 @@ Integrity, Maintain Chain of Custody, Analyze Evidence (verified-only
 extraction plus shared-value correlation), Investigator Validation (of team,
 status, evidence, custody, and finding decisions via audit), Generate Report
 (deterministic, from accepted findings), Archive Investigation (via `archived`
-status). Generative report prose remains planned.
+status). Grounded Ollama report prose and deterministic fallback are implemented.
 
 ## Request / data flow (implemented paths)
 

@@ -1,11 +1,48 @@
 # AI Architecture
 
-> Status: hybrid design. **Extraction, correlation, rule-based findings with
-> human validation, and deterministic reporting are implemented.** Generative
-> reporting (Ollama) is planned, not implemented. Nothing below should be read
-> as claiming LLM involvement: there is none.
+> Status: hybrid implementation. **Extraction, correlation, rule-based findings,
+> human validation, grounded optional Ollama narrative, and deterministic
+> fallback reporting are implemented.**
 
-## The pipeline (planned)
+## Implemented local narrative provider
+
+Report narrative generation uses a small provider boundary in the modular
+monolith. The default provider is deterministic and requires no model. When
+`LLM_ENABLED=true`, `LLM_PROVIDER=ollama`, and `OLLAMA_MODEL` is configured,
+Provena sends only a controlled JSON context to Ollama. That context contains
+investigation metadata, accepted findings, confidence factors,
+recommendations, and investigator notes. Raw evidence bytes are never sent.
+
+The prompt requires JSON with an executive summary, investigation narrative,
+per-finding narratives, a conclusion, and referenced finding IDs. Provena
+validates the structure, length limits, and finding IDs. Any HTTP error,
+timeout, malformed JSON, missing field, or unsupported finding reference is
+rejected and replaced with deterministic prose. Provider, model, generation
+time, context SHA-256, template version, fallback flag, and bounded error are
+stored in the immutable report snapshot. Hidden chain-of-thought is neither
+requested nor stored.
+
+The validator also rejects concrete IP addresses, email addresses, URLs,
+filenames, host identifiers, and quantities that do not occur in the supplied
+context. This deliberately prefers fallback over fluent but unsupported prose.
+
+```mermaid
+flowchart LR
+    A[Accepted findings and structured case state] --> B[Grounded context]
+    B --> C{Ollama enabled and healthy?}
+    C -->|Yes| D[Structured local generation]
+    D --> E{Schema and references valid?}
+    E -->|Yes| F[AI-enhanced narrative]
+    E -->|No| G[Deterministic fallback]
+    C -->|No| G
+    F --> H[Immutable hashed report]
+    G --> H
+```
+
+The provider does not parse evidence, correlate entities, run rules, set
+confidence, change finding status, determine integrity, or update custody.
+
+## The deterministic analytical pipeline
 
 ```mermaid
 flowchart TB
@@ -65,16 +102,16 @@ flowchart LR
     R --> S[Confidence]
     S --> Rec[Recommendations]
     Rec --> H[Human Validation]
-    H --> D[Deterministic Report]
-    H --> L[LLM Report Generation planned]
-    style L fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
+    H --> D[Grounded Report Context]
+    D --> L[Optional Ollama Narrative]
+    D --> F[Deterministic Fallback]
 ```
 
 Implemented: verified-only processing, parsers (txt, log, csv, json, pdf),
 14 artifact types, provenance locators, deduplicated artifacts, shared-value
 correlation, three rules, weighted confidence, recommendations from rules,
 pending/accepted/rejected validation, investigator notes, deterministic
-reports. Planned: Ollama narrative enhancement (Milestone 6).
+reports, optional Ollama narrative enhancement, and deterministic fallback.
 
 One principle governs this handoff: **analysis runs only on VERIFIED
 evidence.** A `mismatch`, `unavailable`, or never-verified item is blocked
@@ -131,7 +168,7 @@ makes the audit log meaningful for analysis events
 
 ## D. Confidence scoring
 
-- **Initial planned implementation: transparent weighted confidence scoring.**
+- **Implemented: transparent weighted confidence scoring.**
   Each contributing factor has a recorded weight, and the final score is a
   documented combination of its inputs. These scores rank and prioritize
   findings; they are **not** mathematically calibrated probabilities and must
@@ -141,7 +178,7 @@ makes the audit log meaningful for analysis events
 
 ## E. Generative AI / Ollama
 
-- A free, local LLM is planned; **Ollama is the intended inference mechanism**
+- A free, local LLM is optional; **Ollama is the implemented inference mechanism**
   (zero budget, data never leaves the machine).
 - Model choice must remain hardware-conscious: small instruction-tuned models
   (a few billion parameters) are sufficient for rephrasing structured input.
@@ -163,22 +200,22 @@ and remain visible in the audit trail as rejected.
 
 ## G. AI course relevance
 
-Provena maps to these AI concepts (implemented unless marked planned):
+Provena maps to these AI concepts:
 
 - **Intelligent agents:** the analysis pipeline perceives evidence and acts by
   recommending investigative steps, with the investigator in the loop.
 - **Knowledge representation:** structured evidence, entities, rules, and
   finding records with explicit references.
-- **Search / graph traversal:** planned correlation over shared artifacts and
-  time windows; a future investigation knowledge graph.
+- **Search and correlation:** deterministic shared-artifact correlation is
+  implemented; a future investigation knowledge graph may extend it.
 - **Symbolic AI / expert systems:** the rule engine encoding investigator
   domain knowledge.
 - **Rule-based reasoning:** deriving hypotheses and recommendations from
   structured facts.
 - **Reasoning under uncertainty:** transparent weighted confidence now,
   Bayesian scoring later.
-- **Information extraction / NLP:** regex for structured artifacts; spaCy where
-  NLP genuinely adds value (named entities in unstructured text).
+- **Information extraction:** deterministic regex and key-aware structured
+  extraction with exact source locators.
 - **Planning:** recommendation of next investigative steps given current state.
 - **Natural language generation:** LLM rendering of validated findings into
   report prose.

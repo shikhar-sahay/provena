@@ -1,4 +1,4 @@
-# AGENTS.md — Instructions for AI coding agents working in Provena
+# AGENTS.md: Instructions for AI coding agents working in Provena
 
 Read this file before making any change. The repository itself is the persistent
 project context; keep it accurate.
@@ -29,7 +29,7 @@ Evidence processing, correlation, reasoning, confidence calculation, and
 recommendations must remain explainable and traceable to underlying evidence.
 The investigative pipeline is deterministic parsers, regex, spaCy (only where NLP
 genuinely adds value), custom correlation logic, custom rule-based reasoning,
-transparent weighted confidence scoring, and deterministic recommendations — with
+transparent weighted confidence scoring, and deterministic recommendations, with
 human investigator validation before anything reaches a report. A local LLM
 (Ollama) may eventually render validated structured findings into report prose,
 and the system must degrade gracefully when it is unavailable.
@@ -61,7 +61,7 @@ sample-data/         # synthetic demo data only (see its README)
 
 - **Backend:** FastAPI + Pydantic v2 + SQLAlchemy 2.0 style. One domain = one
   package under `app/modules/<domain>/` with `router.py`, `schemas.py`,
-  `service.py`, `models.py` only as needed — do not create empty abstraction
+  `service.py`, `models.py` only as needed. Do not create empty abstraction
   files to look "enterprise". Environment-based config in `app/core/config.py`;
   never hardcode credentials or URLs.
 - **Frontend:** Functional React components, TypeScript strict, Tailwind v4
@@ -115,7 +115,7 @@ sample-data/         # synthetic demo data only (see its README)
 - Inspect existing code and docs before changing architecture; understand the
   current branch/remote and preserve legitimate existing work.
 - Prefer focused changes over broad rewrites. Do not silently change core
-  architectural decisions (monolith, deterministic AI pipeline, Postgres) —
+  architectural decisions (monolith, deterministic AI pipeline, Postgres).
   raise them with the user first.
 - Do not expand scope beyond what is requested.
 

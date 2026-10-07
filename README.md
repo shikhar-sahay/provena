@@ -26,17 +26,20 @@ human investigators validating findings before anything reaches a report.
 
 ## Current implementation status
 
-Working end-to-end slice: **authentication, users and roles, investigation
-management with team membership, forensic evidence with SHA-256 integrity and
+Working end-to-end slice: **self-service accounts, workspaces, invitation-based
+membership and roles, investigation management with team membership, forensic evidence with SHA-256 integrity and
 chain of custody, deterministic intelligence (extraction plus shared-value
 correlation over verified evidence), rule-based findings with human
-validation, deterministic reporting, audit logging, timelines, and a polished
-web UI**. Generative AI is planned, not implemented.
+validation, grounded local narrative generation with deterministic fallback,
+immutable reporting, audit logging, timelines, and a polished web UI**.
 
 ### Implemented now
 
 - Username/email login with bcrypt-hashed passwords and JWT bearer sessions
-- Four roles with backend-enforced authorization: admin, investigator,
+- Self-service registration followed by create-workspace or invite-code onboarding
+- Workspace isolation for investigations, evidence, findings, search, and member rosters
+- Hashed, expiring, reusable invitation codes with role assignment
+- Four workspace-scoped roles with backend-enforced authorization: admin, investigator,
   forensic analyst, evidence custodian
 - Explicit dev seed creating one login per role (`python -m app.seed`)
 - Investigations with auto-generated case numbers (`PRV-2026-0001`), statuses,
@@ -59,27 +62,27 @@ web UI**. Generative AI is planned, not implemented.
   pending/accepted/rejected validation with reviewer and note
 - Investigator notes on cases and findings; deterministic reports from
   accepted findings with content hashes and print-to-PDF
+- Optional Ollama-compatible report narrative over accepted structured facts,
+  with validated JSON output, generation metadata, and deterministic fallback
 - Light/dark/system themes, approved monochrome brand, global search,
   dialogs, toasts, skeletons, and empty/error states throughout
 - PostgreSQL persistence via Alembic migrations; backend pytest suite,
   frontend vitest behavior tests
 
-### Planned
+### Future enhancements
 
-- Findings curation workspace (rules and validation exist; bulk triage UI later)
 - Bayesian confidence scoring (current scoring is deterministic and weighted)
 - Knowledge graphs, cross-case analysis, automated timeline reconstruction
-- Ollama-backed narrative enhancement for reports (deterministic reports work
-  offline; the LLM would only improve prose, never invent findings)
+- OCR and deep binary forensics
 
 ## AI architecture overview
 
 **The LLM is not the investigative reasoning engine.** Provena separates
 explainable analytical AI (deterministic parsing, extraction, correlation,
 symbolic rule-based reasoning, transparent weighted scoring) from generative
-AI. A local LLM via Ollama may later render *already-validated* structured
-findings into report prose, and the system stays useful when it is
-unavailable. Initial scoring is deterministic and weighted; Bayesian scoring
+AI. An optional local LLM via Ollama renders *already-validated* structured
+findings into report prose, and the system stays useful when it is unavailable.
+Initial scoring is deterministic and weighted; Bayesian scoring
 is a future enhancement, not a current claim. Full design and course mapping
 in `docs/ai-architecture.md`.
 
@@ -95,7 +98,9 @@ in `docs/ai-architecture.md`.
 | Dev      | Docker/Docker Compose, pytest, ESLint, Alembic                 |
 
 The backend is a **modular monolith**: all domain and analysis logic lives in
-one FastAPI application (`backend/app/modules/`, `backend/app/ai/`).
+one FastAPI application (`backend/app/modules/`, `backend/app/ai/`). Workspace
+membership is the authorization boundary, while investigation teams are
+workspace-member subsets.
 See `docs/architecture.md`.
 
 ## System architecture
@@ -104,15 +109,15 @@ See `docs/architecture.md`.
 flowchart TB
     Users --> SPA["React + TypeScript SPA"]
     SPA -->|"HTTP /api/*"| API["FastAPI modular monolith"]
-    API --> Auth["Auth / Users (implemented)"]
+    API --> Auth["Auth / Workspaces / Users"]
     API --> Inv["Investigations + Membership (implemented)"]
     API --> Ev["Evidence + Integrity + Custody (implemented)"]
     API --> Intel["Intelligence: runs, artifacts, correlations (implemented)"]
     Intel --> Find["Rule findings + Validation (implemented)"]
-    Intel --> Rep["Deterministic reports (implemented)"]
+    Intel --> Rep["Immutable grounded reports"]
     API --> Audit["Audit log (implemented)"]
     API --> AI["AI investigation engine, in-process (partially implemented)"]
-    AI --> LLM["Local LLM via Ollama, report prose only (planned)"]
+    AI --> LLM["Optional Ollama report prose"]
     API --> PG[("PostgreSQL")]
     style LLM fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
@@ -132,9 +137,9 @@ flowchart LR
     I --> J[Archive Investigation]
 ```
 
-Create, Assign Team, Register Evidence, Verify Integrity, Maintain Custody,
-Validation, and Archive are implemented; analysis, AI insights, and report
-generation are planned.
+Every step shown is implemented. Analysis uses deterministic extraction,
+correlation, and versioned rules. Reports include only accepted findings as
+validated conclusions.
 
 ## Repository structure
 
@@ -165,8 +170,8 @@ Provena mark: a geometric P with provenance nodes for lineage and custody.
   creation, account menu, theme control
 - Dashboard with live caseload figures from `GET /api/dashboard/summary`
   (scoped counts, integrity issues, recent activity), never fabricated metrics
-- Investigation workspace: Overview, Evidence, Timeline, Custody, Audit Log;
-  Findings, AI Analysis, and Reports render as honest planned states
+- Investigation workspace: Overview, Evidence, Timeline, Custody, AI Analysis,
+  Findings, Reports, and Audit Log
 - Evidence as a forensic record: baseline digest with copy, verification
   stepper and history, custody flow, timeline, transfers via dialog
 - Dialogs, drawers, toasts, skeletons, empty/error states, keyboard support,
@@ -203,10 +208,12 @@ outside tests. Verify with `alembic upgrade head` followed by
 
 ## Authentication and development users
 
+Visitors may register, then create a workspace or join one with an invite code.
 Log in with username or email. The user seed (`python -m app.seed` from
 `backend/`, idempotent) creates `admin`, `investigator`, `analyst`, and
 `custodian` (password `provena-dev` by default, overridable via
-`SEED_DEV_PASSWORD`; **local development only**). The demo seed
+`SEED_DEV_PASSWORD`; **local development only**). All four belong to the
+`Provena Demo Workspace`. The demo seed
 (`python -m app.seed_demo`) builds a populated fictional exfiltration
 investigation from `sample-data/` for walkthroughs. Admins can create
 further users via `POST /api/users`. Tokens expire after 8 hours; logout

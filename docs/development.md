@@ -1,5 +1,50 @@
 # Development Guide
 
+## Account and workspace onboarding
+
+The sign-in page links to self-service registration. A newly registered user
+has no workspace and is redirected to onboarding. They can create a workspace,
+which makes them its administrator, or enter an invite code created by a
+workspace administrator. Invite codes are stored only as SHA-256 hashes and
+the full code is returned only when created.
+
+The development seed remains idempotent and creates or repairs the `Provena
+Demo Workspace` membership for all four local accounts.
+
+## Optional Ollama narrative
+
+Core Provena operation and report generation do not require Ollama. To enable
+local narrative enhancement:
+
+```powershell
+ollama pull qwen3:4b
+$env:LLM_ENABLED="true"
+$env:LLM_PROVIDER="ollama"
+$env:OLLAMA_BASE_URL="http://127.0.0.1:11434"
+$env:OLLAMA_MODEL="qwen3:4b"
+./scripts/dev.ps1 api
+```
+
+`qwen3:4b` is an example for ordinary student hardware, not a hard-coded
+requirement. Choose another installed Ollama model through `OLLAMA_MODEL` when
+resource constraints require it. The Workspace page reports availability. A
+missing model, stopped server, timeout, or invalid response automatically uses
+deterministic fallback prose.
+
+## Fresh demo walkthrough
+
+1. Register a new account and create a workspace.
+2. Open Workspace, choose a role, generate an invite, and copy the code.
+3. Register a second account in another browser profile and join with the code.
+4. Assign workspace members to a new investigation.
+5. Register synthetic evidence, verify its SHA-256, and record custody.
+6. Run analysis as an assigned analyst. Inspect artifacts, locators,
+   correlations, rule conditions, and weighted confidence.
+7. Accept or reject findings as an investigator and add review context.
+8. Generate a report. Inspect narrative mode, context hash, accepted findings,
+   and final report content hash.
+9. Stop Ollama and generate a new report to demonstrate deterministic fallback.
+
 ## Prerequisites
 
 Python 3.13+, Node 22+, Docker + Docker Compose.

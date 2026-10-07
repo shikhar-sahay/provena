@@ -2,7 +2,7 @@
 
 This document is the authoritative description of how Provena registers
 evidence, proves its integrity, and tracks its custody. It covers the
-implemented foundation; AI processing on top of this layer is planned
+implemented foundation and the verified-only analysis gate
 (see `docs/ai-architecture.md`).
 
 ## Concepts (kept separate)
@@ -27,11 +27,10 @@ flowchart TB
     Register --> Custody0[Initial custody event: registered]
     Custody0 --> Verify[Integrity verification on demand]
     Verify --> Activity[Custody and analysis activity]
-    Activity --> AI[Future AI processing: extraction, reasoning]
-    style AI fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
+    Activity --> AI[Verified-only extraction and reasoning]
 ```
 
-The dashed stage is planned. Everything else is implemented.
+Every stage shown is implemented.
 
 ## Registration and storage
 
