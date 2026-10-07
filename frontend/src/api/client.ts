@@ -346,8 +346,37 @@ export interface Finding {
   reviewer_username: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  investigation_title?: string | null;
+  investigation_case_number?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SearchResultItem {
+  category: "investigation" | "evidence" | "finding" | "artifact";
+  id: number;
+  title: string;
+  subtitle: string;
+  url: string;
+  investigation_id: number;
+  investigation_title: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  results: SearchResultItem[];
+}
+
+export interface BulkFindingReviewPayload {
+  finding_ids: number[];
+  status: "accepted" | "rejected";
+  note?: string;
+}
+
+export interface BulkReviewResult {
+  updated: Finding[];
+  count: number;
 }
 
 export interface Note {
@@ -681,6 +710,44 @@ export const api = {
       `/api/investigations/${invId}/analysis/findings/${findingId}/review`,
       { method: "POST", body: JSON.stringify({ status, note: note ?? null }) },
     );
+  },
+  bulkReviewFindings(invId: number, payload: BulkFindingReviewPayload) {
+    return apiFetch<BulkReviewResult>(
+      `/api/investigations/${invId}/analysis/findings/bulk-review`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+  listGlobalFindings(
+    filters: {
+      status?: FindingStatus;
+      severity?: string;
+      rule_id?: string;
+      investigation_id?: number;
+      q?: string;
+      limit?: number;
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.status) params.set("status", filters.status);
+    if (filters.severity) params.set("severity", filters.severity);
+    if (filters.rule_id) params.set("rule_id", filters.rule_id);
+    if (filters.investigation_id !== undefined) {
+      params.set("investigation_id", String(filters.investigation_id));
+    }
+    if (filters.q) params.set("q", filters.q);
+    if (filters.limit) params.set("limit", String(filters.limit));
+    const qs = params.toString();
+    return apiFetch<Finding[]>(`/api/findings${qs ? `?${qs}` : ""}`);
+  },
+  bulkReviewGlobalFindings(payload: BulkFindingReviewPayload) {
+    return apiFetch<BulkReviewResult>("/api/findings/bulk-review", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  globalSearch(query: string) {
+    const q = encodeURIComponent(query.trim());
+    return apiFetch<SearchResponse>(`/api/search?q=${q}`);
   },
   listNotes(invId: number, findingId?: number) {
     const query = findingId !== undefined ? `?finding_id=${findingId}` : "";

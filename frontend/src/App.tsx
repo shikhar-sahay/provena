@@ -10,6 +10,7 @@ import CustodyTab from "./pages/CustodyTab";
 import DashboardPage from "./pages/DashboardPage";
 import EvidenceDetailPage from "./pages/EvidenceDetailPage";
 import EvidenceTab from "./pages/EvidenceTab";
+import FindingsWorkspacePage from "./pages/FindingsWorkspacePage";
 import InvestigationOverview from "./pages/InvestigationOverview";
 import InvestigationWorkspace from "./pages/InvestigationWorkspace";
 import InvestigationsPage from "./pages/InvestigationsPage";
@@ -52,6 +53,7 @@ export default function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="investigations" element={<InvestigationsPage />} />
+        <Route path="findings" element={<FindingsWorkspacePage />} />
         <Route path="users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
         <Route path="investigations/:id" element={<InvestigationWorkspace />}>
           <Route index element={<InvestigationOverview />} />
