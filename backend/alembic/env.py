@@ -16,6 +16,7 @@ from app.db.session import Base
 # Import all models so autogenerate sees every table.
 import app.modules.audit.models  # noqa: F401
 import app.modules.evidence.models  # noqa: F401
+import app.modules.intelligence.models  # noqa: F401
 import app.modules.investigations.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
 

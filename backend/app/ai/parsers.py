@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 # what a single analysis pass will chew through, with explicit per-evidence
 # failure instead of silent truncation.
 MAX_LINE_CHARS = 10_000
+MAX_TEXT_BYTES = 10 * 1024 * 1024
 MAX_JSON_BYTES = 10 * 1024 * 1024
 MAX_JSON_DEPTH = 20
 MAX_JSON_LEAVES = 50_000
@@ -59,6 +60,8 @@ def _bound_line(line: str) -> str:
 
 def parse_text(data: bytes) -> list[SourceUnit]:
     """Plain text: one unit per non-blank line, 1-based line numbers."""
+    if len(data) > MAX_TEXT_BYTES:
+        raise ParserError("Text exceeds the size limit for analysis.")
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
@@ -80,6 +83,8 @@ def parse_text(data: bytes) -> list[SourceUnit]:
 
 def parse_log(data: bytes) -> list[SourceUnit]:
     """Log text: like plain text, but skips comment and blank lines."""
+    if len(data) > MAX_TEXT_BYTES:
+        raise ParserError("Log exceeds the size limit for analysis.")
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
@@ -102,6 +107,8 @@ def parse_log(data: bytes) -> list[SourceUnit]:
 
 def parse_csv(data: bytes) -> list[SourceUnit]:
     """CSV: one unit per (data row, non-empty column). Rows are 1-based."""
+    if len(data) > MAX_TEXT_BYTES:
+        raise ParserError("CSV exceeds the size limit for analysis.")
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
