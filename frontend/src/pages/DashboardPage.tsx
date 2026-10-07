@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, FileSearch, FolderKanban, Plus } from "lucide-react";
+import { AlertTriangle, FileSearch, FlaskConical, FolderKanban, Inbox } from "lucide-react";
 import { api } from "../api/client";
 import type { DashboardSummary, Investigation } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -74,14 +74,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Welcome back${user ? `, ${displayName(user)}` : ""}`}
-        description="Caseload context across the investigations you can access."
-        actions={
-          canCreate && (
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-              New investigation
-            </Button>
-          )
-        }
+        description="What needs your attention across the investigations you can access."
       />
 
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
@@ -104,6 +97,56 @@ export default function DashboardPage() {
           {summary.integrity_issues === 1
             ? "One evidence item needs attention: its stored bytes do not match the baseline, or it cannot be read."
             : `${summary.integrity_issues} evidence items need attention: stored bytes do not match baselines, or files cannot be read.`}
+        </p>
+      )}
+
+      {(summary.pending_analysis > 0 || summary.findings_pending_review > 0) && (
+        <section aria-label="Needs attention" className="rounded-md border border-line bg-surface">
+          <ul className="divide-y divide-line">
+            {summary.pending_analysis > 0 && (
+              <li>
+                <Link
+                  to="/investigations"
+                  className="pv-transition flex items-center gap-2.5 px-4 py-2.5 hover:bg-hover"
+                >
+                  <FlaskConical size={15} className="shrink-0 text-info-ink" />
+                  <span className="text-sm">
+                    <span className="font-semibold tabular-nums">{summary.pending_analysis}</span>{" "}
+                    verified evidence{" "}
+                    {summary.pending_analysis === 1 ? "item awaits" : "items await"} analysis
+                  </span>
+                </Link>
+              </li>
+            )}
+            {summary.findings_pending_review > 0 && (
+              <li className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
+                <Inbox size={15} className="shrink-0 text-warning-ink" />
+                <span>
+                  <span className="font-semibold tabular-nums">{summary.findings_pending_review}</span>{" "}
+                  {summary.findings_pending_review === 1 ? "finding awaits" : "findings await"}{" "}
+                  investigator review
+                </span>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
+
+      {summary.last_analysis && (
+        <p className="text-[13px] text-ink3">
+          Last analysis:{" "}
+          <Link
+            to={`/investigations/${summary.last_analysis.investigation_id}/analysis`}
+            className="font-mono text-accentink hover:underline"
+          >
+            {summary.last_analysis.run_label}
+          </Link>{" "}
+          · {summary.last_analysis.investigation_title} · {summary.last_analysis.status} ·{" "}
+          {summary.last_analysis.artifact_count} artifacts,{" "}
+          {summary.last_analysis.correlation_count} correlations
+          {summary.last_analysis.completed_at
+            ? ` · ${timeAgo(summary.last_analysis.completed_at)}`
+            : ""}
         </p>
       )}
 

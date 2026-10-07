@@ -124,6 +124,27 @@ export default function InvestigationsPage() {
         }
       />
 
+      {items !== null && items.length > 0 && (
+        <p aria-live="polite" className="text-[13px] text-ink3">
+          {visible.length === items.length ? (
+            <>
+              <span className="font-semibold text-ink tabular-nums">{items.length}</span>{" "}
+              {items.length === 1 ? "investigation" : "investigations"}
+              {" · "}
+              <span className="font-semibold text-ink tabular-nums">
+                {items.filter((inv) => inv.status !== "closed" && inv.status !== "archived").length}
+              </span>{" "}
+              active
+            </>
+          ) : (
+            <>
+              Showing <span className="font-semibold text-ink tabular-nums">{visible.length}</span>{" "}
+              of <span className="font-semibold text-ink tabular-nums">{items.length}</span>
+            </>
+          )}
+        </p>
+      )}
+
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative min-w-0 flex-1 sm:max-w-xs">
           <Search

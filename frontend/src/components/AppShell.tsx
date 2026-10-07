@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { FolderKanban, LayoutDashboard, LogOut, Moon, Plus, Sun } from "lucide-react";
+import { FolderKanban, LayoutDashboard, LogOut, Moon, Plus, Sun, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "./Toast";
 import { useTheme } from "../theme/ThemeContext";
@@ -17,11 +17,14 @@ import { ThemeToggle } from "./ThemeToggle";
 import { displayName } from "../lib/format";
 
 const NAV = [
-  { to: "/", label: "Dashboard", end: true, icon: <LayoutDashboard size={15} /> },
-  { to: "/investigations", label: "Investigations", end: false, icon: <FolderKanban size={15} /> },
+  { to: "/", label: "Dashboard", end: true, icon: <LayoutDashboard size={15} />, admin: false },
+  { to: "/investigations", label: "Investigations", end: false, icon: <FolderKanban size={15} />, admin: false },
+  { to: "/users", label: "Users", end: true, icon: <Users size={15} />, admin: true },
 ];
 
-const PLANNED = ["Findings", "AI Analysis", "Reports"];
+const PLANNED = [
+  { label: "Findings", note: "Investigator findings curation arrives in a later milestone." },
+];
 
 export default function AppShell() {
   const { user, logout } = useAuth();
@@ -42,7 +45,7 @@ export default function AppShell() {
         </Link>
 
         <nav aria-label="Primary" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-          {NAV.map((item) => (
+          {NAV.filter((item) => !item.admin || user?.role === "admin").map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -61,13 +64,13 @@ export default function AppShell() {
           <p className="px-2.5 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-ink3 uppercase">
             Planned
           </p>
-          {PLANNED.map((label) => (
+          {PLANNED.map((item) => (
             <span
-              key={label}
-              title="Planned for a future milestone"
+              key={item.label}
+              title={item.note}
               className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-ink3"
             >
-              {label}
+              {item.label}
               <span className="rounded border border-line px-1.5 py-px text-[10px] font-medium tracking-wide uppercase">
                 Soon
               </span>
@@ -105,7 +108,7 @@ export default function AppShell() {
                 <BrandMark size={22} />
               </Link>
               <nav aria-label="Primary" className="flex shrink-0 items-center gap-1">
-                {NAV.map((item) => (
+                {NAV.filter((item) => !item.admin || user?.role === "admin").map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}

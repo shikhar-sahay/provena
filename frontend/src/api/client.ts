@@ -178,6 +178,17 @@ export interface DashboardActivity {
   created_at: string;
 }
 
+export interface DashboardLastAnalysis {
+  run_id: number;
+  run_label: string;
+  investigation_id: number;
+  investigation_title: string;
+  status: string;
+  completed_at: string | null;
+  artifact_count: number;
+  correlation_count: number;
+}
+
 export interface DashboardSummary {
   investigations_total: number;
   by_status: Record<string, number>;
@@ -185,9 +196,260 @@ export interface DashboardSummary {
   integrity_issues: number;
   open_investigations: number[];
   recent_activity: DashboardActivity[];
+  pending_analysis: number;
+  findings_pending_review: number;
+  last_analysis: DashboardLastAnalysis | null;
 }
 
-export interface InvestigationCustodyRow {  id: number;
+export type RunStatus = "pending" | "running" | "completed" | "failed";
+export type RunEvidenceStatus =
+  | "processed"
+  | "blocked_not_verified"
+  | "blocked_mismatch"
+  | "blocked_unavailable"
+  | "unsupported"
+  | "failed";
+
+export interface RunEvidenceOutcome {
+  id: number;
+  evidence_id: number;
+  evidence_number: string | null;
+  status: RunEvidenceStatus;
+  error: string | null;
+  artifact_count: number;
+}
+
+export interface AnalysisRun {
+  id: number;
+  investigation_id: number;
+  run_number: number;
+  run_label: string | null;
+  initiated_by_username: string | null;
+  status: RunStatus;
+  pipeline_version: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error: string | null;
+  evidence_count: number;
+  artifact_count: number;
+  correlation_count: number;
+  created_at: string;
+  evidence_outcomes: RunEvidenceOutcome[];
+}
+
+export interface EligibilityEntry {
+  evidence_id: number;
+  evidence_number: string;
+  title: string;
+  integrity_status: string;
+  supported: boolean;
+  eligible: boolean;
+  reason: string | null;
+}
+
+export type ArtifactType =
+  | "IP_ADDRESS"
+  | "EMAIL_ADDRESS"
+  | "USERNAME"
+  | "HOSTNAME"
+  | "DOMAIN"
+  | "FILE_PATH"
+  | "FILE_NAME"
+  | "HASH"
+  | "USB_DEVICE"
+  | "TIMESTAMP"
+  | "URL"
+  | "PORT"
+  | "MAC_ADDRESS"
+  | "PROCESS_NAME";
+
+export interface Artifact {
+  id: number;
+  investigation_id: number;
+  evidence_id: number;
+  evidence_number: string | null;
+  evidence_title: string | null;
+  artifact_type: ArtifactType;
+  raw_value: string;
+  normalized_value: string;
+  locator: Record<string, unknown>;
+  source_key: string;
+  context: string;
+  method: string;
+  extractor_name: string;
+  extractor_version: string;
+  created_at: string;
+}
+
+export interface ArtifactList {
+  total: number;
+  limit: number;
+  offset: number;
+  items: Artifact[];
+}
+
+export interface CorrelationEvidenceItem {
+  evidence_id: number;
+  evidence_number: string;
+  evidence_title: string;
+  artifact_count: number;
+}
+
+export interface Correlation {
+  id: number;
+  investigation_id: number;
+  correlation_type: string;
+  artifact_type: ArtifactType;
+  normalized_value: string;
+  evidence_count: number;
+  artifact_count: number;
+  created_at: string;
+  evidence_items: CorrelationEvidenceItem[];
+}
+
+export interface CorrelationArtifact {
+  id: number;
+  evidence_id: number;
+  evidence_number: string;
+  artifact_type: ArtifactType;
+  raw_value: string;
+  normalized_value: string;
+  locator: Record<string, unknown>;
+  source_key: string;
+  context: string;
+  method: string;
+  extractor_name: string;
+  extractor_version: string;
+}
+
+export interface CorrelationDetail extends Correlation {
+  artifacts: CorrelationArtifact[];
+}
+
+export type FindingStatus = "pending_review" | "accepted" | "rejected";
+
+export interface Finding {
+  id: number;
+  investigation_id: number;
+  rule_id: string;
+  rule_version: string;
+  title: string;
+  summary: string;
+  severity: string;
+  confidence: number;
+  factors: { factor: string; weight: number; detail: string }[];
+  evidence_ids: number[];
+  artifact_ids: number[];
+  correlation_ids: number[];
+  recommendations: string[];
+  status: FindingStatus;
+  reviewer_username: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Note {
+  id: number;
+  investigation_id: number;
+  finding_id: number | null;
+  author_username: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Report {
+  id: number;
+  investigation_id: number;
+  report_number: number;
+  report_label: string | null;
+  generated_by_username: string | null;
+  content: ReportContent;
+  content_sha256: string;
+  created_at: string;
+}
+
+export interface ReportContent {
+  investigation: {
+    case_number: string;
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    created_by: string | null;
+    lead_investigator: string | null;
+    team: { username: string; full_name: string; role: string; team_role: string }[];
+    created_at: string | null;
+  };
+  evidence_summary: {
+    evidence_number: string;
+    title: string;
+    evidence_type: string;
+    original_filename: string;
+    file_size: number;
+    sha256: string;
+    integrity_status: string;
+    last_verified_at: string | null;
+    registered_by: string | null;
+    current_holder: string | null;
+    created_at: string | null;
+  }[];
+  custody_summary: {
+    id: number;
+    evidence_id: number;
+    evidence_number: string;
+    evidence_title: string;
+    action: string;
+    from_user: string | null;
+    to_user: string | null;
+    performed_by: string | null;
+    notes: string;
+    created_at: string;
+  }[];
+  timeline: TimelineEntry[];
+  accepted_findings: {
+    rule_id: string;
+    rule_version: string;
+    title: string;
+    summary: string;
+    severity: string;
+    confidence: number;
+    factors: { factor: string; weight: number; detail: string }[];
+    evidence_ids: number[];
+    artifact_ids: number[];
+    correlation_ids: number[];
+    recommendations: string[];
+    reviewer: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+  }[];
+  recommendations: string[];
+  investigator_notes: {
+    author: string | null;
+    finding_id: number | null;
+    body: string;
+    created_at: string | null;
+  }[];
+  generated_by: string;
+  generated_at: string;
+  generator: string;
+}
+
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+  investigations: { id: number; case_number: string; title: string }[];
+}
+
+export interface InvestigationCustodyRow {
+  id: number;
   evidence_id: number;
   evidence_number: string;
   evidence_title: string;
@@ -341,8 +603,7 @@ export const api = {
   investigationCustody(invId: number) {
     return apiFetch<InvestigationCustodyRow[]>(`/api/investigations/${invId}/custody`);
   },
-  async downloadEvidence(invId: number, evidenceId: number, filename: string) {
-    const API_BASE = import.meta.env.VITE_API_URL ?? "";
+    async downloadEvidence(invId: number, evidenceId: number, filename: string) {    const API_BASE = import.meta.env.VITE_API_URL ?? "";
     const response = await fetch(
       `${API_BASE}/api/investigations/${invId}/evidence/${evidenceId}/download`,
       { headers: { Authorization: `Bearer ${localStorage.getItem("provena_token") ?? ""}` } },
@@ -357,5 +618,116 @@ export const api = {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  },
+  analysisEligibility(invId: number) {
+    return apiFetch<EligibilityEntry[]>(`/api/investigations/${invId}/analysis/eligibility`);
+  },
+  startAnalysisRun(invId: number, evidenceIds: number[]) {
+    return apiFetch<AnalysisRun>(`/api/investigations/${invId}/analysis/runs`, {
+      method: "POST",
+      body: JSON.stringify({ evidence_ids: evidenceIds }),
+    });
+  },
+  listAnalysisRuns(invId: number) {
+    return apiFetch<AnalysisRun[]>(`/api/investigations/${invId}/analysis/runs`);
+  },
+  getAnalysisRun(invId: number, runId: number) {
+    return apiFetch<AnalysisRun>(`/api/investigations/${invId}/analysis/runs/${runId}`);
+  },
+  listArtifacts(
+    invId: number,
+    filters: {
+      artifact_type?: ArtifactType;
+      evidence_id?: number;
+      q?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.artifact_type) params.set("artifact_type", filters.artifact_type);
+    if (filters.evidence_id !== undefined) params.set("evidence_id", String(filters.evidence_id));
+    if (filters.q) params.set("q", filters.q);
+    params.set("limit", String(filters.limit ?? 100));
+    params.set("offset", String(filters.offset ?? 0));
+    return apiFetch<ArtifactList>(`/api/investigations/${invId}/analysis/artifacts?${params}`);
+  },
+  getArtifact(invId: number, artifactId: number) {
+    return apiFetch<Artifact>(`/api/investigations/${invId}/analysis/artifacts/${artifactId}`);
+  },
+  listCorrelations(invId: number) {
+    return apiFetch<Correlation[]>(`/api/investigations/${invId}/analysis/correlations`);
+  },
+  getCorrelation(invId: number, correlationId: number) {
+    return apiFetch<CorrelationDetail>(
+      `/api/investigations/${invId}/analysis/correlations/${correlationId}`,
+    );
+  },
+  generateFindings(invId: number) {
+    return apiFetch<{ findings: Finding[]; new_count: number }>(
+      `/api/investigations/${invId}/analysis/findings/generate`,
+      { method: "POST" },
+    );
+  },
+  listFindings(invId: number, status?: FindingStatus) {
+    const query = status ? `?status=${status}` : "";
+    return apiFetch<Finding[]>(`/api/investigations/${invId}/analysis/findings${query}`);
+  },
+  getFinding(invId: number, findingId: number) {
+    return apiFetch<Finding>(`/api/investigations/${invId}/analysis/findings/${findingId}`);
+  },
+  reviewFinding(invId: number, findingId: number, status: "accepted" | "rejected", note?: string) {
+    return apiFetch<Finding>(
+      `/api/investigations/${invId}/analysis/findings/${findingId}/review`,
+      { method: "POST", body: JSON.stringify({ status, note: note ?? null }) },
+    );
+  },
+  listNotes(invId: number, findingId?: number) {
+    const query = findingId !== undefined ? `?finding_id=${findingId}` : "";
+    return apiFetch<Note[]>(`/api/investigations/${invId}/analysis/notes${query}`);
+  },
+  createNote(invId: number, body: string, findingId?: number) {
+    return apiFetch<Note>(`/api/investigations/${invId}/analysis/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body, finding_id: findingId ?? null }),
+    });
+  },
+  updateNote(invId: number, noteId: number, body: string) {
+    return apiFetch<Note>(`/api/investigations/${invId}/analysis/notes/${noteId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    });
+  },
+  generateReport(invId: number) {
+    return apiFetch<Report>(`/api/investigations/${invId}/analysis/reports`, {
+      method: "POST",
+    });
+  },
+  listReports(invId: number) {
+    return apiFetch<Report[]>(`/api/investigations/${invId}/analysis/reports`);
+  },
+  getReport(invId: number, reportId: number) {
+    return apiFetch<Report>(`/api/investigations/${invId}/analysis/reports/${reportId}`);
+  },
+  adminListUsers() {
+    return apiFetch<AdminUser[]>("/api/admin/users");
+  },
+  adminSetActive(userId: number, isActive: boolean) {
+    return apiFetch<AdminUser>(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive }),
+    });
+  },
+  adminCreateUser(payload: {
+    username: string;
+    email: string;
+    full_name?: string;
+    password: string;
+    role: Role;
+  }) {
+    return apiFetch<User>("/api/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 };
