@@ -69,18 +69,28 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
             select(Evidence).where(Evidence.investigation_id == inv.id)
         ).scalars().all()
     }
-    facts = [
-        ArtifactFact(
-            id=a.id,
-            evidence_id=a.evidence_id,
-            evidence_number=evidence_numbers.get(a.evidence_id, f"#{a.evidence_id}"),
-            artifact_type=a.artifact_type,
-            normalized_value=a.normalized_value,
-            locator_key=a.source_key,
-            context=a.context,
+    facts = []
+    for a in artifacts:
+        span = None
+        raw_span = (a.locator or {}).get("span")
+        if (
+            isinstance(raw_span, list)
+            and len(raw_span) == 2
+            and all(isinstance(v, int) for v in raw_span)
+        ):
+            span = (raw_span[0], raw_span[1])
+        facts.append(
+            ArtifactFact(
+                id=a.id,
+                evidence_id=a.evidence_id,
+                evidence_number=evidence_numbers.get(a.evidence_id, f"#{a.evidence_id}"),
+                artifact_type=a.artifact_type,
+                normalized_value=a.normalized_value,
+                locator_key=a.source_key,
+                context=a.context,
+                span=span,
+            )
         )
-        for a in artifacts
-    ]
     correlations = {
         (c.artifact_type, c.normalized_value): c.id
         for c in db.execute(

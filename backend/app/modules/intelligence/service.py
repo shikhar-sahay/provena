@@ -162,6 +162,7 @@ def _get_or_create_artifact(
     raw_value: str,
     normalized_value: str,
     unit: SourceUnit,
+    locator_override: dict | None = None,
     extractor,
 ) -> Artifact:
     stmt = select(Artifact).where(
@@ -182,7 +183,7 @@ def _get_or_create_artifact(
         artifact_type=artifact_type,
         raw_value=raw_value,
         normalized_value=normalized_value,
-        locator=dict(unit.locator),
+        locator=locator_override if locator_override is not None else dict(unit.locator),
         source_key=unit.locator_key,
         context=unit.context,
         method=extractor.method,
@@ -228,6 +229,9 @@ def _process_evidence(
             normalized = normalize(extraction.artifact_type, extraction.raw_value)
             if normalized is None:
                 continue
+            locator = dict(unit.locator)
+            if extraction.span is not None:
+                locator["span"] = [extraction.span[0], extraction.span[1]]
             _get_or_create_artifact(
                 db,
                 inv_id=inv.id,
@@ -237,6 +241,7 @@ def _process_evidence(
                 raw_value=extraction.raw_value,
                 normalized_value=normalized,
                 unit=unit,
+                locator_override=locator,
                 extractor=extractor,
             )
             count += 1
@@ -244,13 +249,23 @@ def _process_evidence(
 
 
 def _rebuild_correlations(db: Session, inv: Investigation) -> int:
-    """Rebuild shared-value correlations from the canonical artifact store."""
+    """Rebuild shared-value correlations from the canonical artifact store.
+
+    Timestamps are excluded by design: identical clock readings across
+    independent logs are usually coincidence, not entity recurrence. They
+    remain first-class artifacts for rules and display.
+    """
+    from app.modules.intelligence.models import ArtifactType
+
     db.execute(
         Correlation.__table__.delete().where(Correlation.investigation_id == inv.id)
     )
     rows = db.execute(
         select(Artifact.id, Artifact.evidence_id, Artifact.artifact_type, Artifact.normalized_value)
-        .where(Artifact.investigation_id == inv.id)
+        .where(
+            Artifact.investigation_id == inv.id,
+            Artifact.artifact_type != ArtifactType.TIMESTAMP.value,
+        )
         .order_by(Artifact.id)
     ).all()
     built = correlate_engine.build_correlations(

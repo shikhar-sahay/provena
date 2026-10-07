@@ -129,11 +129,13 @@ def _field_name(key: str) -> str:
     return segment.casefold().lstrip("$")
 
 
-def _key_aware_extractions(text: str) -> list[tuple[str, str]]:
+def _key_aware_extractions(text: str) -> list[tuple[str, str, tuple[int, int] | None]]:
     found = []
     for match in KEYVALUE_RE.finditer(text):
         key = match.group(1)
-        value = next(g for g in match.groups()[1:] if g is not None).strip()
+        group_index = next(i for i, g in enumerate(match.groups()[1:], start=2) if g is not None)
+        value = match.group(group_index).strip()
+        span = match.span(group_index)
         if not value:
             continue
         artifact_type = KEY_MAP.get(_field_name(key))
@@ -151,7 +153,7 @@ def _key_aware_extractions(text: str) -> list[tuple[str, str]]:
             continue
         if artifact_type == "FILE_PATH" and "/" not in value and "\\" not in value:
             artifact_type = "FILE_NAME"
-        found.append((artifact_type, value))
+        found.append((artifact_type, value, span))
     return found
 
 
@@ -159,6 +161,10 @@ def _key_aware_extractions(text: str) -> list[tuple[str, str]]:
 class Extraction:
     artifact_type: str
     raw_value: str
+    # Character offsets of the raw value within the unit context, where
+    # available. Used for positional checks (e.g. upload destinations); the
+    # locator_key remains the stable dedup identity.
+    span: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -170,7 +176,12 @@ class Extractor:
     def extract(self, unit: SourceUnit) -> list[Extraction]:
         seen: set[tuple[str, str]] = set()
         out = []
-        for artifact_type, raw in self.run(unit):  # type: ignore[operator]
+        for item in self.run(unit):  # type: ignore[operator]
+            if len(item) == 3:
+                artifact_type, raw, span = item
+            else:
+                artifact_type, raw = item
+                span = None
             raw = raw.strip()
             if not raw or len(raw) > MAX_RAW_CHARS:
                 continue
@@ -178,13 +189,16 @@ class Extractor:
             if key in seen:
                 continue
             seen.add(key)
-            out.append(Extraction(artifact_type, raw))
+            out.append(Extraction(artifact_type, raw, span))
         return out
 
 
 def _regex_extractor(pattern: re.Pattern[str], artifact_type: str):
     def run(unit: SourceUnit):
-        return [(artifact_type, m.group(0)) for m in pattern.finditer(unit.context)]
+        return [
+            (artifact_type, m.group(0), (m.start(), m.end()))
+            for m in pattern.finditer(unit.context)
+        ]
 
     return run
 
@@ -198,7 +212,7 @@ def _domain_run(unit: SourceUnit):
             continue
         if len(labels) == 2 and len(labels[0]) < 3 and tld not in COMMON_TLDS:
             continue
-        yield ("DOMAIN", value)
+        yield ("DOMAIN", value, (match.start(), match.end()))
 
 
 def _usb_token_run(unit: SourceUnit):
@@ -206,7 +220,7 @@ def _usb_token_run(unit: SourceUnit):
         value = match.group(0)
         if len(value) < 5:
             continue
-        yield ("USB_DEVICE", value)
+        yield ("USB_DEVICE", value, (match.start(), match.end()))
 
 
 def _port_run(unit: SourceUnit):
@@ -214,14 +228,16 @@ def _port_run(unit: SourceUnit):
         host, port = match.group(1), match.group(2)
         if not any(c.isalpha() or c in ".-" for c in host):
             continue
-        yield ("PORT", port)
+        start, end = match.span(2)
+        yield ("PORT", port, (start, end))
 
 
 def _email_username_run(unit: SourceUnit):
     for match in EMAIL_RE.finditer(unit.context):
         local = match.group(0).split("@", 1)[0]
         if USERNAME_VALUE_RE.match(local):
-            yield ("USERNAME", local)
+            end = match.start() + len(local)
+            yield ("USERNAME", local, (match.start(), end))
 
 
 def _keyvalue_run(unit: SourceUnit):

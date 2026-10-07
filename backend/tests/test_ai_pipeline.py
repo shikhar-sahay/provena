@@ -208,3 +208,34 @@ def test_correlation_ordering_deterministic():
         ("USERNAME", "a"),
         ("USERNAME", "b"),
     ]
+
+
+def test_regex_extractions_carry_spans():
+    from app.ai.parsers import SourceUnit
+
+    unit = SourceUnit(locator={"kind": "line", "line": 1}, locator_key="line:1",
+                      context="ws-114 (192.0.2.90) https upload 10 bytes to 203.0.113.44")
+    spans = {}
+    for extractor, extraction in extractors.extract_all(unit):
+        if extraction.artifact_type in ("IP_ADDRESS", "HOSTNAME"):
+            spans[extraction.raw_value] = extraction.span
+    assert spans["192.0.2.90"] == (8, 18)
+    assert spans["203.0.113.44"] is not None
+    assert spans["203.0.113.44"][0] > context_keyword(unit.context)
+
+
+def context_keyword(text: str) -> int:
+    return text.casefold().find("upload")
+
+
+def test_keyvalue_extractions_carry_spans():
+    from app.ai.parsers import SourceUnit
+
+    unit = SourceUnit(locator={"kind": "line", "line": 1}, locator_key="line:1",
+                      context="session user=j.smith host=WS-17")
+    found = {}
+    for extractor, extraction in extractors.extract_all(unit):
+        if extraction.artifact_type in ("USERNAME", "HOSTNAME"):
+            found[extraction.raw_value] = extraction.span
+    assert found["j.smith"] == (13, 20)
+    assert found["WS-17"] == (26, 31)

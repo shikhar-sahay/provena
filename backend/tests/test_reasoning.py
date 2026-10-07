@@ -2,6 +2,7 @@
 
 from sqlalchemy import func, select
 
+from app.ai.rules import ArtifactFact, ExternalTransferSequenceRule, FactView
 from app.modules.audit.models import AuditEvent
 from app.modules.intelligence.models import Finding, InvestigationNote, Report
 from tests.conftest import auth_headers, login, make_user
@@ -235,3 +236,46 @@ def test_reports_only_include_accepted(client, investigator, storage_dir, db_ses
     assert db_session.execute(select(func.count()).select_from(Report)).scalar_one() == 2
     assert db_session.execute(select(func.count()).select_from(Finding)).scalar_one() >= 2
     assert db_session.execute(select(func.count()).select_from(InvestigationNote)).scalar_one() == 1
+
+
+def _fact(id, evidence_id, artifact_type, normalized, locator_key, context, span=None):
+    return ArtifactFact(
+        id=id,
+        evidence_id=evidence_id,
+        evidence_number=f"E-{evidence_id:03d}",
+        artifact_type=artifact_type,
+        normalized_value=normalized,
+        locator_key=locator_key,
+        context=context,
+        span=span,
+    )
+
+
+def test_transfer_rule_ignores_source_address_before_keyword():
+    facts = FactView(
+        artifacts=[
+            _fact(1, 10, "HOSTNAME", "ws-114", "line:1", "ws-114 (192.0.2.90) up", (0, 6)),
+            _fact(2, 10, "IP_ADDRESS", "192.0.2.90", "line:1", "ws-114 (192.0.2.90) up", (8, 18)),
+            _fact(
+                3, 10, "IP_ADDRESS", "203.0.113.44", "line:2",
+                "ws-114 upload 10 bytes to 203.0.113.44", (33, 45),
+            ),
+            _fact(
+                4, 10, "TIMESTAMP", "2026-01-13T02:23:18+00:00", "line:2",
+                "2026-01-13 02:23:18 ws-114 upload 10 bytes", None,
+            ),
+            _fact(5, 11, "FILE_NAME", "a.csv", "line:1", "copied a.csv", None),
+            _fact(
+                6, 11, "TIMESTAMP", "2026-01-13T02:20:00+00:00", "line:1",
+                "2026-01-13 02:20:00 copied a.csv", None,
+            ),
+            _fact(7, 11, "USERNAME", "j.smith", "line:1", "user=j.smith copied a.csv", (5, 12)),
+            _fact(8, 10, "USERNAME", "j.smith", "line:2", "user=j.smith upload x", (5, 12)),
+        ],
+        correlations={},
+        all_verified=True,
+    )
+    findings = ExternalTransferSequenceRule().evaluate(facts)
+    assert len(findings) == 1
+    assert "203.0.113.44" in findings[0].title
+    assert "192.0.2.90" not in findings[0].title

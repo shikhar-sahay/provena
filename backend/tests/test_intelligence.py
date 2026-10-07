@@ -78,7 +78,9 @@ def test_verified_evidence_processes_with_provenance(client, investigator, stora
         f"/api/investigations/{inv['id']}/analysis/artifacts/{artifacts['items'][0]['id']}",
         headers=auth_headers(token),
     ).json()
-    assert detail["locator"] == {"kind": "line", "line": 1}
+    assert detail["locator"]["kind"] == "line"
+    assert detail["locator"]["line"] == 1
+    assert detail["locator"]["span"] == [55, 65]
     assert "storage_key" not in str(detail)
     assert len(detail["context"]) <= 280
 
@@ -181,6 +183,32 @@ def test_scanned_pdf_reports_no_text(client, investigator, storage_dir):
     outcome = run["evidence_outcomes"][0]
     assert outcome["status"] == "failed"
     assert "OCR" in (outcome["error"] or "")
+
+
+def test_timestamps_excluded_from_correlation(client, investigator, storage_dir):
+    token = login(client, "investigator")
+    inv = make_investigation(client, token)
+    first = _register(
+        client, token, inv["id"], b"2026-01-13 02:15:01 event alpha\n", "a.log", title="A"
+    )
+    second = _register(
+        client, token, inv["id"], b"2026-01-13 02:15:01 event beta\n", "b.log", title="B"
+    )
+    for item in (first, second):
+        _verify(client, token, inv["id"], item["id"])
+    run = _run(client, token, inv["id"], [first["id"], second["id"]])
+    assert run["status"] == "completed"
+    correlations = client.get(
+        f"/api/investigations/{inv['id']}/analysis/correlations",
+        headers=auth_headers(token),
+    ).json()
+    assert all(c["artifact_type"] != "TIMESTAMP" for c in correlations)
+    timestamps = client.get(
+        f"/api/investigations/{inv['id']}/analysis/artifacts",
+        headers=auth_headers(token),
+        params={"artifact_type": "TIMESTAMP", "limit": 10},
+    ).json()
+    assert timestamps["total"] == 2
 
 
 def test_rerun_does_not_duplicate_artifacts(client, investigator, storage_dir, db_session):
