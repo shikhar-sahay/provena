@@ -1,10 +1,11 @@
 """Intelligence request/response schemas. Storage paths never appear."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.intelligence.models import ArtifactType, RunEvidenceStatus, RunStatus
+from app.modules.intelligence.models import ArtifactType, FindingStatus, RunEvidenceStatus, RunStatus
 
 
 class RunStart(BaseModel):
@@ -110,3 +111,73 @@ class CorrelationArtifactRead(BaseModel):
 
 class CorrelationDetailRead(CorrelationRead):
     artifacts: list[CorrelationArtifactRead] = []
+
+
+class FindingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    investigation_id: int
+    rule_id: str
+    rule_version: str
+    title: str
+    summary: str
+    severity: str
+    confidence: int
+    factors: list[dict]
+    evidence_ids: list[int]
+    artifact_ids: list[int]
+    correlation_ids: list[int]
+    recommendations: list[str]
+    status: FindingStatus
+    reviewer_username: str | None = None
+    reviewed_at: datetime | None = None
+    review_note: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class FindingGenerateResult(BaseModel):
+    findings: list[FindingRead]
+    new_count: int
+
+
+class FindingReview(BaseModel):
+    status: Literal["accepted", "rejected"] = Field(
+        description="Findings can only be accepted or rejected, never auto-validated."
+    )
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class NoteCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    finding_id: int | None = None
+
+
+class NoteUpdate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class NoteRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    investigation_id: int
+    finding_id: int | None
+    author_username: str | None = None
+    body: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReportRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    investigation_id: int
+    report_number: int
+    report_label: str | None = None
+    generated_by_username: str | None = None
+    content: dict
+    content_sha256: str
+    created_at: datetime

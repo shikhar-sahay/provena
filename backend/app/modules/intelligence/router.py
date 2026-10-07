@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.evidence.models import Evidence
-from app.modules.intelligence import service
+from app.modules.intelligence import reasoning, service
 from app.modules.intelligence.models import Artifact, ArtifactType, CorrelationArtifact
 from app.modules.intelligence.schemas import (
     AnalysisRunRead,
@@ -17,6 +17,13 @@ from app.modules.intelligence.schemas import (
     CorrelationEvidence,
     CorrelationRead,
     EligibilityEntry,
+    FindingGenerateResult,
+    FindingRead,
+    FindingReview,
+    NoteCreate,
+    NoteRead,
+    NoteUpdate,
+    ReportRead,
     RunEvidenceRead,
     RunStart,
 )
@@ -232,3 +239,153 @@ def get_correlation(
         for artifact, number in members
     ]
     return data
+
+
+def _to_finding_read(db: Session, finding) -> FindingRead:
+    data = FindingRead.model_validate(finding)
+    data.reviewer_username = finding.reviewer.username if finding.reviewer else None
+    return data
+
+
+@router.post("/findings/generate", response_model=FindingGenerateResult)
+def generate_findings(
+    investigation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = inv_service.get_investigation(db, investigation_id)
+    inv = reasoning.ensure_finding_produce(db, inv, user)
+    findings, created = reasoning.generate_findings(db, inv, user)
+    return FindingGenerateResult(
+        findings=[_to_finding_read(db, item) for item in findings], new_count=created
+    )
+
+
+@router.get("/findings", response_model=list[FindingRead])
+def list_findings(
+    investigation_id: int,
+    status: str | None = Query(default=None, pattern="^(pending_review|accepted|rejected)$"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.modules.intelligence.models import FindingStatus
+
+    inv = _investigation(db, investigation_id, user)
+    status_filter = FindingStatus(status) if status else None
+    return [_to_finding_read(db, item) for item in reasoning.list_findings(db, inv, status_filter)]
+
+
+@router.get("/findings/{finding_id}", response_model=FindingRead)
+def get_finding(
+    investigation_id: int,
+    finding_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    finding = reasoning.get_finding(db, inv, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found.")
+    return _to_finding_read(db, finding)
+
+
+@router.post("/findings/{finding_id}/review", response_model=FindingRead)
+def review_finding(
+    investigation_id: int,
+    finding_id: int,
+    payload: FindingReview,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = inv_service.get_investigation(db, investigation_id)
+    inv = reasoning.ensure_finding_review(db, inv, user)
+    finding = reasoning.get_finding(db, inv, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found.")
+    return _to_finding_read(
+        db, reasoning.review_finding(db, inv, finding, payload.status, payload.note, user)
+    )
+
+
+def _to_note_read(db: Session, note) -> NoteRead:
+    data = NoteRead.model_validate(note)
+    data.author_username = note.author.username if note.author else None
+    return data
+
+
+@router.get("/notes", response_model=list[NoteRead])
+def list_notes(
+    investigation_id: int,
+    finding_id: int | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    return [_to_note_read(db, note) for note in reasoning.list_notes(db, inv, finding_id)]
+
+
+@router.post("/notes", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
+def create_note(
+    investigation_id: int,
+    payload: NoteCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    return _to_note_read(
+        db, reasoning.create_note(db, inv, payload.body, user, payload.finding_id)
+    )
+
+
+@router.patch("/notes/{note_id}", response_model=NoteRead)
+def update_note(
+    investigation_id: int,
+    note_id: int,
+    payload: NoteUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    return _to_note_read(db, reasoning.update_note(db, inv, note_id, payload.body, user))
+
+
+def _to_report_read(db: Session, report) -> ReportRead:
+    data = ReportRead.model_validate(report)
+    data.report_label = f"RPT-{report.report_number:04d}"
+    data.generated_by_username = report.generated_by.username if report.generated_by else None
+    return data
+
+
+@router.post("/reports", response_model=ReportRead, status_code=status.HTTP_201_CREATED)
+def generate_report(
+    investigation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = inv_service.get_investigation(db, investigation_id)
+    inv = reasoning.ensure_finding_review(db, inv, user)
+    return _to_report_read(db, reasoning.generate_report(db, inv, user))
+
+
+@router.get("/reports", response_model=list[ReportRead])
+def list_reports(
+    investigation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    return [_to_report_read(db, report) for report in reasoning.list_reports(db, inv)]
+
+
+@router.get("/reports/{report_id}", response_model=ReportRead)
+def get_report(
+    investigation_id: int,
+    report_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = _investigation(db, investigation_id, user)
+    report = reasoning.get_report(db, inv, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found.")
+    return _to_report_read(db, report)

@@ -15,7 +15,10 @@ from app.modules.users.models import Role
 def write_sample_files(sample_dir: Path):
     sample_dir.mkdir(parents=True, exist_ok=True)
     for filename, *_ in DEMO_FILES:
-        (sample_dir / filename).write_text(f"synthetic {filename}\nline two\n")
+        if filename.endswith(".pdf"):
+            (sample_dir / filename).write_bytes(b"%PDF-1.4\n%EOF\n")
+        else:
+            (sample_dir / filename).write_text(f"synthetic {filename}\nline two\n")
 
 
 def seed_roles(db_session):
@@ -35,9 +38,13 @@ def test_demo_seed_builds_genuine_records(db_session, storage_dir, tmp_path):
     assert inv.status == "in_progress"
     items = db_session.execute(select(Evidence)).scalars().all()
     assert len(items) == len(DEMO_FILES)
-    assert [e.evidence_number for e in items] == ["E-001", "E-002", "E-003", "E-004"]
+    assert [e.evidence_number for e in items] == [
+        f"E-{i:03d}" for i in range(1, len(DEMO_FILES) + 1)
+    ]
     assert all(e.integrity_status == "verified" for e in items)
-    assert db_session.execute(select(func.count()).select_from(EvidenceVerification)).scalar_one() == 4
+    assert db_session.execute(select(func.count()).select_from(EvidenceVerification)).scalar_one() == len(
+        DEMO_FILES
+    )
     custody = db_session.execute(select(CustodyEvent)).scalars().all()
     assert len(custody) == len(DEMO_FILES) + 1
     assert any(c.action == "transferred" for c in custody)

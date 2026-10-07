@@ -39,24 +39,36 @@ DEMO_FILES = [
         "Authentication log (Jan 12-14)",
         "Odd-hour logins and failures for m.okafor from an unfamiliar address.",
         "SIEM export, identity gateway",
+        EvidenceType.LOG,
     ),
     (
         "usb_activity.log",
         "USB activity log (Jan 12-14)",
         "USB insertions on ws-114 coinciding with the suspect sessions.",
         "Endpoint agent, workstation ws-114",
+        EvidenceType.LOG,
     ),
     (
         "file_access.log",
         "File access log (Jan 12-14)",
         "Reads and copies of restricted files to removable media.",
         "File server audit share",
+        EvidenceType.LOG,
     ),
     (
         "network_activity.log",
         "Network activity log (Jan 12-14)",
         "Large outbound uploads to an external destination.",
         "Perimeter firewall export",
+        EvidenceType.LOG,
+    ),
+    (
+        "employee-access-report.pdf",
+        "Employee access review (synthetic PDF)",
+        "Machine-readable access review naming the same account, host, "
+        "device, files, and destinations as the logs.",
+        "Fictional quarterly access review",
+        EvidenceType.DOCUMENT,
     ),
 ]
 
@@ -102,7 +114,7 @@ def run_demo(db: Session, sample_dir: Path = SAMPLE_DIR) -> Investigation:
     assert inv is not None
 
     items = []
-    for filename, title, description, source in DEMO_FILES:
+    for filename, title, description, source, evidence_type in DEMO_FILES:
         path = sample_dir / filename
         if not path.exists():
             raise SystemExit(f"Sample file missing: {path}")
@@ -112,11 +124,11 @@ def run_demo(db: Session, sample_dir: Path = SAMPLE_DIR) -> Investigation:
                 inv,
                 title=title,
                 description=description,
-                evidence_type=EvidenceType.LOG,
+                evidence_type=evidence_type,
                 source=source,
                 acquired_at=None,
                 filename=filename,
-                content_type="text/plain",
+                content_type="text/plain" if filename.endswith(".log") else "application/pdf",
                 stream=handle,
                 actor=investigator,
             )

@@ -7,6 +7,10 @@
 - ``Correlation`` is deterministic derived state, rebuilt on each completed
   run from the current artifact store. Correlations explain themselves
   through ``CorrelationArtifact`` links; they carry no conclusions.
+- ``Finding`` is a rule-engine proposal with deterministic confidence,
+  validated by humans (pending/accepted/rejected). Never auto-validated.
+- ``InvestigationNote`` attaches human context to investigations or findings.
+- ``Report`` snapshots accepted findings and case data deterministically.
 
 Statuses and types are plain strings validated against Python enums, matching
 existing backend conventions (no database enum migrations).
@@ -193,3 +197,105 @@ class CorrelationArtifact(Base):
     )
 
     correlation: Mapped[Correlation] = relationship(back_populates="members")
+
+
+class FindingStatus(str, enum.Enum):
+    PENDING_REVIEW = "pending_review"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint(
+            "investigation_id", "rule_id", "inputs_key", name="uq_finding_inputs"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rule_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    rule_version: Mapped[str] = mapped_column(String(16), nullable=False, default="1")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
+    severity: Mapped[str] = mapped_column(String(32), nullable=False, default="low")
+    # Deterministic weighted score 0-100 for ranking, not a probability.
+    confidence: Mapped[int] = mapped_column(nullable=False, default=0)
+    factors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    artifact_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    correlation_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    # Stable dedup identity over rule version plus sorted inputs.
+    inputs_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    recommendations: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=FindingStatus.PENDING_REVIEW.value, index=True
+    )
+    reviewer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    generated_by_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analysis_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewer_id])
+
+
+class InvestigationNote(Base):
+    __tablename__ = "investigation_notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    finding_id: Mapped[int | None] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    author_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    body: Mapped[str] = mapped_column(String(2000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    author: Mapped[User | None] = relationship(foreign_keys=[author_id])
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    __table_args__ = (
+        UniqueConstraint("investigation_id", "report_number", name="uq_report_number"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    investigation_id: Mapped[int] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Per-investigation sequence, displayed as RPT-0001.
+    report_number: Mapped[int] = mapped_column(nullable=False)
+    generated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Full deterministic snapshot plus its SHA-256 for traceability.
+    content: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+
+    generated_by: Mapped[User | None] = relationship(foreign_keys=[generated_by_id])
