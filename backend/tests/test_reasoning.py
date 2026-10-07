@@ -321,3 +321,70 @@ def test_global_findings_listing_and_bulk_review(client, investigator, storage_d
     accepted_ids = {f["id"] for f in res_accepted.json()}
     assert set(f_ids).issubset(accepted_ids)
 
+
+def test_global_findings_scoping_and_zero_findings_empty_collection(
+    client, investigator, analyst, admin, storage_dir, db_session
+):
+    inv_token = login(client, "investigator")
+    analyst_token = login(client, "analyst")
+
+    # 1. Zero findings returns a valid empty collection 200, not 404
+    res_empty = client.get("/api/findings", headers=auth_headers(inv_token))
+    assert res_empty.status_code == 200
+    assert res_empty.json() == []
+
+    # 2. Setup investigation with findings
+    inv = make_investigation(client, inv_token, title="Case with findings")
+    _demo_run(client, inv_token, inv["id"])
+    gen_body = _generate(client, inv_token, inv["id"])
+    findings = gen_body["findings"]
+    assert len(findings) > 0
+
+    # 3. Authorized investigator sees findings
+    res_inv = client.get("/api/findings", headers=auth_headers(inv_token))
+    assert res_inv.status_code == 200
+    assert len(res_inv.json()) >= len(findings)
+
+    # 4. Outsider user (not in case) sees zero findings
+    outsider = make_user(db_session, "outsider_inv", Role.INVESTIGATOR)
+    outsider_token = login(client, "outsider_inv")
+    res_outsider = client.get("/api/findings", headers=auth_headers(outsider_token))
+    assert res_outsider.status_code == 200
+    assert res_outsider.json() == []
+
+    # Outsider requesting specific investigation_id gets 404
+    res_outsider_specific = client.get(
+        f"/api/findings?investigation_id={inv['id']}", headers=auth_headers(outsider_token)
+    )
+    assert res_outsider_specific.status_code == 404
+
+    # 5. Add analyst to investigation: analyst can now view findings
+    add_member = client.post(
+        f"/api/investigations/{inv['id']}/members",
+        headers=auth_headers(inv_token),
+        json={"user_id": analyst.id, "team_role": "member"},
+    )
+    assert add_member.status_code == 200
+
+    res_analyst = client.get("/api/findings", headers=auth_headers(analyst_token))
+    assert res_analyst.status_code == 200
+    assert len(res_analyst.json()) >= len(findings)
+
+    # Analyst cannot review findings (neither single review nor bulk review)
+    f_id = findings[0]["id"]
+    single_rev = client.post(
+        f"/api/investigations/{inv['id']}/analysis/findings/{f_id}/review",
+        headers=auth_headers(analyst_token),
+        json={"status": "accepted", "note": "Analyst attempt"},
+    )
+    assert single_rev.status_code == 403
+
+    bulk_rev = client.post(
+        "/api/findings/bulk-review",
+        headers=auth_headers(analyst_token),
+        json={"finding_ids": [f_id], "status": "accepted", "note": "Analyst bulk attempt"},
+    )
+    assert bulk_rev.status_code == 200
+    assert bulk_rev.json()["count"] == 0
+
+

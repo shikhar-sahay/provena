@@ -362,6 +362,8 @@ def list_global_findings(
             )
         )
     if investigation_id is not None:
+        inv = inv_service.get_investigation(db, investigation_id)
+        service.ensure_analysis_view(db, inv, user)
         stmt = stmt.where(Finding.investigation_id == investigation_id)
     if status:
         stmt = stmt.where(Finding.status == FindingStatus(status).value)

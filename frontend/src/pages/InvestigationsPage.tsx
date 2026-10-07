@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, ArrowUpDown, FolderKanban, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, FolderKanban, Search } from "lucide-react";
 import { api } from "../api/client";
 import type { Investigation, InvestigationStatus } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -115,13 +115,6 @@ export default function InvestigationsPage() {
       <PageHeader
         title="Investigations"
         description="Cases you participate in. Admins see every investigation."
-        actions={
-          canCreate && (
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setCreating(true)}>
-              New investigation
-            </Button>
-          )
-        }
       />
 
       {items !== null && items.length > 0 && (

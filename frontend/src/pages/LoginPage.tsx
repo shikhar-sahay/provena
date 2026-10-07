@@ -10,6 +10,7 @@ import { BrandLockup } from "../components/Brand";
 import { Button } from "../components/Button";
 import { Field, Input } from "../components/Field";
 import { ProvenanceMotif } from "../components/ProvenanceMotif";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { loginErrorMessage } from "../lib/errors";
 
 const PILLARS = [
@@ -62,30 +63,39 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-10">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+
       <ProvenanceMotif className="pointer-events-none absolute inset-0 h-full w-full text-ink" />
 
-      <div className="pv-animate-rise relative grid w-full max-w-4xl items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
-        <div className="hidden lg:block">
-          <BrandLockup height={32} />
-          <p className="mt-5 max-w-sm text-[15px] leading-relaxed text-ink2">
-            Evidence integrity, provenance, and accountable investigation, in one
-            traceable workspace.
-          </p>
-          <ul className="mt-8 space-y-5">
-            {PILLARS.map((pillar) => (
-              <li key={pillar.title} className="flex gap-3">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-ink2">
-                  {pillar.icon}
-                </span>
-                <span>
-                  <span className="block text-sm font-semibold">{pillar.title}</span>
-                  <span className="mt-0.5 block max-w-xs text-[13px] leading-relaxed text-ink2">
-                    {pillar.body}
+      <div className="pv-animate-rise relative grid w-full max-w-4xl items-center gap-12 lg:grid-cols-[1.1fr_1fr]">
+        <div className="hidden lg:flex lg:flex-col lg:justify-center">
+          <div className="max-w-md space-y-8">
+            <div className="space-y-4">
+              <BrandLockup height={34} />
+              <p className="text-[15px] leading-relaxed text-ink2">
+                Evidence integrity, provenance, and accountable investigation, in one
+                traceable workspace.
+              </p>
+            </div>
+
+            <ul className="space-y-5">
+              {PILLARS.map((pillar) => (
+                <li key={pillar.title} className="flex items-start gap-3.5">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-ink2">
+                    {pillar.icon}
                   </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-ink">{pillar.title}</span>
+                    <span className="mt-0.5 block text-[13px] leading-relaxed text-ink2">
+                      {pillar.body}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <div>
