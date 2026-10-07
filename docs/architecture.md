@@ -107,6 +107,7 @@ Dashed boxes are planned modules. Everything else is implemented.
 | evidence        | Implemented | Registration, storage, verification, custody, timelines |
 | dashboard       | Implemented | Scoped summary counts, attention items, activity |
 | intelligence    | Implemented | Analysis runs, artifacts, correlations, findings, notes, reports |
+| search          | Implemented | Authorized cross-investigation multi-entity search |
 | audit           | Implemented | Append-only application audit log               |
 
 Each domain package exposes a router mounted in `app/api/router.py`. Domains
@@ -121,19 +122,19 @@ communicate via direct Python calls (same process), not HTTP or queues.
   `.dark` for dark) mapped to Tailwind utilities via `@theme inline`
   (`bg-surface`, `text-ink`, `border-line`, semantic tones). No scattered
   ad-hoc colors.
-- First-class light/dark/system themes, persisted in `localStorage`, applied
-  pre-paint by an inline script in `index.html`, following OS changes in
-  system mode, with `prefers-reduced-motion` respected.
+- First-class light/dark themes, persisted in `localStorage`, applied
+  pre-paint by an inline script in `index.html`, with `prefers-reduced-motion` respected.
 - Approved monochrome brand from `frontend/public/brand/provena-brand-pack/`;
   production copies live in `frontend/public/brand/` (`mark-*.svg`,
   `logo-*.svg`, theme-aware `favicon-*.svg`, PNG fallback, Apple touch icon).
   The logo is never recolored by semantic colors.
-- Shell: compact sidebar (brand, Dashboard/Investigations/Users for admins,
-  theme switch, user card) plus a topbar with global investigation search,
-  role-gated creation, and account menu. Dialogs for forms and
-  confirmations, a drawer for evidence registration and artifact detail,
-  toasts for feedback, skeletons/empty/error states on every async view.
-  Workspace Findings curation stays planned; everything else shown works.
+- Shell: compact sidebar (brand, Dashboard, Investigations, Findings, and Users
+  for admins, user card) plus a topbar with multi-category global search,
+  compact theme toggle, role-gated creation, and account menu. Dialogs for forms
+  and confirmations, drawers for registration and detail inspection, toasts for
+  feedback, and skeletons/empty/error states across async views.
+- Global Findings workspace: cross-investigation triage, rule proposals review,
+  severity/status filtering, search, and bulk accept/reject actions.
 - Behavior tests run under vitest (`npm test`): formatting, error semantics,
   badges, theming, sign-in validation, and analysis labels.
 
