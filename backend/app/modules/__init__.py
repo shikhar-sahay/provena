@@ -1,1 +1,1 @@
-"""Domain modules: users, investigations, audit (planned: evidence, findings, reports)."""
+"""Implemented domain modules for the Provena modular monolith."""

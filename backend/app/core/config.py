@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     evidence_storage_root: str = "./evidence-storage"
     # Maximum accepted upload size in bytes (default 100 MiB).
     evidence_max_upload_bytes: int = 100 * 1024 * 1024
+    # Optional local narrative generation. Core analysis never depends on it.
+    llm_enabled: bool = False
+    llm_provider: str = "deterministic"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = ""
+    llm_timeout_seconds: float = 30.0
 
 
 @lru_cache

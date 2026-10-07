@@ -344,8 +344,9 @@ def list_global_findings(
 ):
     from sqlalchemy.orm import selectinload
     from app.modules.intelligence.models import Finding, FindingStatus
-    from app.modules.investigations.models import InvestigationMember
+    from app.modules.investigations.models import Investigation, InvestigationMember
     from app.modules.users.models import Role
+    from app.modules.workspaces import service as workspace_service
 
     # Identify accessible investigations
     stmt = (
@@ -353,7 +354,9 @@ def list_global_findings(
         .join(Finding.investigation)
         .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
     )
-    if user.role != Role.ADMIN.value:
+    membership = workspace_service.require_membership(db, user)
+    stmt = stmt.where(Investigation.workspace_id == membership.workspace_id)
+    if membership.role != Role.ADMIN.value:
         stmt = stmt.where(
             Finding.investigation_id.in_(
                 select(InvestigationMember.investigation_id).where(
@@ -388,8 +391,9 @@ def bulk_review_global_findings(
 ):
     from sqlalchemy.orm import selectinload
     from app.modules.intelligence.models import Finding
-    from app.modules.investigations.models import InvestigationMember
+    from app.modules.investigations.models import Investigation, InvestigationMember
     from app.modules.users.models import Role
+    from app.modules.workspaces import service as workspace_service
 
     stmt = (
         select(Finding)
@@ -397,7 +401,9 @@ def bulk_review_global_findings(
         .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
         .where(Finding.id.in_(payload.finding_ids))
     )
-    if user.role != Role.ADMIN.value:
+    membership = workspace_service.require_membership(db, user)
+    stmt = stmt.where(Investigation.workspace_id == membership.workspace_id)
+    if membership.role != Role.ADMIN.value:
         stmt = stmt.where(
             Finding.investigation_id.in_(
                 select(InvestigationMember.investigation_id).where(

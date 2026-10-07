@@ -5,12 +5,13 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.audit.service import Actions, ResourceTypes, record
 from app.modules.auth.dependencies import get_current_user, require_admin
-from app.modules.users.models import User
+from app.modules.users.models import Role, User
 from app.modules.users.schemas import UserActiveUpdate, UserAdminRead, UserCreate, UserMembership, UserRead
 from app.modules.users.service import count_active_admins, create_user, list_active, list_all, set_active
 
@@ -19,7 +20,15 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 @router.get("", response_model=list[UserRead])
 def list_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return [UserRead.model_validate(u) for u in list_active(db)]
+    from app.modules.workspaces import service as workspace_service
+    result = []
+    for item in workspace_service.list_members(db, user):
+        if not item.user.is_active:
+            continue
+        data = UserRead.model_validate(item.user)
+        data.role = Role(item.role)
+        result.append(data)
+    return result
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -32,6 +41,14 @@ def create_user_endpoint(
         user = create_user(db, payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    from app.modules.workspaces import service as workspace_service
+    from app.modules.workspaces.models import WorkspaceMembership
+    admin_membership = workspace_service.require_membership(db, admin)
+    db.add(WorkspaceMembership(
+        workspace_id=admin_membership.workspace_id, user_id=user.id,
+        role=payload.role.value, is_active=True,
+    ))
+    user.active_workspace_id = admin_membership.workspace_id
     record(
         db,
         action=Actions.USER_CREATED,
@@ -53,6 +70,8 @@ def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends
     from app.modules.investigations.models import Investigation, InvestigationMember
     from sqlalchemy import select as sa_select
 
+    from app.modules.workspaces import service as workspace_service
+    workspace_membership = workspace_service.require_membership(db, admin)
     memberships = db.execute(
         sa_select(
             InvestigationMember.user_id,
@@ -61,6 +80,7 @@ def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends
             Investigation.title,
         )
         .join(Investigation, Investigation.id == InvestigationMember.investigation_id)
+        .where(Investigation.workspace_id == workspace_membership.workspace_id)
         .order_by(Investigation.case_number)
     ).all()
     by_user: dict[int, list] = {}
@@ -69,7 +89,8 @@ def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends
             UserMembership(id=inv_id, case_number=case_number, title=title)
         )
     out = []
-    for account in list_all(db):
+    accounts = [item.user for item in workspace_service.list_members(db, admin)]
+    for account in accounts:
         data = UserAdminRead.model_validate(account)
         data.investigations = by_user.get(account.id, [])
         out.append(data)
@@ -86,7 +107,9 @@ def admin_update_user(
     from app.modules.users.models import Role
 
     target = db.get(User, user_id)
-    if target is None:
+    from app.modules.workspaces import service as workspace_service
+    member_ids = {item.user_id for item in workspace_service.list_members(db, admin)}
+    if target is None or target.id not in member_ids:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     if not payload.is_active:
         if target.id == admin.id:

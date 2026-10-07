@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.modules.users.models import User
-from app.modules.users.schemas import UserCreate
+from app.modules.users.schemas import UserCreate, UserRegister
 
 
 def get_by_id(db: Session, user_id: int) -> User | None:
@@ -55,6 +55,26 @@ def create_user(db: Session, payload: UserCreate) -> User:
         full_name=payload.full_name,
         password_hash=hash_password(payload.password),
         role=payload.role.value,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ValueError("Username or email is already taken.")
+    db.refresh(user)
+    return user
+
+
+def create_registered_user(db: Session, payload: UserRegister) -> User:
+    """Create a self-service account with no workspace until onboarding."""
+    user = User(
+        username=payload.username.strip(),
+        email=payload.email.lower().strip(),
+        full_name=payload.full_name.strip(),
+        password_hash=hash_password(payload.password),
+        role="investigator",
+        is_active=True,
     )
     db.add(user)
     try:

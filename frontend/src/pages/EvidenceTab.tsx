@@ -7,6 +7,7 @@ import { Link, useOutletContext, useParams } from "react-router-dom";
 import { FileUp, Search, Upload } from "lucide-react";
 import { api } from "../api/client";
 import type { Evidence, EvidenceType, IntegrityStatus } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { EVIDENCE_TYPE_LABELS, INTEGRITY_LABELS, IntegrityBadge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Drawer } from "../components/Dialog";
@@ -39,6 +40,7 @@ const INTEGRITY_OPTIONS: (IntegrityStatus | "")[] = [
 export default function EvidenceTab({ registerOpen = false }: { registerOpen?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const { canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
+  const { user } = useAuth();
   const [items, setItems] = useState<Evidence[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<EvidenceType | "">("");
@@ -68,7 +70,7 @@ export default function EvidenceTab({ registerOpen = false }: { registerOpen?: b
     void load();
   }, [load]);
 
-  const canRegister = canManage && !archivedLocked;
+  const canRegister = (canManage || user?.role === "evidence_custodian") && !archivedLocked;
 
   return (
     <div className="space-y-4">

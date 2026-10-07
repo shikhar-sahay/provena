@@ -15,6 +15,7 @@ class UserRead(BaseModel):
     email: str
     full_name: str
     role: Role
+    active_workspace_id: int | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -38,6 +39,20 @@ class UserCreate(BaseModel):
         if "@" not in value or " " in value or "." not in value.split("@")[-1]:
             raise ValueError("Enter a valid email address.")
         return value
+
+
+class UserRegister(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    email: str = Field(min_length=3, max_length=255)
+    full_name: str = Field(default="", max_length=255)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("email")
+    @classmethod
+    def _email_shape(cls, value: str) -> str:
+        if "@" not in value or " " in value or "." not in value.split("@")[-1]:
+            raise ValueError("Enter a valid email address.")
+        return value.lower()
 
 
 class UserMembership(BaseModel):

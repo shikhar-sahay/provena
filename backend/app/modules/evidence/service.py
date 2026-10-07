@@ -33,6 +33,7 @@ from app.modules.evidence.schemas import CustodyCreate, EvidenceUpdate, Timeline
 from app.modules.investigations import service as inv_service
 from app.modules.investigations.models import Investigation, InvestigationStatus
 from app.modules.users.models import Role, User
+from app.modules.workspaces import service as workspace_service
 from app.modules.users.service import get_by_id
 
 
@@ -71,8 +72,21 @@ def ensure_custody_permission(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found.")
     if inv_service.can_manage(db, inv, user):
         return evidence
-    if user.role == Role.EVIDENCE_CUSTODIAN.value and inv_service.is_member(db, inv.id, user.id):
+    if workspace_service.role_for(db, user, inv.workspace_id) == Role.EVIDENCE_CUSTODIAN.value and inv_service.is_member(db, inv.id, user.id):
         return evidence
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
+
+
+def ensure_custodian_permission(db: Session, inv: Investigation, user: User) -> None:
+    """Allow case managers or an assigned evidence custodian."""
+    if inv_service.can_manage(db, inv, user):
+        return
+    if (
+        workspace_service.role_for(db, user, inv.workspace_id)
+        == Role.EVIDENCE_CUSTODIAN.value
+        and inv_service.is_member(db, inv.id, user.id)
+    ):
+        return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
 
 

@@ -19,6 +19,7 @@ import app.modules.evidence.models  # noqa: F401
 import app.modules.intelligence.models  # noqa: F401
 import app.modules.investigations.models  # noqa: F401
 import app.modules.users.models  # noqa: F401
+import app.modules.workspaces.models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

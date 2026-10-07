@@ -15,6 +15,7 @@ from app.core.security import hash_password
 from app.db.session import Base, get_db
 from app.main import app
 from app.modules.users.models import Role, User
+from app.modules.workspaces.models import Workspace, WorkspaceMembership
 from app.core.config import settings
 
 
@@ -69,6 +70,17 @@ def make_user(db_session, username="tester", role=Role.INVESTIGATOR, active=True
         is_active=active,
     )
     db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    workspace = db_session.query(Workspace).filter_by(slug="test-workspace").one_or_none()
+    if workspace is None:
+        workspace = Workspace(name="Test Workspace", slug="test-workspace", created_by_id=user.id)
+        db_session.add(workspace)
+        db_session.flush()
+    db_session.add(WorkspaceMembership(
+        workspace_id=workspace.id, user_id=user.id, role=role.value, is_active=True
+    ))
+    user.active_workspace_id = workspace.id
     db_session.commit()
     db_session.refresh(user)
     return user

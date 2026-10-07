@@ -13,6 +13,7 @@ from app.modules.intelligence.models import Artifact, Finding
 from app.modules.investigations.models import Investigation, InvestigationMember
 from app.modules.search.schemas import SearchResponse, SearchResultItem
 from app.modules.users.models import Role, User
+from app.modules.workspaces import service as workspace_service
 
 
 def search_all(db: Session, user: User, query: str, limit_per_category: int = 5) -> SearchResponse:
@@ -23,8 +24,11 @@ def search_all(db: Session, user: User, query: str, limit_per_category: int = 5)
     term = f"%{q}%"
 
     # 1. Accessible investigation IDs
-    inv_stmt = select(Investigation.id, Investigation.title, Investigation.case_number, Investigation.status)
-    if user.role != Role.ADMIN.value:
+    membership = workspace_service.require_membership(db, user)
+    inv_stmt = select(Investigation.id, Investigation.title, Investigation.case_number, Investigation.status).where(
+        Investigation.workspace_id == membership.workspace_id
+    )
+    if membership.role != Role.ADMIN.value:
         inv_stmt = inv_stmt.where(
             Investigation.id.in_(
                 select(InvestigationMember.investigation_id).where(
@@ -36,7 +40,7 @@ def search_all(db: Session, user: User, query: str, limit_per_category: int = 5)
     accessible_map = {row.id: (row.title, row.case_number) for row in accessible_rows}
     accessible_ids = list(accessible_map.keys())
 
-    if not accessible_ids and user.role != Role.ADMIN.value:
+    if not accessible_ids:
         return SearchResponse(query=q, total=0, results=[])
 
     results: list[SearchResultItem] = []

@@ -114,7 +114,7 @@ def test_evidence_list_filters(evidence, client):
     ).status_code == 422
 
 
-def test_member_analyst_can_view_and_verify(evidence, client, analyst, db_session):
+def test_member_analyst_can_view_but_not_register_or_verify(evidence, client, analyst, db_session):
     inv, item, token = evidence
     client.post(
         f"/api/investigations/{inv['id']}/members",
@@ -124,7 +124,8 @@ def test_member_analyst_can_view_and_verify(evidence, client, analyst, db_sessio
     analyst_token = login(client, "analyst")
     # Analysts cannot register evidence (manage permission required).
     assert upload(client, analyst_token, inv["id"]).status_code == 403
-    # But members can view evidence and run verification.
+    # Assigned analysts can inspect evidence but integrity verification remains
+    # a case-manager or evidence-custodian action.
     detail = client.get(
         f"/api/investigations/{inv['id']}/evidence/{item['id']}",
         headers=auth_headers(analyst_token),
@@ -135,11 +136,10 @@ def test_member_analyst_can_view_and_verify(evidence, client, analyst, db_sessio
         f"/api/investigations/{inv['id']}/evidence/{item['id']}/verify",
         headers=auth_headers(analyst_token),
     )
-    assert verify.status_code == 200
-    assert verify.json()["result"] == "verified"
+    assert verify.status_code == 403
 
 
-def test_custodian_cannot_register(evidence, client, custodian):
+def test_assigned_custodian_can_register_and_verify(evidence, client, custodian):
     inv, _, token = evidence
     client.post(
         f"/api/investigations/{inv['id']}/members",
@@ -147,7 +147,14 @@ def test_custodian_cannot_register(evidence, client, custodian):
         json={"user_id": custodian.id},
     )
     custodian_token = login(client, "custodian")
-    assert upload(client, custodian_token, inv["id"]).status_code == 403
+    registered = upload(client, custodian_token, inv["id"], filename="custody.log")
+    assert registered.status_code == 201
+    verify = client.post(
+        f"/api/investigations/{inv['id']}/evidence/{registered.json()['id']}/verify",
+        headers=auth_headers(custodian_token),
+    )
+    assert verify.status_code == 200
+    assert verify.json()["result"] == "verified"
 
 
 def test_outsider_cannot_access_evidence(evidence, client, analyst):

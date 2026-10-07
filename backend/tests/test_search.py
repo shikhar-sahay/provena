@@ -22,6 +22,7 @@ def test_search_investigator_rbac_isolation(client, db_session, investigator):
     # Inv 1: accessible to investigator
     inv1 = Investigation(
         case_number="CASE-2026-001",
+        workspace_id=investigator.active_workspace_id,
         title="Project Helios Breach",
         description="Investigation into unauthorized access",
         status="open",
@@ -31,6 +32,7 @@ def test_search_investigator_rbac_isolation(client, db_session, investigator):
     # Inv 2: accessible only to other_user
     inv2 = Investigation(
         case_number="CASE-2026-002",
+        workspace_id=other_user.active_workspace_id,
         title="Project Helios Financial Fraud",
         description="Confidential fraud probe",
         status="open",
@@ -60,6 +62,7 @@ def test_search_investigator_rbac_isolation(client, db_session, investigator):
 def test_search_admin_sees_all(client, db_session, admin, investigator):
     inv = Investigation(
         case_number="CASE-2026-099",
+        workspace_id=investigator.active_workspace_id,
         title="Admin Test Case Secret",
         description="Test case",
         status="open",
@@ -81,6 +84,7 @@ def test_search_admin_sees_all(client, db_session, admin, investigator):
 def test_search_returns_evidence_findings_artifacts(client, db_session, investigator):
     inv = Investigation(
         case_number="CASE-2026-010",
+        workspace_id=investigator.active_workspace_id,
         title="Network Intrusion Probe",
         description="Test case",
         status="open",

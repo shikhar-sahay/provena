@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import SessionLocal, engine
 from app.modules.users.models import Role, User
+from app.modules.workspaces.models import Workspace, WorkspaceMembership
 
 DEV_USERS = [
     ("admin", "Admin User", Role.ADMIN),
@@ -51,6 +52,27 @@ def main() -> None:
                 )
             )
             print(f"created: {username} ({role.value})")
+        db.commit()
+        users = list(db.execute(select(User).where(User.username.in_([u[0] for u in DEV_USERS]))).scalars())
+        workspace = db.execute(select(Workspace).where(Workspace.slug == "provena-demo")).scalar_one_or_none()
+        if workspace is None:
+            admin = next(user for user in users if user.username == "admin")
+            workspace = Workspace(
+                name="Provena Demo Workspace", slug="provena-demo", created_by_id=admin.id
+            )
+            db.add(workspace)
+            db.flush()
+            print("created: Provena Demo Workspace")
+        for user in users:
+            membership = db.execute(select(WorkspaceMembership).where(
+                WorkspaceMembership.workspace_id == workspace.id,
+                WorkspaceMembership.user_id == user.id,
+            )).scalar_one_or_none()
+            if membership is None:
+                db.add(WorkspaceMembership(
+                    workspace_id=workspace.id, user_id=user.id, role=user.role, is_active=True
+                ))
+            user.active_workspace_id = workspace.id
         db.commit()
     print("Seed complete. Development logins: admin, investigator, analyst, custodian.")
 

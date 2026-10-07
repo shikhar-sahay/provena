@@ -15,6 +15,9 @@ import InvestigationOverview from "./pages/InvestigationOverview";
 import InvestigationWorkspace from "./pages/InvestigationWorkspace";
 import InvestigationsPage from "./pages/InvestigationsPage";
 import LoginPage from "./pages/LoginPage";
+import OnboardingPage from "./pages/OnboardingPage";
+import RegisterPage from "./pages/RegisterPage";
+import WorkspacePage from "./pages/WorkspacePage";
 import RegisterEvidencePage from "./pages/RegisterEvidencePage";
 import ReportsPage from "./pages/ReportsPage";
 import TimelineTab from "./pages/TimelineTab";
@@ -40,14 +43,24 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireWorkspace({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <p className="p-8 text-sm text-ink2">Loading Provena...</p>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.active_workspace_id) return <Navigate to="/onboarding" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
       <Route
         element={
           <RequireAuth>
-            <AppShell />
+            <RequireWorkspace><AppShell /></RequireWorkspace>
           </RequireAuth>
         }
       >
@@ -55,6 +68,7 @@ export default function App() {
         <Route path="investigations" element={<InvestigationsPage />} />
         <Route path="findings" element={<FindingsWorkspacePage />} />
         <Route path="users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
+        <Route path="workspace" element={<RequireAdmin><WorkspacePage /></RequireAdmin>} />
         <Route path="investigations/:id" element={<InvestigationWorkspace />}>
           <Route index element={<InvestigationOverview />} />
           <Route path="evidence" element={<EvidenceTab />} />

@@ -39,6 +39,7 @@ from app.modules.intelligence.models import (
 from app.modules.investigations import service as inv_service
 from app.modules.investigations.models import Investigation
 from app.modules.users.models import Role, User
+from app.modules.workspaces import service as workspace_service
 
 PIPELINE_VERSION = "1"
 
@@ -80,11 +81,12 @@ def ensure_analysis_initiate(
 ) -> Investigation:
     inv = inv_service.ensure_access(db, inv, user)
     ensure_mutable(inv, user)
-    if user.role == Role.ADMIN.value:
+    role = workspace_service.role_for(db, user, inv.workspace_id)
+    if role == Role.ADMIN.value:
         return inv
-    if user.role == Role.INVESTIGATOR.value and inv_service.can_manage(db, inv, user):
+    if role == Role.INVESTIGATOR.value and inv_service.can_manage(db, inv, user):
         return inv
-    if user.role == Role.FORENSIC_ANALYST.value and inv_service.is_member(db, inv.id, user.id):
+    if role == Role.FORENSIC_ANALYST.value and inv_service.is_member(db, inv.id, user.id):
         return inv
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
 

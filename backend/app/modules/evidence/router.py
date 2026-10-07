@@ -64,9 +64,8 @@ def register_evidence(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    inv = inv_service.ensure_manage(
-        db, inv_service.get_investigation(db, investigation_id), user
-    )
+    inv = inv_service.ensure_access(db, inv_service.get_investigation(db, investigation_id), user)
+    service.ensure_custodian_permission(db, inv, user)
     service.ensure_mutable(inv, user)
     evidence = service.register_evidence(
         db,
@@ -117,6 +116,7 @@ def verify_evidence(
 ):
     inv = _investigation(db, investigation_id, user)
     service.ensure_mutable(inv, user)
+    service.ensure_custodian_permission(db, inv, user)
     evidence = service.ensure_evidence_access(db, inv, evidence_id, user)
     return VerificationRead.model_validate(service.verify_evidence(db, inv, evidence, user))
 

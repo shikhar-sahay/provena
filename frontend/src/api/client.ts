@@ -64,6 +64,47 @@ export interface User {
   full_name: string;
   role: Role;
   is_active: boolean;
+  active_workspace_id: number | null;
+}
+
+export interface Workspace {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  role: Role;
+  member_count: number;
+  created_at: string;
+}
+
+export interface WorkspaceMember {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string;
+  role: Role;
+  is_active: boolean;
+  joined_at: string;
+}
+
+export interface WorkspaceInvite {
+  id: number;
+  code: string | null;
+  code_hint: string;
+  role: Role;
+  expires_at: string | null;
+  revoked_at: string | null;
+  use_count: number;
+  max_uses: number;
+  created_at: string;
+}
+
+export interface AiProviderHealth {
+  enabled: boolean;
+  provider: string;
+  model: string | null;
+  available: boolean;
+  detail: string;
 }
 
 export interface Member {
@@ -439,6 +480,7 @@ export interface ReportContent {
   }[];
   timeline: TimelineEntry[];
   accepted_findings: {
+    id: number;
     rule_id: string;
     rule_version: string;
     title: string;
@@ -464,6 +506,23 @@ export interface ReportContent {
   generated_by: string;
   generated_at: string;
   generator: string;
+  narrative: {
+    executive_summary: string;
+    investigation_narrative: string;
+    finding_narratives: Record<string, string>;
+    conclusion: string;
+    used_finding_ids: number[];
+  };
+  generation_metadata: {
+    mode: "ai_enhanced" | "deterministic_fallback";
+    provider: string;
+    model: string | null;
+    generated_at: string;
+    context_sha256: string;
+    template_version: string;
+    fallback: boolean;
+    error: string | null;
+  };
 }
 
 export interface AdminUser {
@@ -500,11 +559,46 @@ export const api = {
       },
     );
   },
+  register(payload: { username: string; email: string; full_name: string; password: string }) {
+    return apiFetch<{ access_token: string; token_type: string; user: User }>(
+      "/api/auth/register",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
   logout() {
     return apiFetch<{ detail: string }>("/api/auth/logout", { method: "POST" });
   },
   me() {
     return apiFetch<User>("/api/auth/me");
+  },
+  listWorkspaces() {
+    return apiFetch<Workspace[]>("/api/workspaces");
+  },
+  createWorkspace(name: string) {
+    return apiFetch<Workspace>("/api/workspaces", {
+      method: "POST", body: JSON.stringify({ name }),
+    });
+  },
+  joinWorkspace(code: string) {
+    return apiFetch<Workspace>("/api/workspaces/join", {
+      method: "POST", body: JSON.stringify({ code }),
+    });
+  },
+  listWorkspaceMembers() {
+    return apiFetch<WorkspaceMember[]>("/api/workspaces/current/members");
+  },
+  updateWorkspaceMemberRole(userId: number, role: Role) {
+    return apiFetch<WorkspaceMember>(`/api/workspaces/current/members/${userId}`, {
+      method: "PATCH", body: JSON.stringify({ role }),
+    });
+  },
+  createWorkspaceInvite(role: Role) {
+    return apiFetch<WorkspaceInvite>("/api/workspaces/current/invites", {
+      method: "POST", body: JSON.stringify({ role, expires_in_days: 7, max_uses: 25 }),
+    });
+  },
+  aiProviderHealth() {
+    return apiFetch<AiProviderHealth>("/api/ai/provider-health");
   },
   dashboardSummary() {
     return apiFetch<DashboardSummary>("/api/dashboard/summary");

@@ -1,6 +1,6 @@
 // Investigation workspace: case header, section tabs, and shared context.
-// Overview, Evidence, AI Analysis, Timeline, Custody, Reports, and Audit Log
-// are functional. Findings is honestly marked as planned.
+// Overview, Evidence, AI Analysis with findings, Timeline, Custody, Reports,
+// and Audit Log are functional.
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router-dom";
@@ -29,10 +29,6 @@ const TABS = [
   { to: "custody", label: "Custody", end: true },
   { to: "reports", label: "Reports", end: true },
   { to: "audit", label: "Audit Log", end: true },
-];
-
-const PLANNED_TABS = [
-  { label: "Findings", note: "Investigator findings curation arrives in a later milestone." },
 ];
 
 export default function InvestigationWorkspace() {
@@ -142,20 +138,6 @@ export default function InvestigationWorkspace() {
           >
             {tab.label}
           </NavLink>
-        ))}
-        {PLANNED_TABS.map((tab) => (
-          <span
-            key={tab.label}
-            role="tab"
-            aria-disabled="true"
-            title={tab.note}
-            className="flex shrink-0 cursor-not-allowed items-center gap-1.5 border-b-2 border-transparent px-3 py-2 whitespace-nowrap text-ink3"
-          >
-            {tab.label}
-            <span className="rounded border border-line px-1 py-px text-[10px] font-medium tracking-wide uppercase">
-              Planned
-            </span>
-          </span>
         ))}
       </div>
 

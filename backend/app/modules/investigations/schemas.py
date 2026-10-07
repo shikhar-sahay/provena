@@ -41,6 +41,7 @@ class InvestigationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    workspace_id: int
     case_number: str
     title: str
     description: str

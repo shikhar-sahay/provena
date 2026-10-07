@@ -42,8 +42,11 @@ def get_current_user(
 def require_roles(*roles: Role) -> Callable[[User], User]:
     """Dependency factory enforcing role membership (403 otherwise)."""
 
-    def checker(user: User = Depends(get_current_user)) -> User:
-        if user.role not in {r.value for r in roles}:
+    def checker(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+        from app.modules.workspaces.service import role_for
+
+        role = role_for(db, user)
+        if role not in {r.value for r in roles}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
         return user
 

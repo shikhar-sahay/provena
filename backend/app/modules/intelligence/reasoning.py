@@ -32,6 +32,7 @@ from app.modules.intelligence.models import (
 from app.modules.investigations import service as inv_service
 from app.modules.investigations.models import Investigation
 from app.modules.users.models import Role, User
+from app.modules.workspaces import service as workspace_service
 from app.modules.users.service import get_by_id
 
 
@@ -43,9 +44,10 @@ def ensure_finding_produce(db: Session, inv: Investigation | None, user: User) -
     """Analysts may produce findings on assigned work; managers and admins too."""
     inv = inv_service.ensure_access(db, inv, user)
     ensure_mutable(inv, user)
-    if user.role == Role.ADMIN.value:
+    role = workspace_service.role_for(db, user, inv.workspace_id)
+    if role == Role.ADMIN.value:
         return inv
-    if user.role == Role.FORENSIC_ANALYST.value and inv_service.is_member(db, inv.id, user.id):
+    if role == Role.FORENSIC_ANALYST.value and inv_service.is_member(db, inv.id, user.id):
         return inv
     if inv_service.can_manage(db, inv, user):
         return inv
@@ -274,7 +276,7 @@ def update_note(db: Session, inv: Investigation, note_id: int, body: str, user: 
     note = db.get(InvestigationNote, note_id)
     if note is None or note.investigation_id != inv.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found.")
-    if note.author_id != user.id and user.role != Role.ADMIN.value:
+    if note.author_id != user.id and not workspace_service.is_admin(db, user, inv.workspace_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden.")
     text = body.strip()
     if not text:
@@ -307,8 +309,9 @@ def _next_report_number(db: Session, investigation_id: int) -> int:
 
 
 def generate_report(db: Session, inv: Investigation, user: User) -> Report:
-    """Snapshot accepted findings and case data into a deterministic report."""
+    """Snapshot accepted findings, deterministic records, and grounded narrative."""
     from app.modules.intelligence.models import Report
+    from app.modules.intelligence.narrative import generate_narrative
 
     full = inv_service.get_investigation(db, inv.id)
     assert full is not None
@@ -345,6 +348,7 @@ def generate_report(db: Session, inv: Investigation, user: User) -> Report:
         reviewer = get_by_id(db, finding.reviewer_id) if finding.reviewer_id else None
         findings_payload.append(
             {
+                "id": finding.id,
                 "rule_id": finding.rule_id,
                 "rule_version": finding.rule_version,
                 "title": finding.title,
@@ -372,6 +376,27 @@ def generate_report(db: Session, inv: Investigation, user: User) -> Report:
         created = entry.get("created_at")
         entry["created_at"] = created.isoformat() if created else None
         custody_payload.append(entry)
+    from app.modules.workspaces.models import WorkspaceMembership
+    workspace_roles = dict(db.execute(select(
+        WorkspaceMembership.user_id, WorkspaceMembership.role
+    ).where(WorkspaceMembership.workspace_id == full.workspace_id)).all())
+    grounded_context = {
+        "investigation": {
+            "case_number": full.case_number,
+            "title": full.title,
+            "description": full.description,
+            "status": full.status,
+            "priority": full.priority,
+        },
+        "accepted_findings": findings_payload,
+        "evidence_count": len(evidence_summary),
+        "confidence_scale": "0-100 deterministic weighted score, not a probability",
+        "recommendations": recommendations,
+        "investigator_notes": [
+            {"finding_id": n.finding_id, "body": n.body} for n in notes
+        ],
+    }
+    narrative_result = generate_narrative(grounded_context)
     content = {
         "investigation": {
             "case_number": full.case_number,
@@ -386,7 +411,7 @@ def generate_report(db: Session, inv: Investigation, user: User) -> Report:
             "team": [
                 {"username": m.user.username,
                  "full_name": m.user.full_name,
-                 "role": m.user.role,
+                 "role": workspace_roles.get(m.user_id, m.user.role),
                  "team_role": m.team_role}
                 for m in full.members
             ],
@@ -410,7 +435,9 @@ def generate_report(db: Session, inv: Investigation, user: User) -> Report:
         ],
         "generated_by": user.username,
         "generated_at": _now().isoformat(),
-        "generator": "deterministic-report-v1",
+        "generator": "grounded-report-v2",
+        "narrative": narrative_result.narrative,
+        "generation_metadata": narrative_result.metadata,
     }
     canonical = json.dumps(content, sort_keys=True, default=str)
     report = Report(

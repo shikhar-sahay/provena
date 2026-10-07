@@ -9,6 +9,8 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (usernameOrEmail: string, password: string) => Promise<void>;
+  register: (payload: { username: string; email: string; full_name: string; password: string }) => Promise<void>;
+  refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,6 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(result.user);
   }, []);
 
+  const register = useCallback(async (payload: { username: string; email: string; full_name: string; password: string }) => {
+    const result = await api.register(payload);
+    localStorage.setItem("provena_token", result.access_token);
+    setUser(result.user);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setUser(await api.me());
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.logout();
@@ -67,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, refresh, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,6 +27,8 @@ from app.modules.investigations.models import (
 from app.modules.investigations.schemas import InvestigationCreate, InvestigationUpdate, MemberAdd
 from app.modules.users.models import Role, User
 from app.modules.users.service import get_by_id
+from app.modules.workspaces import service as workspace_service
+from app.modules.workspaces.models import WorkspaceMembership
 
 CASE_NUMBER_PREFIX = "PRV"
 
@@ -56,11 +58,14 @@ def is_member(db: Session, investigation_id: int, user_id: int) -> bool:
 
 
 def can_access(db: Session, inv: Investigation, user: User) -> bool:
-    return user.role == Role.ADMIN.value or is_member(db, inv.id, user.id)
+    if user.active_workspace_id != inv.workspace_id:
+        return False
+    workspace_role = workspace_service.role_for(db, user, inv.workspace_id)
+    return workspace_role == Role.ADMIN.value or is_member(db, inv.id, user.id)
 
 
 def can_manage(db: Session, inv: Investigation, user: User) -> bool:
-    if user.role == Role.ADMIN.value:
+    if workspace_service.is_admin(db, user, inv.workspace_id):
         return True
     return user.id in (inv.created_by_id, inv.lead_investigator_id)
 
@@ -105,7 +110,9 @@ def list_accessible(db: Session, user: User, status_filter: InvestigationStatus 
     )
     if status_filter is not None:
         stmt = stmt.where(Investigation.status == status_filter.value)
-    if user.role != Role.ADMIN.value:
+    membership = workspace_service.require_membership(db, user)
+    stmt = stmt.where(Investigation.workspace_id == membership.workspace_id)
+    if membership.role != Role.ADMIN.value:
         stmt = stmt.where(
             Investigation.id.in_(
                 select(InvestigationMember.investigation_id).where(
@@ -117,20 +124,27 @@ def list_accessible(db: Session, user: User, status_filter: InvestigationStatus 
 
 
 def create_investigation(db: Session, payload: InvestigationCreate, creator: User) -> Investigation:
-    if creator.role not in (Role.ADMIN.value, Role.INVESTIGATOR.value):
+    membership = workspace_service.require_membership(db, creator)
+    if membership.role not in (Role.ADMIN.value, Role.INVESTIGATOR.value):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only investigators and admins can create investigations.",
         )
     lead_id = payload.lead_investigator_id or creator.id
     lead = get_by_id(db, lead_id)
-    if lead is None or not lead.is_active:
+    lead_membership = db.execute(select(WorkspaceMembership).where(
+        WorkspaceMembership.workspace_id == membership.workspace_id,
+        WorkspaceMembership.user_id == lead_id,
+        WorkspaceMembership.is_active.is_(True),
+    )).scalar_one_or_none()
+    if lead is None or not lead.is_active or lead_membership is None or lead_membership.role not in (Role.ADMIN.value, Role.INVESTIGATOR.value):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lead investigator.")
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Title is required.")
 
     inv = Investigation(
+        workspace_id=membership.workspace_id,
         case_number="",
         title=title,
         description=payload.description.strip(),
@@ -192,7 +206,7 @@ def _apply_status(inv: Investigation, new_status: InvestigationStatus) -> bool:
 def update_investigation(
     db: Session, inv: Investigation, payload: InvestigationUpdate, actor: User
 ) -> Investigation:
-    if inv.status == InvestigationStatus.ARCHIVED.value and actor.role != Role.ADMIN.value:
+    if inv.status == InvestigationStatus.ARCHIVED.value and not workspace_service.is_admin(db, actor, inv.workspace_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Archived investigations are read-only.",
@@ -213,7 +227,12 @@ def update_investigation(
         changes["priority"] = inv.priority
     if payload.lead_investigator_id is not None and payload.lead_investigator_id != inv.lead_investigator_id:
         lead = get_by_id(db, payload.lead_investigator_id)
-        if lead is None or not lead.is_active:
+        lead_membership = db.execute(select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == inv.workspace_id,
+            WorkspaceMembership.user_id == payload.lead_investigator_id,
+            WorkspaceMembership.is_active.is_(True),
+        )).scalar_one_or_none()
+        if lead is None or not lead.is_active or lead_membership is None or lead_membership.role not in (Role.ADMIN.value, Role.INVESTIGATOR.value):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lead investigator.")
         old_lead = inv.lead_investigator_id
         inv.lead_investigator_id = lead.id
@@ -225,7 +244,7 @@ def update_investigation(
         if (
             inv.status == InvestigationStatus.ARCHIVED.value
             and payload.status != InvestigationStatus.ARCHIVED
-            and actor.role != Role.ADMIN.value
+            and not workspace_service.is_admin(db, actor, inv.workspace_id)
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -275,7 +294,12 @@ def _ensure_member(db: Session, investigation_id: int, user_id: int, team_role: 
 
 def add_member(db: Session, inv: Investigation, payload: MemberAdd, actor: User) -> Investigation:
     target = get_by_id(db, payload.user_id)
-    if target is None or not target.is_active:
+    workspace_member = db.execute(select(WorkspaceMembership).where(
+        WorkspaceMembership.workspace_id == inv.workspace_id,
+        WorkspaceMembership.user_id == payload.user_id,
+        WorkspaceMembership.is_active.is_(True),
+    )).scalar_one_or_none()
+    if target is None or not target.is_active or workspace_member is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user.")
     stmt = select(InvestigationMember).where(
         InvestigationMember.investigation_id == inv.id,

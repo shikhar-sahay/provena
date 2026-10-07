@@ -20,6 +20,10 @@ services:
       DATABASE_URL: postgresql+psycopg2://provena:provena@db:5432/provena
       CORS_ORIGINS: http://localhost:5173
       EVIDENCE_STORAGE_ROOT: /evidence
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      LLM_PROVIDER: ${LLM_PROVIDER:-deterministic}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
     ports:
       - "8000:8000"
     volumes:

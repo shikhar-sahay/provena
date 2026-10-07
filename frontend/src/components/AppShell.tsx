@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { FolderKanban, LayoutDashboard, LogOut, Plus, ShieldAlert, Users } from "lucide-react";
+import { Building2, FolderKanban, LayoutDashboard, LogOut, Plus, ShieldAlert, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "./Toast";
 import { Avatar, BrandLockup, BrandMark } from "./Brand";
@@ -20,6 +20,7 @@ const NAV = [
   { to: "/investigations", label: "Investigations", end: false, icon: <FolderKanban size={15} />, admin: false },
   { to: "/findings", label: "Findings", end: false, icon: <ShieldAlert size={15} />, admin: false },
   { to: "/users", label: "Users", end: true, icon: <Users size={15} />, admin: true },
+  { to: "/workspace", label: "Workspace", end: true, icon: <Building2 size={15} />, admin: true },
 ];
 
 export default function AppShell() {

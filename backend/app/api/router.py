@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.endpoints import health
+from app.api.endpoints import ai_health, health
 from app.modules.auth.router import router as auth_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.evidence.router import router as evidence_router
@@ -13,14 +13,17 @@ from app.modules.investigations.router import router as investigations_router
 from app.modules.search.router import router as search_router
 from app.modules.users.router import admin_router as users_admin_router
 from app.modules.users.router import router as users_router
+from app.modules.workspaces.router import router as workspaces_router
 
 router = APIRouter(prefix="/api")
 router.include_router(health.router, tags=["health"])
+router.include_router(ai_health.router, tags=["ai-provider"])
 router.include_router(auth_router)
 router.include_router(dashboard_router)
 router.include_router(investigations_router)
 router.include_router(users_router)
 router.include_router(users_admin_router)
+router.include_router(workspaces_router)
 router.include_router(evidence_router)
 router.include_router(intelligence_router)
 router.include_router(global_findings_router)

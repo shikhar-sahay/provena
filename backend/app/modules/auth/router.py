@@ -9,10 +9,24 @@ from app.modules.audit.service import Actions, ResourceTypes, record
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import LoginRequest, MessageResponse, TokenResponse
 from app.modules.users.models import User
-from app.modules.users.schemas import UserRead
-from app.modules.users.service import get_by_login
+from app.modules.users.schemas import UserRead, UserRegister
+from app.modules.users.service import create_registered_user, get_by_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: UserRegister, db: Session = Depends(get_db)):
+    try:
+        user = create_registered_user(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    record(
+        db, action=Actions.USER_CREATED, resource_type=ResourceTypes.USER,
+        resource_id=user.id, actor_id=user.id, metadata={"username": user.username, "source": "self_registration"},
+    )
+    db.commit()
+    return TokenResponse(access_token=create_access_token(user.id), user=UserRead.model_validate(user))
 
 
 @router.post("/login", response_model=TokenResponse)

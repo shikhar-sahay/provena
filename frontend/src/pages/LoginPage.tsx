@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Fingerprint, Link2, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
@@ -152,7 +152,7 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-4 text-center text-[13px] text-ink3">
-            Local development accounts are listed in docs/development.md
+            New to Provena? <Link to="/register" className="font-medium text-ink hover:underline">Create an account</Link>
           </p>
         </div>
       </div>
