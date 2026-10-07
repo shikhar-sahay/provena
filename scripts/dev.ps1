@@ -37,23 +37,53 @@ function Invoke-Compose([string[]]$composeArgs) {
     Push-Location $Root
     try {
         & docker compose @composeArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker compose $($composeArgs -join ' ') failed with exit code $LASTEXITCODE."
+        }
     } finally {
         Pop-Location
     }
 }
 
+function Wait-ForPostgres {
+    Step "Waiting for PostgreSQL on localhost:5433"
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            $client = New-Object Net.Sockets.TcpClient
+            $async = $client.BeginConnect("127.0.0.1", 5433, $null, $null)
+            if ($async.AsyncWaitHandle.WaitOne(1000) -and $client.Connected) {
+                $client.Close()
+                Write-Host "PostgreSQL is accepting connections."
+                return
+            }
+            $client.Close()
+        } catch {
+            # Retry below.
+        }
+        Start-Sleep -Seconds 3
+    }
+    throw "PostgreSQL did not accept connections on localhost:5433. Is Docker Desktop running with the db service up? Check with: docker compose ps db"
+}
+
 function Ensure-Db {
     Step "Starting Provena PostgreSQL (host :5433)"
     Invoke-Compose @("up", "-d", "db")
+    Wait-ForPostgres
 }
 
 function Ensure-Venv {
     if (-not (Test-Path $VenvPython)) {
         Step "Creating backend virtual environment"
         & python -m venv (Join-Path $Backend ".venv")
+        if ($LASTEXITCODE -ne 0) {
+            throw "Creating the virtual environment failed with exit code $LASTEXITCODE."
+        }
     }
     Step "Installing backend dependencies"
     & $VenvPython -m pip install -q -r (Join-Path $Backend "requirements.txt")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installing backend dependencies failed with exit code $LASTEXITCODE."
+    }
 }
 
 function Backend-Env {
@@ -76,6 +106,9 @@ function Invoke-Backend($scriptArgs) {
         Push-Location $Backend
         try {
             & $VenvPython @scriptArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "Backend command ($($scriptArgs -join ' ')) failed with exit code $LASTEXITCODE."
+            }
         } finally {
             Pop-Location
         }
@@ -143,7 +176,6 @@ switch ($Task) {
         Ensure-Db
         Ensure-Venv
         Backend-Env
-        Start-Sleep -Seconds 8
         Invoke-Backend @("-m", "alembic", "upgrade", "head")
         Invoke-Backend @("-m", "app.seed")
         Write-Host "Reset complete."

@@ -49,9 +49,9 @@ backend/app/
   core/              # config, errors, shared utilities
   db/                # engine, session, Base
   modules/           # domain modules: auth, users, investigations, evidence,
-                     # audit (implemented); findings, reports (planned)
-  ai/                # future analysis: extraction, correlation, reasoning,
-                     # scoring, recommendations, reporting
+                     # dashboard, intelligence, audit (all implemented)
+  ai/                # deterministic pipeline: parsers, extractors, normalize,
+                     # correlate, rules (no FastAPI/SQLAlchemy here)
   main.py            # create_app() + app
 docs/                # architecture.md, ai-architecture.md, development.md
 sample-data/         # synthetic demo data only (see its README)
@@ -83,6 +83,13 @@ sample-data/         # synthetic demo data only (see its README)
   uploaders, and registration timestamps are immutable. Custody and audit
   records are append-only with no update/delete endpoints. See
   `docs/evidence-integrity.md`.
+- **Intelligence:** analysis runs only on VERIFIED evidence (hard backend
+  gate; everything else is an explicit blocked outcome). Artifacts deduplicate
+  on evidence, type, normalized value, locator, and extractor/version.
+  Correlations are shared-value, investigation-scoped, and rebuilt per
+  completed run. Rules propose findings with weighted factors; humans accept
+  or reject; only accepted findings enter deterministic reports. Never invent
+  guilt, scores of suspicion, or LLM output.
 - **Security/forensics:** Never commit `.env`, uploads, evidence, DB dumps,
   models, venvs, build artifacts. Real investigative evidence must never enter
   the repo. Never describe the project as certified forensic software.

@@ -115,7 +115,16 @@ npm run build                         # from frontend/ (production build)
 ```
 
 Backend evidence tests override `EVIDENCE_STORAGE_ROOT` with a temporary
-directory, so test uploads never touch real storage.
+directory, so test uploads never touch real storage. Intelligence tests run
+against throwaway SQLite databases the same way; PDF fixtures are generated
+in-test with the standard library.
+
+The PDF parser needs `pypdf` (`backend/requirements.txt`). Regenerate the
+synthetic demo PDF after editing its source:
+
+```powershell
+python sample-data/make_access_report.py   # from the repository root
+```
 
 CI (`.github/workflows/ci.yml`, pinned to `ubuntu-24.04`) runs backend
 tests plus frontend lint, tests, and build on every push/PR. Recent runs #4-6

@@ -28,8 +28,10 @@ human investigators validating findings before anything reaches a report.
 
 Working end-to-end slice: **authentication, users and roles, investigation
 management with team membership, forensic evidence with SHA-256 integrity and
-chain of custody, audit logging, timelines, and a polished web UI**.
-AI analysis is planned, not implemented.
+chain of custody, deterministic intelligence (extraction plus shared-value
+correlation over verified evidence), rule-based findings with human
+validation, deterministic reporting, audit logging, timelines, and a polished
+web UI**. Generative AI is planned, not implemented.
 
 ### Implemented now
 
@@ -48,19 +50,27 @@ AI analysis is planned, not implemented.
 - Append-only chain of custody with transfers and current-holder tracking
 - Evidence, investigation, and custody timelines assembled from real records
 - Local evidence storage outside the repo, configurable size limits
-- Dashboard, investigation workspace (Overview, Evidence, Timeline, Custody,
-  Audit Log), evidence detail with integrity/custody sections
+- Dashboard, investigation workspace (Overview, Evidence, AI Analysis,
+  Timeline, Custody, Reports, Audit Log), evidence detail with
+  integrity/custody sections, admin user management
+- Verified-only analysis runs over txt, log, csv, json, and machine-readable
+  PDF; 14 artifact types with provenance locators; shared-value correlations
+- Three versioned rules proposing findings with weighted confidence factors;
+  pending/accepted/rejected validation with reviewer and note
+- Investigator notes on cases and findings; deterministic reports from
+  accepted findings with content hashes and print-to-PDF
 - Light/dark/system themes, approved monochrome brand, global search,
   dialogs, toasts, skeletons, and empty/error states throughout
-- PostgreSQL persistence via Alembic migrations; 64 backend tests,
-  16 frontend behavior tests
+- PostgreSQL persistence via Alembic migrations; backend pytest suite,
+  frontend vitest behavior tests
 
 ### Planned
 
-- Investigator findings and notes
-- Explainable AI analysis: extraction, correlation, rule-based reasoning,
-  weighted confidence scoring, recommendations
-- Investigator validation of AI findings, AI-assisted report generation
+- Findings curation workspace (rules and validation exist; bulk triage UI later)
+- Bayesian confidence scoring (current scoring is deterministic and weighted)
+- Knowledge graphs, cross-case analysis, automated timeline reconstruction
+- Ollama-backed narrative enhancement for reports (deterministic reports work
+  offline; the LLM would only improve prose, never invent findings)
 
 ## AI architecture overview
 
@@ -81,7 +91,7 @@ in `docs/ai-architecture.md`.
 | Backend  | Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2.0            |
 | Database | PostgreSQL 16 (Docker Compose for local dev)                  |
 | Auth     | bcrypt passwords, PyJWT bearer tokens                         |
-| Analysis | Planned: deterministic parsers, regex, spaCy, custom rules    |
+| Analysis | Deterministic parsers, regex, key-aware rules, pypdf, custom correlation |
 | Dev      | Docker/Docker Compose, pytest, ESLint, Alembic                 |
 
 The backend is a **modular monolith**: all domain and analysis logic lives in
@@ -97,12 +107,14 @@ flowchart TB
     API --> Auth["Auth / Users (implemented)"]
     API --> Inv["Investigations + Membership (implemented)"]
     API --> Ev["Evidence + Integrity + Custody (implemented)"]
+    API --> Intel["Intelligence: runs, artifacts, correlations (implemented)"]
+    Intel --> Find["Rule findings + Validation (implemented)"]
+    Intel --> Rep["Deterministic reports (implemented)"]
     API --> Audit["Audit log (implemented)"]
-    API --> PlannedBE["Findings, Reports (planned)"]
-    API --> AI["AI investigation engine, in-process (planned)"]
+    API --> AI["AI investigation engine, in-process (partially implemented)"]
+    AI --> LLM["Local LLM via Ollama, report prose only (planned)"]
     API --> PG[("PostgreSQL")]
-    style PlannedBE fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
-    style AI fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
+    style LLM fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
 
 ## Investigation workflow (product vision)

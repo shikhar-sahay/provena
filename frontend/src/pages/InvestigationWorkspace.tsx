@@ -1,6 +1,6 @@
 // Investigation workspace: case header, section tabs, and shared context.
-// Overview, Evidence, Timeline, Custody, and Audit Log are functional.
-// Findings, AI Analysis, and Reports are honestly marked as planned.
+// Overview, Evidence, AI Analysis, Timeline, Custody, Reports, and Audit Log
+// are functional. Findings is honestly marked as planned.
 
 import { useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router-dom";
@@ -24,15 +24,15 @@ export interface WorkspaceContext {
 const TABS = [
   { to: "", label: "Overview", end: true },
   { to: "evidence", label: "Evidence", end: false },
+  { to: "analysis", label: "AI Analysis", end: false },
   { to: "timeline", label: "Timeline", end: true },
   { to: "custody", label: "Custody", end: true },
+  { to: "reports", label: "Reports", end: true },
   { to: "audit", label: "Audit Log", end: true },
 ];
 
 const PLANNED_TABS = [
-  { label: "Findings", note: "Investigator findings arrive with the analysis milestone." },
-  { label: "AI Analysis", note: "Explainable analysis arrives with the analysis milestone." },
-  { label: "Reports", note: "Report generation arrives with the analysis milestone." },
+  { label: "Findings", note: "Investigator findings curation arrives in a later milestone." },
 ];
 
 export default function InvestigationWorkspace() {

@@ -82,6 +82,18 @@ Verification writes an audit event (`EVIDENCE_VERIFIED`, or
 Initial hashing is not verification: only an explicit later recomputation
 moves an item out of `not_verified`.
 
+## Integrity gate for analysis
+
+Automated analysis runs only on evidence whose current integrity status is
+`verified`. This is enforced server-side when a run starts: every other
+state becomes an explicit blocked run outcome (`blocked_not_verified`,
+`blocked_mismatch`, `blocked_unavailable`) with a human-readable reason, and
+the run still records what it skipped. If an item later degrades to
+`mismatch` or `unavailable`, new runs against it are blocked while historical
+results remain visible alongside the current state. The principle is simple:
+Provena does not perform investigative analysis on bytes it has not verified
+against the immutable ingestion baseline.
+
 ## Chain of custody
 
 - `custody_events` is append-only. There are no update or delete endpoints.

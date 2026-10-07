@@ -1,9 +1,9 @@
 # AI Architecture
 
-> Status: architecture and design intent. **No AI analysis code is implemented
-> yet.** The implemented platform slice (auth, investigations, evidence with
-> integrity and custody, audit) is the foundation the AI layer will build on.
-> Nothing below should be read as working functionality.
+> Status: hybrid design. **Extraction, correlation, rule-based findings with
+> human validation, and deterministic reporting are implemented.** Generative
+> reporting (Ollama) is planned, not implemented. Nothing below should be read
+> as claiming LLM involvement: there is none.
 
 ## The pipeline (planned)
 
@@ -43,9 +43,9 @@ lives in the explainable block; the generative block only turns
 already-validated findings into readable prose. Human validation happens
 **before** any generative step.
 
-## Evidence foundation (implemented) feeds the pipeline (planned)
+## Evidence foundation (implemented) feeds the pipeline (implemented through validation)
 
-The evidence layer now provides what the future AI milestone will consume:
+The evidence layer now provides what the intelligence milestones consume:
 
 - stable evidence identifiers (`E-001`) that findings can cite,
 - metadata, timestamps, source provenance, and original filenames,
@@ -54,7 +54,7 @@ The evidence layer now provides what the future AI milestone will consume:
   storage service (`app/modules/evidence/storage.py`),
 - custody history showing how each item was handled.
 
-The intended consumption order is therefore:
+The implemented order is therefore:
 
 ```mermaid
 flowchart LR
@@ -65,15 +65,23 @@ flowchart LR
     R --> S[Confidence]
     S --> Rec[Recommendations]
     Rec --> H[Human Validation]
-    H --> L[LLM Report Generation]
+    H --> D[Deterministic Report]
+    H --> L[LLM Report Generation planned]
+    style L fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
 
-One principle governs this handoff: **AI analysis should prefer evidence
-whose integrity state is known.** A `mismatch` or `unavailable` item must stay
-visible to investigators and must never be silently consumed as if it were
-sound. Verification status travels with the evidence into processing, and the
-synthetic logs in `sample-data/` exist so the first extraction work has
-realistic, committable input.
+Implemented: verified-only processing, parsers (txt, log, csv, json, pdf),
+14 artifact types, provenance locators, deduplicated artifacts, shared-value
+correlation, three rules, weighted confidence, recommendations from rules,
+pending/accepted/rejected validation, investigator notes, deterministic
+reports. Planned: Ollama narrative enhancement (Milestone 6).
+
+One principle governs this handoff: **analysis runs only on VERIFIED
+evidence.** A `mismatch`, `unavailable`, or never-verified item is blocked
+server-side with an explicit reason, never silently consumed. Verification
+status travels with the evidence into processing, and the synthetic logs plus
+generated PDF in `sample-data/` exist so extraction work has realistic,
+committable input.
 
 ## A. Why Provena uses a hybrid AI architecture
 
@@ -155,8 +163,7 @@ and remain visible in the audit trail as rejected.
 
 ## G. AI course relevance
 
-Provena maps to these AI concepts (architecture and planned work, not all
-implemented):
+Provena maps to these AI concepts (implemented unless marked planned):
 
 - **Intelligent agents:** the analysis pipeline perceives evidence and acts by
   recommending investigative steps, with the investigator in the loop.
@@ -176,7 +183,25 @@ implemented):
 - **Natural language generation:** LLM rendering of validated findings into
   report prose.
 
-## H. Future AI enhancements
+## H. Milestone boundary: what is real and what is next
+
+Implemented (Milestone 4 plus reasoning/reporting): information extraction
+(regex plus key-aware structured rules over txt, log, csv, json, and
+machine-readable PDF via pypdf), knowledge representation (artifacts with
+locators, correlations with contributors, findings with factors), information
+retrieval (filtered artifact and correlation APIs), deterministic
+shared-value correlation, symbolic rule-based reasoning (three versioned
+rules), transparent weighted confidence, rule-derived recommendations, human
+validation (pending/accepted/rejected with reviewer and note), and
+deterministic reporting from accepted findings.
+
+Explicitly not implemented: Bayesian confidence scoring, knowledge graphs,
+automated timeline reconstruction, cross-case pattern analysis, evidence
+similarity detection, embeddings, vector search, Ollama/LLM generation, RAG,
+and MCP integrations. The rule set is intentionally small; sophistication
+grows by adding inspectable rules, not opacity.
+
+## I. Future AI enhancements
 
 Legitimate possibilities once the foundation holds: Bayesian confidence
 scoring, an investigation knowledge graph, automated timeline reconstruction,

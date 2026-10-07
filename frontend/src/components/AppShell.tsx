@@ -135,7 +135,7 @@ export default function AppShell() {
                   onClick={() => setCreating(true)}
                   className="h-8 shadow-xs"
                 >
-                  <span className="hidden sm:inline">New Investigation</span>
+                  <span className="hidden sm:inline">New investigation</span>
                   <span className="sm:hidden">New</span>
                 </Button>
               )}

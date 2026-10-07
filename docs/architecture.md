@@ -17,12 +17,14 @@ flowchart TB
     Ev --> Cust["Chain of Custody (implemented)"]
     Ev --> Store["Local Evidence Storage (implemented)"]
     API --> Audit["Audit log (implemented)"]
-    API --> PlannedBE["Findings, Reports (planned)"]
-    API --> AI["AI investigation engine, in-process (planned)"]
+    API --> Intel["Intelligence (implemented)"]
+    Intel --> Runs["Analysis runs + Artifacts (implemented)"]
+    Intel --> Corr["Shared-value correlation (implemented)"]
+    Intel --> Find["Rule findings + Validation (implemented)"]
+    Intel --> Rep["Deterministic reports (implemented)"]
+    API --> AI["AI investigation engine, in-process (partially implemented)"]
     AI --> LLM["Local LLM via Ollama, report prose only (planned)"]
     API --> PG[("PostgreSQL")]
-    style PlannedBE fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
-    style AI fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
     style LLM fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
 
@@ -100,13 +102,12 @@ Dashed boxes are planned modules. Everything else is implemented.
 | Module          | Status      | Responsibility                                  |
 | --------------- | ----------- | ----------------------------------------------- |
 | auth            | Implemented | Login, tokens, current user, RBAC helpers       |
-| users           | Implemented | User model, admin creation, member listing      |
+| users           | Implemented | User model, admin creation, admin user management |
 | investigations  | Implemented | Lifecycle, team membership, authorization       |
 | evidence        | Implemented | Registration, storage, verification, custody, timelines |
-| dashboard       | Implemented | Scoped summary counts and recent activity       |
+| dashboard       | Implemented | Scoped summary counts, attention items, activity |
+| intelligence    | Implemented | Analysis runs, artifacts, correlations, findings, notes, reports |
 | audit           | Implemented | Append-only application audit log               |
-| findings        | Planned     | Investigator notes, AI-finding validation       |
-| reports         | Planned     | Report generation from validated findings       |
 
 Each domain package exposes a router mounted in `app/api/router.py`. Domains
 communicate via direct Python calls (same process), not HTTP or queues.
@@ -127,14 +128,14 @@ communicate via direct Python calls (same process), not HTTP or queues.
   production copies live in `frontend/public/brand/` (`mark-*.svg`,
   `logo-*.svg`, theme-aware `favicon-*.svg`, PNG fallback, Apple touch icon).
   The logo is never recolored by semantic colors.
-- Shell: compact sidebar (brand, Dashboard/Investigations, honest Planned
-  section, theme switch, user card) plus a topbar with global investigation
-  search, role-gated creation, and account menu. Dialogs for forms and
-  confirmations, a drawer for evidence registration, toasts for feedback,
-  skeletons/empty/error states on every async view. Findings, AI Analysis,
-  and Reports render as planned states, never fake content.
+- Shell: compact sidebar (brand, Dashboard/Investigations/Users for admins,
+  theme switch, user card) plus a topbar with global investigation search,
+  role-gated creation, and account menu. Dialogs for forms and
+  confirmations, a drawer for evidence registration and artifact detail,
+  toasts for feedback, skeletons/empty/error states on every async view.
+  Workspace Findings curation stays planned; everything else shown works.
 - Behavior tests run under vitest (`npm test`): formatting, error semantics,
-  badges, theming, and sign-in validation.
+  badges, theming, sign-in validation, and analysis labels.
 
 ## Evidence, integrity, and custody (implemented)
 
@@ -150,6 +151,29 @@ communicate via direct Python calls (same process), not HTTP or queues.
   latest event. Registration creates the first event automatically.
 - Evidence, investigation, and custody timelines are deterministic assemblies
   of these records. Full detail in `docs/evidence-integrity.md`.
+
+## Investigation intelligence (implemented)
+
+- Pure pipeline in `app/ai/` (parsers, extractors, normalization,
+  correlation): no FastAPI, no SQLAlchemy, fully unit-tested. Persistence,
+  API, RBAC, and audit live in `app/modules/intelligence/`.
+- Only VERIFIED evidence is processed (hard backend gate); anything else
+  becomes an explicit blocked run outcome with a reason.
+- Supported formats by filename: txt, log, csv, json, and machine-readable
+  PDF via pypdf (no-text PDFs fail with OCR guidance, never silent success).
+- Artifacts carry type, raw and normalized values, structured locators
+  (line, csv row/column, JSON path, PDF page), bounded context, and
+  extractor name/version/method. Deduplication is enforced by a uniqueness
+  constraint over evidence, type, normalized value, locator, and
+  extractor/version, so re-runs never duplicate.
+- Correlations are shared-value, investigation-scoped, and rebuilt
+  deterministically on each completed run, with contributor links.
+- Three versioned rules propose findings with weighted confidence factors;
+  humans accept or reject with reviewer and note. Only accepted findings
+  enter deterministic reports (content-hashed snapshots, print-to-PDF via
+  the browser). Investigator notes attach to cases or findings.
+- Scheduled jobs, queues, and vector stores are deliberately absent: runs
+  execute synchronously inside the request with per-evidence savepoints.
 
 ## File storage concept (implemented)
 
@@ -175,15 +199,14 @@ flowchart LR
     G --> H[Investigator Validation]
     H --> I[Generate Report]
     I --> J[Archive Investigation]
-    style F fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
-    style G fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
-    style I fill:#1e293b,stroke:#475569,stroke-dasharray: 5 5
 ```
 
 Implemented now: Create Investigation, Assign Team, Register Evidence, Verify
-Integrity, Maintain Chain of Custody, Investigator Validation (of team, status,
-evidence, and custody changes via audit), Archive Investigation (via `archived`
-status). Analysis, AI insights, and report generation are planned.
+Integrity, Maintain Chain of Custody, Analyze Evidence (verified-only
+extraction plus shared-value correlation), Investigator Validation (of team,
+status, evidence, custody, and finding decisions via audit), Generate Report
+(deterministic, from accepted findings), Archive Investigation (via `archived`
+status). Generative report prose remains planned.
 
 ## Request / data flow (implemented paths)
 
