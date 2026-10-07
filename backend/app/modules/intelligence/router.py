@@ -16,6 +16,8 @@ from app.modules.intelligence.schemas import (
     CorrelationDetailRead,
     CorrelationEvidence,
     CorrelationRead,
+    BulkFindingReview,
+    BulkReviewResult,
     EligibilityEntry,
     FindingGenerateResult,
     FindingRead,
@@ -31,6 +33,7 @@ from app.modules.investigations import service as inv_service
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/investigations/{investigation_id}/analysis", tags=["analysis"])
+global_findings_router = APIRouter(prefix="/findings", tags=["findings"])
 
 
 def _investigation(db: Session, investigation_id: int, user: User):
@@ -244,6 +247,9 @@ def get_correlation(
 def _to_finding_read(db: Session, finding) -> FindingRead:
     data = FindingRead.model_validate(finding)
     data.reviewer_username = finding.reviewer.username if finding.reviewer else None
+    if finding.investigation:
+        data.investigation_title = finding.investigation.title
+        data.investigation_case_number = finding.investigation.case_number
     return data
 
 
@@ -305,6 +311,111 @@ def review_finding(
     return _to_finding_read(
         db, reasoning.review_finding(db, inv, finding, payload.status, payload.note, user)
     )
+
+
+@router.post("/findings/bulk-review", response_model=BulkReviewResult)
+def bulk_review_findings(
+    investigation_id: int,
+    payload: BulkFindingReview,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = inv_service.get_investigation(db, investigation_id)
+    inv = reasoning.ensure_finding_review(db, inv, user)
+    updated = []
+    for fid in payload.finding_ids:
+        finding = reasoning.get_finding(db, inv, fid)
+        if finding:
+            item = reasoning.review_finding(db, inv, finding, payload.status, payload.note, user)
+            updated.append(_to_finding_read(db, item))
+    return BulkReviewResult(updated=updated, count=len(updated))
+
+
+@global_findings_router.get("", response_model=list[FindingRead])
+def list_global_findings(
+    status: str | None = Query(default=None, pattern="^(pending_review|accepted|rejected)$"),
+    severity: str | None = Query(default=None),
+    rule_id: str | None = Query(default=None),
+    investigation_id: int | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=500),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy.orm import selectinload
+    from app.modules.intelligence.models import Finding, FindingStatus
+    from app.modules.investigations.models import InvestigationMember
+    from app.modules.users.models import Role
+
+    # Identify accessible investigations
+    stmt = (
+        select(Finding)
+        .join(Finding.investigation)
+        .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
+    )
+    if user.role != Role.ADMIN.value:
+        stmt = stmt.where(
+            Finding.investigation_id.in_(
+                select(InvestigationMember.investigation_id).where(
+                    InvestigationMember.user_id == user.id
+                )
+            )
+        )
+    if investigation_id is not None:
+        stmt = stmt.where(Finding.investigation_id == investigation_id)
+    if status:
+        stmt = stmt.where(Finding.status == FindingStatus(status).value)
+    if severity:
+        stmt = stmt.where(Finding.severity == severity)
+    if rule_id:
+        stmt = stmt.where(Finding.rule_id == rule_id)
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        stmt = stmt.where(Finding.title.ilike(term) | Finding.summary.ilike(term))
+
+    stmt = stmt.order_by(Finding.confidence.desc(), Finding.id.desc()).limit(limit)
+    findings = db.execute(stmt).scalars().all()
+    return [_to_finding_read(db, f) for f in findings]
+
+
+@global_findings_router.post("/bulk-review", response_model=BulkReviewResult)
+def bulk_review_global_findings(
+    payload: BulkFindingReview,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy.orm import selectinload
+    from app.modules.intelligence.models import Finding
+    from app.modules.investigations.models import InvestigationMember
+    from app.modules.users.models import Role
+
+    stmt = (
+        select(Finding)
+        .join(Finding.investigation)
+        .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
+        .where(Finding.id.in_(payload.finding_ids))
+    )
+    if user.role != Role.ADMIN.value:
+        stmt = stmt.where(
+            Finding.investigation_id.in_(
+                select(InvestigationMember.investigation_id).where(
+                    InvestigationMember.user_id == user.id
+                )
+            )
+        )
+    targets = list(db.execute(stmt).scalars().all())
+
+    updated = []
+    for finding in targets:
+        inv = finding.investigation
+        try:
+            inv = reasoning.ensure_finding_review(db, inv, user)
+        except HTTPException:
+            continue
+        item = reasoning.review_finding(db, inv, finding, payload.status, payload.note, user)
+        updated.append(_to_finding_read(db, item))
+
+    return BulkReviewResult(updated=updated, count=len(updated))
 
 
 def _to_note_read(db: Session, note) -> NoteRead:

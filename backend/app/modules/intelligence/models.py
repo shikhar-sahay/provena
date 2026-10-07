@@ -24,6 +24,7 @@ from sqlalchemy import DateTime, ForeignKey, JSON, String, UniqueConstraint, fun
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+from app.modules.investigations.models import Investigation
 from app.modules.users.models import User
 
 
@@ -250,6 +251,7 @@ class Finding(Base):
     )
 
     reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewer_id])
+    investigation: Mapped["Investigation"] = relationship("Investigation")
 
 
 class InvestigationNote(Base):

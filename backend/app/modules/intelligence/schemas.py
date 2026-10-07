@@ -133,6 +133,8 @@ class FindingRead(BaseModel):
     reviewer_username: str | None = None
     reviewed_at: datetime | None = None
     review_note: str | None = None
+    investigation_title: str | None = None
+    investigation_case_number: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -147,6 +149,19 @@ class FindingReview(BaseModel):
         description="Findings can only be accepted or rejected, never auto-validated."
     )
     note: str | None = Field(default=None, max_length=1000)
+
+
+class BulkFindingReview(BaseModel):
+    finding_ids: list[int] = Field(min_length=1, max_length=100)
+    status: Literal["accepted", "rejected"] = Field(
+        description="Findings can only be accepted or rejected, never auto-validated."
+    )
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class BulkReviewResult(BaseModel):
+    updated: list[FindingRead]
+    count: int
 
 
 class NoteCreate(BaseModel):

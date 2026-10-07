@@ -279,3 +279,45 @@ def test_transfer_rule_ignores_source_address_before_keyword():
     assert len(findings) == 1
     assert "203.0.113.44" in findings[0].title
     assert "192.0.2.90" not in findings[0].title
+
+
+def test_global_findings_listing_and_bulk_review(client, investigator, storage_dir):
+    token = login(client, "investigator")
+    inv = make_investigation(client, token)
+    _demo_run(client, token, inv["id"])
+    generated = _generate(client, token, inv["id"])
+    findings = generated["findings"]
+    assert len(findings) >= 2
+
+    # Test global findings endpoint returns investigation context
+    res = client.get("/api/findings", headers=auth_headers(token))
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) >= len(findings)
+    first_item = items[0]
+    assert first_item["investigation_title"] == inv["title"]
+    assert first_item["investigation_case_number"] == inv["case_number"]
+
+    # Filter by status
+    res_pending = client.get("/api/findings?status=pending_review", headers=auth_headers(token))
+    assert res_pending.status_code == 200
+    assert all(f["status"] == "pending_review" for f in res_pending.json())
+
+    # Bulk review via global endpoint
+    f_ids = [findings[0]["id"], findings[1]["id"]]
+    bulk_res = client.post(
+        "/api/findings/bulk-review",
+        headers=auth_headers(token),
+        json={"finding_ids": f_ids, "status": "accepted", "note": "Bulk validated via test"},
+    )
+    assert bulk_res.status_code == 200
+    bulk_data = bulk_res.json()
+    assert bulk_data["count"] == 2
+    assert len(bulk_data["updated"]) == 2
+
+    # Verify findings are now accepted
+    res_accepted = client.get("/api/findings?status=accepted", headers=auth_headers(token))
+    assert res_accepted.status_code == 200
+    accepted_ids = {f["id"] for f in res_accepted.json()}
+    assert set(f_ids).issubset(accepted_ids)
+

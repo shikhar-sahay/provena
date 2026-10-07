@@ -186,7 +186,7 @@ def list_findings(
     stmt = (
         select(Finding)
         .where(Finding.investigation_id == inv.id)
-        .options(selectinload(Finding.reviewer))
+        .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
         .order_by(Finding.confidence.desc(), Finding.id)
     )
     if status_filter is not None:
@@ -198,7 +198,7 @@ def get_finding(db: Session, inv: Investigation, finding_id: int) -> Finding | N
     stmt = (
         select(Finding)
         .where(Finding.investigation_id == inv.id, Finding.id == finding_id)
-        .options(selectinload(Finding.reviewer))
+        .options(selectinload(Finding.reviewer), selectinload(Finding.investigation))
     )
     return db.execute(stmt).scalar_one_or_none()
 
