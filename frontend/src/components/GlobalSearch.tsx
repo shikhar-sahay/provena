@@ -1,114 +1,279 @@
-// Global investigation search: filters accessible investigations by title or
-// case number, navigates on selection. Enter jumps to the filtered list view.
+// Global search component: connects to server-side /api/search with debouncing,
+// grouped category results, keyboard navigation, and '/' shortcut.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import {
+  Cpu,
+  Database,
+  FolderKanban,
+  Loader2,
+  Search,
+  ShieldAlert,
+} from "lucide-react";
 import { api } from "../api/client";
-import type { Investigation } from "../api/client";
+import type { SearchResultItem } from "../api/client";
+
+const CATEGORY_CONFIG: Record<
+  SearchResultItem["category"],
+  { label: string; icon: typeof FolderKanban }
+> = {
+  investigation: { label: "Investigations", icon: FolderKanban },
+  evidence: { label: "Evidence", icon: Database },
+  finding: { label: "Findings", icon: ShieldAlert },
+  artifact: { label: "Artifacts", icon: Cpu },
+};
+
+const CATEGORY_ORDER: SearchResultItem["category"][] = [
+  "investigation",
+  "evidence",
+  "finding",
+  "artifact",
+];
 
 export function GlobalSearch() {
   const navigate = useNavigate();
+  const searchId = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<Investigation[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!open || items !== null) return;
-    let cancelled = false;
-    api
-      .listInvestigations()
-      .then((data) => {
-        if (!cancelled) setItems(data);
-      })
-      .catch(() => {
-        if (!cancelled) setItems([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, items]);
-
+  // Close dropdown on click outside
   useEffect(() => {
     if (!open) return;
     const onClick = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, [open ]);
+  }, [open]);
 
-  const term = query.trim().toLowerCase();
-  const matches = (items ?? [])
-    .filter(
-      (inv) =>
-        term.length === 0 ||
-        inv.title.toLowerCase().includes(term) ||
-        inv.case_number.toLowerCase().includes(term),
-    )
-    .slice(0, 6);
+  // Global '/' keyboard shortcut to focus search input
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      inputRef.current?.focus();
+      setOpen(true);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-  function goToList() {
+  // Debounced search query
+  useEffect(() => {
+    const term = query.trim();
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    if (term.length < 2) {
+      setResults([]);
+      setLoading(false);
+      setActiveIndex(-1);
+      return;
+    }
+
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const response = await api.globalSearch(term);
+        setResults(response.results);
+        setActiveIndex(response.results.length > 0 ? 0 : -1);
+      } catch {
+        setResults([]);
+        setActiveIndex(-1);
+      } finally {
+        setLoading(false);
+      }
+    }, 280);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [query]);
+
+  // Flattened list respecting category order for arrow navigation
+  const groupedResults = CATEGORY_ORDER.reduce<
+    { category: SearchResultItem["category"]; items: SearchResultItem[] }[]
+  >((acc, cat) => {
+    const items = results.filter((r) => r.category === cat);
+    if (items.length > 0) acc.push({ category: cat, items });
+    return acc;
+  }, []);
+
+  const flatOrderedResults = groupedResults.flatMap((g) => g.items);
+
+  function handleSelect(item: SearchResultItem) {
     setOpen(false);
-    navigate(term ? `/investigations?q=${encodeURIComponent(query.trim())}` : "/investigations");
+    setQuery("");
+    navigate(item.url);
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      setOpen(false);
+      inputRef.current?.blur();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      if (flatOrderedResults.length === 0) return;
+      setActiveIndex((prev) => (prev + 1) % flatOrderedResults.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      if (flatOrderedResults.length === 0) return;
+      setActiveIndex((prev) =>
+        prev <= 0 ? flatOrderedResults.length - 1 : prev - 1,
+      );
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (
+        open &&
+        activeIndex >= 0 &&
+        activeIndex < flatOrderedResults.length
+      ) {
+        event.preventDefault();
+        handleSelect(flatOrderedResults[activeIndex]);
+      } else if (open && flatOrderedResults.length > 0) {
+        event.preventDefault();
+        handleSelect(flatOrderedResults[0]);
+      }
+    }
   }
 
   return (
-    <div ref={rootRef} className="relative w-44 shrink-0 sm:w-60 md:w-64">
+    <div ref={rootRef} className="relative w-48 shrink-0 sm:w-64 md:w-72">
       <Search
         size={14}
         className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink3"
       />
       <input
+        ref={inputRef}
         type="search"
         role="combobox"
         aria-expanded={open}
-        aria-label="Search investigations"
-        aria-controls="global-search-results"
-        placeholder="Search investigations…"
+        aria-label="Search investigations, evidence, findings, and artifacts"
+        aria-controls={`${searchId}-results`}
+        placeholder="Search everything..."
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") goToList();
-          if (e.key === "Escape") setOpen(false);
-        }}
+        onKeyDown={handleKeyDown}
         className="pv-transition h-8 w-full rounded-md border border-line bg-surface pr-8 pl-8 text-sm text-ink placeholder:text-ink3 hover:border-linestrong focus:border-accent focus:outline-none"
       />
-      <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-line px-1 text-[11px] text-ink3 sm:block">
-        /
-      </kbd>
-      {open && query.trim().length > 0 && (
+      {loading ? (
+        <Loader2
+          size={13}
+          className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 animate-spin text-ink3"
+        />
+      ) : (
+        <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-line px-1 text-[11px] text-ink3 sm:block">
+          /
+        </kbd>
+      )}
+
+      {open && query.trim().length >= 2 && (
         <div
-          id="global-search-results"
+          id={`${searchId}-results`}
           role="listbox"
-          className="pv-animate-fade absolute right-0 left-0 z-50 mt-1 overflow-hidden rounded-md border border-line bg-surface shadow-(--shadow)"
+          className="pv-animate-fade absolute right-0 left-0 z-50 mt-1 max-h-96 overflow-y-auto rounded-md border border-line bg-surface shadow-lg sm:left-auto sm:w-96"
         >
-          {matches.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-ink3">
-              {items === null ? "Searching…" : "No matching investigations."}
-            </p>
+          {loading && flatOrderedResults.length === 0 ? (
+            <div className="flex items-center gap-2 px-3 py-3 text-sm text-ink3">
+              <Loader2 size={14} className="animate-spin text-accent" />
+              Searching across investigations...
+            </div>
+          ) : flatOrderedResults.length === 0 ? (
+            <div className="px-3 py-3 text-sm text-ink3">
+              No results found for &ldquo;{query.trim()}&rdquo;.
+            </div>
           ) : (
-            matches.map((inv) => (
-              <button
-                key={inv.id}
-                role="option"
-                aria-selected="false"
-                onClick={() => {
-                  setOpen(false);
-                  setQuery("");
-                  navigate(`/investigations/${inv.id}`);
-                }}
-                className="pv-transition flex w-full cursor-pointer flex-col px-3 py-2 text-left hover:bg-hover"
-              >
-                <span className="truncate text-sm font-medium">{inv.title}</span>
-                <span className="font-mono text-xs text-ink3">{inv.case_number}</span>
-              </button>
-            ))
+            groupedResults.map((group) => {
+              const { label, icon: CategoryIcon } =
+                CATEGORY_CONFIG[group.category];
+              return (
+                <div key={group.category} className="border-b border-line last:border-b-0">
+                  <div className="flex items-center gap-1.5 bg-surface2/60 px-3 py-1 text-[11px] font-semibold tracking-wider text-ink3 uppercase">
+                    <CategoryIcon size={12} />
+                    <span>{label}</span>
+                    <span className="ml-auto font-mono text-[10px]">
+                      {group.items.length}
+                    </span>
+                  </div>
+                  {group.items.map((item) => {
+                    const itemGlobalIndex = flatOrderedResults.indexOf(item);
+                    const isSelected = itemGlobalIndex === activeIndex;
+
+                    return (
+                      <button
+                        key={`${item.category}-${item.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onMouseEnter={() => setActiveIndex(itemGlobalIndex)}
+                        onClick={() => handleSelect(item)}
+                        className={`pv-transition flex w-full cursor-pointer flex-col px-3 py-2 text-left ${
+                          isSelected ? "bg-hover" : "hover:bg-hover"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-ink">
+                            {item.title}
+                          </span>
+                          {item.category !== "investigation" && (
+                            <span className="shrink-0 truncate text-[11px] text-ink3">
+                              {item.investigation_title}
+                            </span>
+                          )}
+                        </div>
+                        <span className="truncate font-mono text-xs text-ink3">
+                          {item.subtitle}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
           )}
         </div>
       )}
