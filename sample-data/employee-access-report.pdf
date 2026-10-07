@@ -1,0 +1,72 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 637 >>
+stream
+BT /F1 11 Tf 50 770 Td 13 TL
+(PROVENA DEMO DOCUMENT - ENTIRELY FICTIONAL) Tj T*
+(Employee Access Review - Q1 2026 \(synthetic\)) Tj T*
+() Tj T*
+(This synthetic report summarizes fictional account activity for) Tj T*
+(walkthrough purposes. No real people, systems, or events appear.) Tj T*
+() Tj T*
+(Account: m.okafor \(fictional employee\)) Tj T*
+(Workstation: ws-114 \(fictional asset\)) Tj T*
+(Reviewer contact: a.lindqvist@example.com) Tj T*
+() Tj T*
+(Observed sign-ins for m.okafor:) Tj T*
+(- 2026-01-12 08:02:11 from 192.0.2.14 \(expected office range\)) Tj T*
+(- 2026-01-13 02:14:55 from 192.0.2.90 \(unfamiliar address\)) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+6 0 obj
+<< /Length 687 >>
+stream
+BT /F1 11 Tf 50 770 Td 13 TL
+(Removable media \(fictional endpoint records\):) Tj T*
+(- 2026-01-13 02:16:10 USB device KINGSTON-USB serial) Tj T*
+(  4C5300FICTIONAL01 inserted on ws-114) Tj T*
+(- 2026-01-13 02:47:02 device removed from ws-114) Tj T*
+() Tj T*
+(Files referenced by the fictional review:) Tj T*
+(- vendor-pricing-2026.xlsx \(restricted share\)) Tj T*
+(- customer-list-2026.csv \(restricted share\)) Tj T*
+() Tj T*
+(Network notes \(fictional\): outbound upload of 193402 bytes) Tj T*
+(to 203.0.113.44, and archive-mirror.example.net lookup) Tj T*
+(from ws-114 on 2026-01-13 02:23:18.) Tj T*
+() Tj T*
+(End of synthetic report. No investigative conclusions intended.) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000218 00000 n 
+0000000906 00000 n 
+0000001032 00000 n 
+0000001770 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+1896
+%%EOF

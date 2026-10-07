@@ -1,10 +1,10 @@
 # Synthetic USB activity log. Entirely fictional.
-2026-01-12 12:05:33 usb: device inserted on ws-114, vendor 0781, serial 4C5300FICTIONAL01
+2026-01-12 12:05:33 usb: device inserted on ws-114, vendor=0781 serial=4C5300FICTIONAL01
 2026-01-12 12:06:01 usb: volume mounted on ws-114 as E:
 2026-01-12 12:31:47 usb: device removed from ws-114
-2026-01-13 02:16:10 usb: device inserted on ws-114, vendor 0781, serial 4C5300FICTIONAL01
+2026-01-13 02:16:10 usb: device inserted on ws-114, vendor=0781 serial=4C5300FICTIONAL01
 2026-01-13 02:18:44 usb: volume mounted on ws-114 as E:
 2026-01-13 02:47:02 usb: device removed from ws-114
-2026-01-14 10:02:19 usb: device inserted on ws-207, vendor 0951, serial 0019FICTIONAL99
+2026-01-14 10:02:19 usb: device inserted on ws-207, vendor=0951 serial=0019FICTIONAL99
 2026-01-14 10:02:25 usb: volume mounted on ws-207 as F:
 2026-01-14 10:20:51 usb: device removed from ws-207

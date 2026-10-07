@@ -1,6 +1,9 @@
-"""Future explainable-analysis modules (extraction, correlation, reasoning, scoring, recommendations).
+"""Deterministic intelligence pipeline: parsing, extraction, correlation.
 
-The LLM is a language-generation component, not the source of investigative
-truth: it will only render already-validated structured findings into prose.
-See docs/ai-architecture.md.
+Pure functions over evidence content live here (no FastAPI, no SQLAlchemy).
+Persistence, API, RBAC, and audit belong to ``app.modules.intelligence``.
+
+Milestone 4 implements extraction and shared-value correlation. Rule-based
+reasoning, findings, and recommendations arrive in Milestone 5. The LLM
+remains a language-generation component only; see docs/ai-architecture.md.
 """

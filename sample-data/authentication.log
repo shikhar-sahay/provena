@@ -10,3 +10,4 @@
 2026-01-13 09:00:04 auth: accepted login for a.lindqvist from 192.0.2.31
 2026-01-14 03:12:44 auth: failed login for jdoe from 198.51.100.7
 2026-01-14 11:26:30 auth: accepted login for m.okafor from 192.0.2.14
+2026-01-13 02:15:01 pam_unix(sshd:session): session opened for user=m.okafor host=ws-114 result=success

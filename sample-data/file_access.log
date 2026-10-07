@@ -7,3 +7,4 @@
 2026-01-13 02:44:57 fs: m.okafor read \\fileserver\restricted\customer-list-2026.csv (88110 bytes)
 2026-01-13 02:45:40 fs: m.okafor copied customer-list-2026.csv to E: (88110 bytes)
 2026-01-14 10:11:03 fs: a.lindqvist read \\fileserver\shared\team-calendar.ics (12044 bytes)
+2026-01-13 02:45:40 siem-normalized user=m.okafor host=ws-114 action=copy-to-removable file=customer-list-2026.csv dst=E:

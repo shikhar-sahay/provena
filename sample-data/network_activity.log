@@ -7,3 +7,4 @@
 2026-01-13 09:12:40 net: ws-207 (192.0.2.31) https download 12044 bytes from intranet.example.com
 2026-01-14 03:13:01 net: unknown host (198.51.100.7) ssh attempt on gateway, rejected
 2026-01-14 11:30:12 net: ws-114 (192.0.2.14) https upload 2048 bytes to filesync.example.com
+2026-01-13 02:46:02 siem-normalized user=m.okafor host=ws-114 action=upload-to-external dst=203.0.113.44 bytes=88110
