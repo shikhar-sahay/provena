@@ -3,10 +3,9 @@
 
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { FolderKanban, LayoutDashboard, LogOut, Moon, Plus, Sun, Users } from "lucide-react";
+import { FolderKanban, LayoutDashboard, LogOut, Plus, ShieldAlert, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "./Toast";
-import { useTheme } from "../theme/ThemeContext";
 import { Avatar, BrandLockup, BrandMark } from "./Brand";
 import { GlobalSearch } from "./GlobalSearch";
 import { Menu } from "./Menu";
@@ -19,11 +18,8 @@ import { displayName } from "../lib/format";
 const NAV = [
   { to: "/", label: "Dashboard", end: true, icon: <LayoutDashboard size={15} />, admin: false },
   { to: "/investigations", label: "Investigations", end: false, icon: <FolderKanban size={15} />, admin: false },
+  { to: "/findings", label: "Findings", end: false, icon: <ShieldAlert size={15} />, admin: false },
   { to: "/users", label: "Users", end: true, icon: <Users size={15} />, admin: true },
-];
-
-const PLANNED = [
-  { label: "Findings", note: "Investigator findings curation arrives in a later milestone." },
 ];
 
 export default function AppShell() {
@@ -60,26 +56,9 @@ export default function AppShell() {
               {item.label}
             </NavLink>
           ))}
-
-          <p className="px-2.5 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-ink3 uppercase">
-            Planned
-          </p>
-          {PLANNED.map((item) => (
-            <span
-              key={item.label}
-              title={item.note}
-              className="flex cursor-not-allowed items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-ink3"
-            >
-              {item.label}
-              <span className="rounded border border-line px-1.5 py-px text-[10px] font-medium tracking-wide uppercase">
-                Soon
-              </span>
-            </span>
-          ))}
         </nav>
 
-        <div className="space-y-3 border-t border-line px-4 py-3">
-          <ThemeToggle />
+        <div className="border-t border-line px-4 py-3">
           {user && (
             <div className="flex items-center gap-2.5">
               <Avatar name={user.username} />
@@ -139,9 +118,7 @@ export default function AppShell() {
                   <span className="sm:hidden">New</span>
                 </Button>
               )}
-              <div className="lg:hidden">
-                <ThemeToggleCompact />
-              </div>
+              <ThemeToggle />
               {user && (
                 <Menu
                   label="Account"
@@ -178,20 +155,5 @@ export default function AppShell() {
 
       <NewInvestigationDialog open={creating} onClose={() => setCreating(false)} />
     </div>
-  );
-}
-
-function ThemeToggleCompact() {
-  const { dark, setChoice } = useTheme();
-  return (
-    <button
-      type="button"
-      title={dark ? "Switch to light theme" : "Switch to dark theme"}
-      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-      onClick={() => setChoice(dark ? "light" : "dark")}
-      className="pv-transition flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-ink2 hover:bg-hover hover:text-ink"
-    >
-      {dark ? <Sun size={15} /> : <Moon size={15} />}
-    </button>
   );
 }
