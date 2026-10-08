@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, FileSearch, FlaskConical, FolderKanban, Inbox } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, FileSearch, FlaskConical, FolderKanban, Inbox, ShieldAlert } from "lucide-react";
 import { api } from "../api/client";
 import type { DashboardSummary, Investigation } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -77,26 +77,28 @@ export default function DashboardPage() {
         description="What needs your attention across the investigations you can access."
       />
 
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
-        <Stat label="Active investigations" value={active} />
-        <Stat label="Needs review" value={needsReview} tone={needsReview > 0 ? "warning" : undefined} />
-        <Stat label="Evidence items" value={summary.evidence_total} />
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Active investigations" value={active} detail="Open team caseload" icon={<FolderKanban size={17} />} />
+        <Stat label="Needs review" value={needsReview} detail="Investigator decision" icon={<CheckCircle2 size={17} />} tone={needsReview > 0 ? "warning" : undefined} />
+        <Stat label="Evidence items" value={summary.evidence_total} detail="Registered records" icon={<FileSearch size={17} />} />
         <Stat
           label="Integrity issues"
           value={summary.integrity_issues}
-          tone={summary.integrity_issues > 0 ? "danger" : undefined}
+          detail="Require attention"
+          icon={<ShieldAlert size={17} />}
+          tone={summary.integrity_issues > 0 ? "warning" : undefined}
         />
       </dl>
 
       {summary.integrity_issues > 0 && (
         <p
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-danger-line bg-danger-bg px-3 py-2 text-sm text-danger-ink"
+          className="flex items-start gap-3 rounded-lg border border-warning-line bg-warning-bg/60 px-4 py-3 text-sm text-ink"
         >
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          {summary.integrity_issues === 1
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-warning-line bg-surface/70 text-warning-ink"><AlertTriangle size={15} /></span>
+          <span><strong className="block font-semibold text-warning-ink">Evidence integrity review</strong>{summary.integrity_issues === 1
             ? "One evidence item needs attention: its stored bytes do not match the baseline, or it cannot be read."
-            : `${summary.integrity_issues} evidence items need attention: stored bytes do not match baselines, or files cannot be read.`}
+            : `${summary.integrity_issues} evidence items need attention: stored bytes do not match baselines, or files cannot be read.`}</span>
         </p>
       )}
 
@@ -156,7 +158,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-md border border-line bg-surface">
+        <section className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <h2 className="text-sm font-semibold">Recent investigations</h2>
             <Link to="/investigations" className="text-[13px] font-medium text-accentink hover:underline">
@@ -184,10 +186,10 @@ export default function DashboardPage() {
                 <li key={inv.id}>
                   <Link
                     to={`/investigations/${inv.id}`}
-                    className="pv-transition flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-hover"
+                    className="pv-transition group flex items-center justify-between gap-3 px-4 py-3 hover:bg-hover"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{inv.title}</span>
+                      <span className="block truncate text-sm font-medium group-hover:text-accentink">{inv.title}</span>
                       <span className="block font-mono text-xs text-ink3">
                         {inv.case_number} · updated {timeAgo(inv.updated_at)}
                       </span>
@@ -200,7 +202,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section className="overflow-hidden rounded-md border border-line bg-surface">
+        <section className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
           <div className="border-b border-line px-4 py-2.5">
             <h2 className="text-sm font-semibold">Recent activity</h2>
           </div>
@@ -215,8 +217,9 @@ export default function DashboardPage() {
           ) : (
             <ul className="divide-y divide-line">
               {summary.recent_activity.slice(0, 8).map((entry) => (
-                <li key={entry.id} className="px-4 py-2 text-sm">
-                  <p className="text-ink">
+                <li key={entry.id} className="pv-transition flex gap-3 px-4 py-2.5 hover:bg-hover">
+                  <Activity size={14} className="mt-0.5 shrink-0 text-ink3" />
+                  <div className="min-w-0 text-sm"><p className="text-ink">
                     {actionLabel(entry.action)}
                     {entry.evidence_number && (
                       <span className="ml-1.5 font-mono text-xs text-ink3">{entry.evidence_number}</span>
@@ -231,7 +234,7 @@ export default function DashboardPage() {
                     </Link>
                     {" · "}
                     {entry.actor_username ?? "System"} · {timeAgo(entry.created_at)}
-                  </p>
+                  </p></div>
                 </li>
               ))}
             </ul>
@@ -247,20 +250,22 @@ export default function DashboardPage() {
 function Stat({
   label,
   value,
+  detail,
+  icon,
   tone,
 }: {
   label: string;
   value: number;
+  detail: string;
+  icon: React.ReactNode;
   tone?: "warning" | "danger";
 }) {
-  const valueClass =
-    tone === "danger" ? "text-danger-ink" : tone === "warning" ? "text-warning-ink" : "text-ink";
+  const valueClass = tone === "warning" ? "text-warning-ink" : "text-ink";
   return (
-    <div className="bg-surface px-4 py-3">
-      <dt className="text-[13px] text-ink2">{label}</dt>
-      <dd className={`mt-0.5 text-2xl font-semibold tracking-tight tabular-nums ${valueClass}`}>
-        {value}
-      </dd>
+    <div className="pv-transition rounded-lg border border-line bg-surface p-4 shadow-sm hover:-translate-y-0.5 hover:border-linestrong hover:shadow-(--shadow)">
+      <div className="flex items-start justify-between gap-2"><dt className="text-[13px] font-medium text-ink2">{label}</dt><span className="text-ink3">{icon}</span></div>
+      <dd className={`mt-2 text-3xl font-semibold tracking-tight tabular-nums ${valueClass}`}>{value}</dd>
+      <p className="mt-1 text-xs text-ink3">{detail}</p>
     </div>
   );
 }
