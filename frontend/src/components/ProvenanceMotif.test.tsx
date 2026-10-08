@@ -10,7 +10,11 @@ describe("ProvenanceMotif", () => {
     expect(motif).toHaveAttribute("aria-hidden", "true");
     expect(motif).toHaveClass("pv-motif");
     expect(container.querySelectorAll(".pv-node").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll(".pv-trace").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("line").length).toBeGreaterThan(
+      container.querySelectorAll(".pv-signal-trace").length,
+    );
+    expect(container.querySelectorAll(".pv-signal-trace").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".pv-signal-dot animateMotion").length).toBeGreaterThan(0);
     expect(container.querySelectorAll(".pv-hub-ring").length).toBeGreaterThan(0);
   });
 });

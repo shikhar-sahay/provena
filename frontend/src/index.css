@@ -219,16 +219,10 @@ body {
   will-change: transform;
 }
 
-@keyframes pv-node-float {
-  0%, 100% { transform: translate(0, 0); opacity: 0.65; }
-  40% { transform: translate(8px, -6px); opacity: 1; }
-  72% { transform: translate(-5px, 5px); opacity: 0.78; }
-}
-
 @keyframes pv-trace-flow {
-  from { stroke-dashoffset: 24; opacity: 0.55; }
-  50% { opacity: 1; }
-  to { stroke-dashoffset: 0; opacity: 0.55; }
+  from { stroke-dashoffset: 42; opacity: 0.25; }
+  35%, 65% { opacity: 0.9; }
+  to { stroke-dashoffset: 0; opacity: 0.25; }
 }
 
 @keyframes pv-hub-pulse {
@@ -236,21 +230,19 @@ body {
   50% { transform: scale(1.28); opacity: 1; }
 }
 
-.pv-motif .pv-node {
-  animation: pv-node-float 9s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.pv-motif .pv-trace {
-  animation: pv-trace-flow 8s linear infinite;
-  stroke-dasharray: 3 21;
+.pv-motif .pv-signal-trace {
+  animation: pv-trace-flow 6s linear infinite;
+  stroke-dasharray: 8 34;
 }
 
 .pv-motif .pv-hub-ring {
   animation: pv-hub-pulse 7s ease-in-out infinite;
   transform-box: fill-box;
   transform-origin: center;
+}
+
+.pv-motif .pv-signal-dot {
+  opacity: 0.72;
 }
 
 .app-motif {
@@ -277,6 +269,10 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .pv-motion-layer {
+    display: none;
   }
 }
 

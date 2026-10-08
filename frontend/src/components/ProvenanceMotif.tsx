@@ -99,6 +99,8 @@ const TRACES: [number, number][] = [
   [38, 39], [39, 40],
 ];
 
+const SIGNAL_TRACES = [8, 18, 27, 34, 45, 55, 66, 75];
+
 export function ProvenanceMotif({ className = "" }: { className?: string }) {
   return (
     <svg
@@ -124,8 +126,6 @@ export function ProvenanceMotif({ className = "" }: { className?: string }) {
         {TRACES.map(([from, to], index) => (
           <line
             key={index}
-            className="pv-trace"
-            style={{ animationDelay: `${-(index % 12) * 0.7}s` }}
             x1={NODES[from].x}
             y1={NODES[from].y}
             x2={NODES[to].x}
@@ -140,10 +140,6 @@ export function ProvenanceMotif({ className = "" }: { className?: string }) {
           <circle
             key={index}
             className="pv-node"
-            style={{
-              animationDelay: `${-(index % 9) * 0.8}s`,
-              animationDuration: `${8 + (index % 5)}s`,
-            }}
             cx={node.x}
             cy={node.y}
             r={node.r}
@@ -156,13 +152,56 @@ export function ProvenanceMotif({ className = "" }: { className?: string }) {
         {NODES.filter((n) => n.hub).map((node, index) => (
           <circle
             key={index}
-            className="pv-hub-ring"
-            style={{ animationDelay: `${-index * 1.4}s` }}
             cx={node.x}
             cy={node.y}
             r={node.r + 7}
           />
         ))}
+      </g>
+
+      {/* Motion is layered over the complete static graph so its geometry stays legible. */}
+      <g className="pv-motion-layer">
+        <g fill="none" stroke="currentColor" strokeWidth="1.5">
+          {SIGNAL_TRACES.map((traceIndex, index) => {
+            const [from, to] = TRACES[traceIndex];
+            return (
+              <line
+                key={traceIndex}
+                className="pv-signal-trace"
+                style={{ animationDelay: `${-index * 1.1}s` }}
+                x1={NODES[from].x}
+                y1={NODES[from].y}
+                x2={NODES[to].x}
+                y2={NODES[to].y}
+              />
+            );
+          })}
+        </g>
+        {SIGNAL_TRACES.map((traceIndex, index) => {
+          const [from, to] = TRACES[traceIndex];
+          return (
+            <circle key={traceIndex} className="pv-signal-dot" r="3.2" fill="currentColor">
+              <animateMotion
+                path={`M ${NODES[from].x} ${NODES[from].y} L ${NODES[to].x} ${NODES[to].y}`}
+                dur={`${5.5 + (index % 4)}s`}
+                begin={`${-index * 0.9}s`}
+                repeatCount="indefinite"
+              />
+            </circle>
+          );
+        })}
+        <g fill="none" stroke="currentColor" strokeWidth="1.4">
+          {NODES.filter((node) => node.hub).map((node, index) => (
+            <circle
+              key={index}
+              className="pv-hub-ring"
+              style={{ animationDelay: `${-index * 1.1}s` }}
+              cx={node.x}
+              cy={node.y}
+              r={node.r + 7}
+            />
+          ))}
+        </g>
       </g>
     </svg>
   );
