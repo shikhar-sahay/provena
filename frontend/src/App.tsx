@@ -22,6 +22,7 @@ import RegisterEvidencePage from "./pages/RegisterEvidencePage";
 import ReportsPage from "./pages/ReportsPage";
 import TimelineTab from "./pages/TimelineTab";
 import UsersPage from "./pages/UsersPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import "./index.css";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -81,7 +82,7 @@ export default function App() {
           <Route path="audit" element={<AuditTab />} />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
