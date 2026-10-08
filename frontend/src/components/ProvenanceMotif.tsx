@@ -124,6 +124,8 @@ export function ProvenanceMotif({ className = "" }: { className?: string }) {
         {TRACES.map(([from, to], index) => (
           <line
             key={index}
+            className="pv-trace"
+            style={{ animationDelay: `${-(index % 12) * 0.7}s` }}
             x1={NODES[from].x}
             y1={NODES[from].y}
             x2={NODES[to].x}
@@ -135,14 +137,31 @@ export function ProvenanceMotif({ className = "" }: { className?: string }) {
       {/* Standard nodes */}
       <g fill="currentColor" fillOpacity="0.22">
         {NODES.map((node, index) => (
-          <circle key={index} cx={node.x} cy={node.y} r={node.r} />
+          <circle
+            key={index}
+            className="pv-node"
+            style={{
+              animationDelay: `${-(index % 9) * 0.8}s`,
+              animationDuration: `${8 + (index % 5)}s`,
+            }}
+            cx={node.x}
+            cy={node.y}
+            r={node.r}
+          />
         ))}
       </g>
 
       {/* Evidence hub concentric pulse rings */}
       <g fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="1.2">
         {NODES.filter((n) => n.hub).map((node, index) => (
-          <circle key={index} cx={node.x} cy={node.y} r={node.r + 7} />
+          <circle
+            key={index}
+            className="pv-hub-ring"
+            style={{ animationDelay: `${-index * 1.4}s` }}
+            cx={node.x}
+            cy={node.y}
+            r={node.r + 7}
+          />
         ))}
       </g>
     </svg>

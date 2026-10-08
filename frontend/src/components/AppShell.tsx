@@ -13,6 +13,7 @@ import { NewInvestigationDialog } from "./NewInvestigationDialog";
 import { RoleBadge } from "./Badge";
 import { Button } from "./Button";
 import { ThemeToggle } from "./ThemeToggle";
+import { ProvenanceMotif } from "./ProvenanceMotif";
 import { displayName } from "../lib/format";
 
 const NAV = [
@@ -37,8 +38,12 @@ export default function AppShell() {
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <Link to="/" className="flex items-center border-b border-line px-5 py-4" aria-label="Provena home">
-          <BrandLockup height={22} />
+        <Link
+          to="/"
+          className="pv-transition flex h-14 items-center justify-center border-b border-line px-5 hover:bg-hover"
+          aria-label="Provena home"
+        >
+          <BrandLockup height={24} />
         </Link>
 
         <nav aria-label="Primary" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
@@ -80,7 +85,8 @@ export default function AppShell() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <ProvenanceMotif className="app-motif pointer-events-none absolute inset-0 h-full w-full text-ink" />
         <header className="sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-2 lg:hidden">
@@ -147,7 +153,7 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1">
+        <main className="relative z-10 min-w-0 flex-1">
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
             <Outlet />
           </div>
