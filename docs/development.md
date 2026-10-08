@@ -25,7 +25,7 @@ $env:OLLAMA_MODEL="qwen3:4b"
 ./scripts/dev.ps1 api
 ```
 
-`qwen3:4b` is an example for ordinary student hardware, not a hard-coded
+`qwen3:4b` is an example for modest local hardware, not a hard-coded
 requirement. Choose another installed Ollama model through `OLLAMA_MODEL` when
 resource constraints require it. The Workspace page reports availability. A
 missing model, stopped server, timeout, or invalid response automatically uses
@@ -159,6 +159,11 @@ is set.
 | `SEED_DEV_PASSWORD`   | Seed    | `provena-dev` (local development only)         |
 | `EVIDENCE_STORAGE_ROOT` | Backend | `./evidence-storage` (`/evidence` in Compose) |
 | `EVIDENCE_MAX_UPLOAD_BYTES` | Backend | `104857600` (100 MiB)                    |
+| `LLM_ENABLED`         | Backend | `false` (deterministic reporting only)             |
+| `LLM_PROVIDER`        | Backend | `deterministic` (`ollama` enables local narrative) |
+| `OLLAMA_BASE_URL`     | Backend | `http://127.0.0.1:11434`                           |
+| `OLLAMA_MODEL`        | Backend | empty (required when `LLM_ENABLED=true`)           |
+| `LLM_TIMEOUT_SECONDS` | Backend | `30.0`                                             |
 | `VITE_API_URL`        | Frontend| `http://localhost:8000` (dev proxy covers `/api` anyway) |
 
 See `.env.example`. Never commit `.env` or any secrets.

@@ -164,7 +164,9 @@ Every future AI conclusion must be traceable to:
 If an investigator asks "why does the system believe this", the answer is a
 chain of recorded references, not a generated paragraph. This trace is what
 makes the audit log meaningful for analysis events
-(`AI_ANALYSIS_RUN`, `AI_FINDING_ACCEPTED` are reserved action names).
+(`AI_ANALYSIS_STARTED`, `AI_ANALYSIS_COMPLETED`, `AI_ANALYSIS_FAILED`,
+`AI_FINDING_GENERATED`, `AI_FINDING_ACCEPTED`, `AI_FINDING_REJECTED`, and
+`REPORT_GENERATED`).
 
 ## D. Confidence scoring
 
@@ -198,9 +200,9 @@ scores hypotheses, and suggests next steps, but no AI output reaches a report
 without recorded human acceptance. Rejected findings are excluded downstream
 and remain visible in the audit trail as rejected.
 
-## G. AI course relevance
+## G. Technical capability mapping
 
-Provena maps to these AI concepts:
+Provena implements these capabilities as deterministic platform behavior:
 
 - **Intelligent agents:** the analysis pipeline perceives evidence and acts by
   recommending investigative steps, with the investigator in the loop.
@@ -217,8 +219,8 @@ Provena maps to these AI concepts:
 - **Information extraction:** deterministic regex and key-aware structured
   extraction with exact source locators.
 - **Planning:** recommendation of next investigative steps given current state.
-- **Natural language generation:** LLM rendering of validated findings into
-  report prose.
+- **Natural language generation:** optional grounded rendering of accepted
+  findings into report prose, with deterministic fallback.
 
 ## H. Milestone boundary: what is real and what is next
 
@@ -234,9 +236,11 @@ deterministic reporting from accepted findings.
 
 Explicitly not implemented: Bayesian confidence scoring, knowledge graphs,
 automated timeline reconstruction, cross-case pattern analysis, evidence
-similarity detection, embeddings, vector search, Ollama/LLM generation, RAG,
-and MCP integrations. The rule set is intentionally small; sophistication
-grows by adding inspectable rules, not opacity.
+similarity detection, embeddings, vector search, RAG, and MCP integrations.
+Optional Ollama narrative enhancement is implemented with grounding
+validation and deterministic fallback; the model never originates findings,
+scores, integrity results, or custody facts. The rule set is intentionally
+small; sophistication grows by adding inspectable rules, not opacity.
 
 ## I. Future AI enhancements
 

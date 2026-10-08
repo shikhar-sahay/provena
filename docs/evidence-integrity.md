@@ -129,11 +129,13 @@ against the immutable ingestion baseline.
 Managers are admins, creators, and lead investigators. All enforcement is
 server-side; the UI only hides actions for convenience.
 
-## AI readiness
+## Analysis eligibility
 
-Evidence records give the future AI layer stable identifiers (`E-001`),
-provenance (source, acquisition time, original filename), types for routing
-(`log`, `network`, ...), integrity state, custody history, and controlled
-content access through the storage service. AI analysis should prefer
-evidence whose integrity state is known, and a mismatch must stay visible to
-that pipeline rather than being silently consumed.
+Evidence records feed the implemented intelligence pipeline with stable
+identifiers (`E-001`), provenance (source, acquisition time, original
+filename), types for routing (`log`, `network`, ...), integrity state,
+custody history, and controlled content access through the storage service.
+Analysis runs only on `verified` evidence; every other state produces an
+explicit blocked run outcome. A mismatch stays visible to investigators and
+is never silently consumed by processing. See `docs/ai-architecture.md` for
+parsers, artifacts, correlation, rules, and reporting.

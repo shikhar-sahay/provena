@@ -5,21 +5,24 @@ project context; keep it accurate.
 
 ## 1. Project purpose
 
-Provena is an AI-assisted digital investigation management platform (university
-project: Software Engineering + AI). It centralizes the investigation lifecycle
+Provena is an AI-assisted digital investigation management platform. It centralizes the investigation lifecycle
 (cases, evidence, chain of custody, explainable analysis, human validation,
 reporting) while preserving evidence integrity, traceability, and human oversight.
 
 ## 2. Project constraints (non-negotiable)
 
-- Two-person team, limited timeline, zero infrastructure/API budget.
-- Must run on ordinary student hardware and demo locally with no paid services.
+- Small focused team, limited timeline, zero infrastructure/API budget.
+- Must run on ordinary local hardware and demo locally with no paid services.
 - Optimize for maintainability, simplicity, reliability, explainability.
 - Backend is a **modular monolith**. Do not introduce microservices.
 - Do not introduce Kubernetes, Kafka/RabbitMQ, Redis, Celery, Neo4j,
   Elasticsearch, vector DBs, RAG/MCP infrastructure, or cloud-specific services
   unless explicitly requested with justification.
-- Do not add an LLM dependency except as a documented future integration point.
+- Do not add LLM SDKs, model dependencies, embeddings, vector DBs, knowledge
+  graphs, RAG/MCP infrastructure, or cloud-specific services unless explicitly
+  requested with justification. The optional Ollama HTTP narrative integration
+  already exists with strict grounding validation and deterministic fallback;
+  do not expand it without explicit justification.
 
 ## 3. Core AI principle
 
@@ -27,12 +30,14 @@ reporting) while preserving evidence integrity, traceability, and human oversigh
 
 Evidence processing, correlation, reasoning, confidence calculation, and
 recommendations must remain explainable and traceable to underlying evidence.
-The investigative pipeline is deterministic parsers, regex, spaCy (only where NLP
-genuinely adds value), custom correlation logic, custom rule-based reasoning,
-transparent weighted confidence scoring, and deterministic recommendations, with
-human investigator validation before anything reaches a report. A local LLM
-(Ollama) may eventually render validated structured findings into report prose,
-and the system must degrade gracefully when it is unavailable.
+The investigative pipeline is deterministic parsers, regex, key-aware structured
+rules, pypdf text extraction for machine-readable PDFs, custom correlation logic,
+custom rule-based reasoning, transparent weighted confidence scoring, and
+deterministic recommendations, with human investigator validation before anything
+reaches a report. An optional local Ollama model may render validated structured
+findings into report prose under strict grounding validation; deterministic
+fallback prose is always available, and the system must degrade gracefully when
+the model is unavailable.
 
 - Never call ordinary conditional logic "machine learning".
 - Never claim probabilistic/Bayesian confidence scoring is implemented.

@@ -38,7 +38,7 @@ search results.
 | Manage workspace members and invites | Yes | No | No | No |
 | Create and manage investigations | Yes | Yes | No | No |
 | Join an assigned investigation team | Yes | Yes | Yes | Yes |
-| Register and verify evidence | Yes | Team lead/creator | View | Assigned custodian |
+| Register and verify evidence | Yes | Team lead/creator | Assigned custodian verifies; other members read | Assigned custodian |
 | Record custody transfers | Yes | Team lead/creator | No | Assigned custodian |
 | Run deterministic analysis | Yes | Team lead/creator | Assigned analyst | No |
 | Generate rule findings | Yes | Team lead/creator | Assigned analyst | No |
@@ -90,13 +90,15 @@ flowchart TB
   hashed with bcrypt; hashes never leave the server. Tokens live 8 hours by
   default (`ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY` in `.env`).
 - The React client stores the token in `localStorage`. That storage is readable
-  by page JavaScript, which is an accepted tradeoff for this local student
-  application; a production deployment should prefer httpOnly cookies. Logout
+  by page JavaScript, which is an accepted tradeoff for local trusted use;
+  a production deployment should prefer httpOnly cookies. Logout
   discards the token client-side and records a `USER_LOGOUT` audit event.
 - Roles: `admin`, `investigator`, `forensic_analyst`, `evidence_custodian`.
   Reusable helpers live in `app/modules/auth/dependencies.py`
-  (`get_current_user`, `require_roles(...)`). Admins bypass investigation
-  scoping; everyone else is scoped to their memberships.
+  (`get_current_user`, `require_roles(...)`). Authorization is workspace-first:
+  requests resolve the user's active workspace membership, and investigation
+  access then requires a workspace administrator role or investigation-team
+  membership. There is no cross-workspace administrator bypass.
 
 ## Investigation domain (implemented)
 
@@ -125,14 +127,17 @@ flowchart TB
 
 - Append-only `audit_events` table: action, resource type, resource id, actor,
   timestamp, concise JSON metadata. No update or delete endpoints exist.
-- Recorded events in this slice: `USER_LOGIN`, `USER_LOGOUT`, `USER_CREATED`,
-  `INVESTIGATION_CREATED`, `INVESTIGATION_UPDATED`,
-  `INVESTIGATION_STATUS_CHANGED`, `INVESTIGATION_MEMBER_ADDED`,
-  `INVESTIGATION_MEMBER_REMOVED`, `EVIDENCE_REGISTERED`,
-  `EVIDENCE_METADATA_UPDATED`, `EVIDENCE_VERIFIED`,
-  `EVIDENCE_INTEGRITY_MISMATCH`, `EVIDENCE_DOWNLOADED`, `CUSTODY_TRANSFERRED`,
-  `EVIDENCE_CUSTODY_UPDATED`. Secrets (passwords, hashes, tokens) and file
-  contents are never written to audit metadata.
+- Recorded events include account and workspace actions (`USER_LOGIN`,
+  `USER_LOGOUT`, `USER_CREATED`, `WORKSPACE_CREATED`, `WORKSPACE_JOINED`,
+  `WORKSPACE_INVITE_CREATED`, `WORKSPACE_ROLE_CHANGED`), investigation
+  lifecycle and membership actions, evidence registration and metadata
+  updates, verification outcomes (`EVIDENCE_VERIFIED`,
+  `EVIDENCE_INTEGRITY_MISMATCH`), downloads, custody transfers and updates,
+  analysis lifecycle (`AI_ANALYSIS_STARTED`, `AI_ANALYSIS_COMPLETED`,
+  `AI_ANALYSIS_FAILED`), finding generation and review
+  (`AI_FINDING_GENERATED`, `AI_FINDING_ACCEPTED`, `AI_FINDING_REJECTED`),
+  investigator notes, and report generation (`REPORT_GENERATED`). Secrets
+  (passwords, hashes, tokens) and file contents are never written to audit metadata.
 - Evidence and custody actions are recorded against the investigation
   (`resource_type: investigation`) so per-investigation history and timelines
   stay complete; the metadata carries `evidence_id` and `evidence_number`.
@@ -164,8 +169,11 @@ communicate via direct Python calls (same process), not HTTP or queues.
   `.dark` for dark) mapped to Tailwind utilities via `@theme inline`
   (`bg-surface`, `text-ink`, `border-line`, semantic tones). No scattered
   ad-hoc colors.
-- First-class light/dark themes, persisted in `localStorage`, applied
-  pre-paint by an inline script in `index.html`, with `prefers-reduced-motion` respected.
+- Light and dark themes with a compact toggle in the top bar, persisted in
+  `localStorage` and applied pre-paint by an inline script in `index.html`.
+  A previously stored `system` preference still resolves against the OS
+  preference; the visible control offers Light and Dark. Motion honors
+  `prefers-reduced-motion`.
 - Approved monochrome brand from `frontend/public/brand/provena-brand-pack/`;
   production copies live in `frontend/public/brand/` (`mark-*.svg`,
   `logo-*.svg`, theme-aware `favicon-*.svg`, PNG fallback, Apple touch icon).
