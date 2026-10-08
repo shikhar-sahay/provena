@@ -70,6 +70,7 @@ export function Dialog({
   description,
   children,
   wide = false,
+  reader = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -77,6 +78,7 @@ export function Dialog({
   description?: string;
   children: ReactNode;
   wide?: boolean;
+  reader?: boolean;
 }) {
   const panelRef = useDialogBehavior(open, onClose, true);
   if (!open) return null;
@@ -89,11 +91,11 @@ export function Dialog({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`pv-animate-rise relative z-50 w-full rounded-lg border border-line bg-surface shadow-(--shadow) focus:outline-none ${
-          wide ? "max-w-2xl" : "max-w-md"
+        className={`pv-animate-rise relative z-50 flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-lg border border-line bg-surface shadow-(--shadow) focus:outline-none ${
+          reader ? "report-reader max-w-5xl" : wide ? "max-w-2xl" : "max-w-md"
         }`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+        <div className="dialog-header flex shrink-0 items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
             <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
             {description && <p className="mt-0.5 text-[13px] text-ink2">{description}</p>}
@@ -102,7 +104,13 @@ export function Dialog({
             <X size={16} />
           </IconButton>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div
+          className={`${reader ? "report-reader-body" : ""} min-h-0 overflow-y-auto px-5 py-4`}
+          tabIndex={reader ? 0 : undefined}
+          aria-label={reader ? "Report content" : undefined}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

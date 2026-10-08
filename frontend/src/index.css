@@ -208,6 +208,15 @@ body {
   }
 }
 
+@keyframes pv-motif-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-0.75%, 0.5%, 0) scale(1.012); }
+}
+
+.pv-motif {
+  animation: pv-motif-drift 18s ease-in-out infinite;
+}
+
 .pv-animate-fade {
   animation: pv-fade-in 180ms ease both;
 }
@@ -244,4 +253,30 @@ body {
 *::-webkit-scrollbar-thumb {
   background: var(--line-strong);
   border-radius: 8px;
+}
+
+@media print {
+  @page { margin: 16mm; }
+  html, body, #root { overflow: visible !important; height: auto !important; background: #fff !important; color: #111 !important; }
+  body * { visibility: hidden !important; }
+  .report-reader, .report-reader * { visibility: visible !important; }
+  .report-reader {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .report-reader .dialog-header, .report-reader .print\:hidden { display: none !important; }
+  .report-reader-body { overflow: visible !important; padding: 0 !important; }
+  .report-reader article { margin: 0 !important; color: #111 !important; }
+  .report-reader section, .report-reader li { break-inside: avoid-page; }
+  .report-reader h3, .report-reader h4 { break-after: avoid-page; }
+  .report-reader .text-ink2, .report-reader .text-ink3 { color: #333 !important; }
 }

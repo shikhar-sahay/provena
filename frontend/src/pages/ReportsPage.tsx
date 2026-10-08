@@ -137,7 +137,7 @@ export default function ReportsPage() {
         onClose={() => setSelected(null)}
         title={selected ? (selected.report_label ?? `RPT-${selected.report_number}`) : "Report"}
         description="Frozen snapshot. Use print to save as PDF."
-        wide
+        reader
       >
         {selected && <ReportView report={selected} />}
       </Dialog>
