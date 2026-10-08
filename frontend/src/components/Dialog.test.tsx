@@ -11,7 +11,12 @@ describe("Dialog report reader", () => {
     );
 
     const dialog = screen.getByRole("dialog", { name: "RPT-0001" });
-    expect(dialog).toHaveClass("report-reader", "max-w-5xl", "max-h-[calc(100dvh-2rem)]");
+    expect(dialog).toHaveClass(
+      "report-reader",
+      "max-w-5xl",
+      "max-h-[calc(100dvh-1rem)]",
+      "sm:max-h-[calc(100dvh-2rem)]",
+    );
     const reader = screen.getByLabelText("Report content");
     expect(reader).toHaveAttribute("tabindex", "0");
     expect(reader).toHaveClass(

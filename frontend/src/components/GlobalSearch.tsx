@@ -178,7 +178,7 @@ export function GlobalSearch() {
   }
 
   return (
-    <div ref={rootRef} className="relative w-48 shrink-0 sm:w-64 md:w-72">
+    <div ref={rootRef} className="relative w-28 min-w-0 shrink sm:w-64 md:w-72">
       <Search
         size={14}
         className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink3"
@@ -215,7 +215,7 @@ export function GlobalSearch() {
         <div
           id={`${searchId}-results`}
           role="listbox"
-          className="pv-animate-fade absolute right-0 left-0 z-50 mt-1 max-h-96 overflow-y-auto rounded-md border border-line bg-surface shadow-lg sm:left-auto sm:w-96"
+          className="pv-animate-fade fixed right-3 left-3 z-50 mt-1 max-h-[60dvh] overflow-y-auto rounded-md border border-line bg-surface shadow-lg sm:absolute sm:right-0 sm:left-auto sm:w-96"
         >
           {loading && flatOrderedResults.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-3 text-sm text-ink3">

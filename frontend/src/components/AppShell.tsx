@@ -89,26 +89,10 @@ export default function AppShell() {
         <ProvenanceMotif className="app-motif pointer-events-none absolute inset-0 h-full w-full text-ink" />
         <header className="sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-2 lg:hidden">
+            <div className="flex items-center lg:hidden">
               <Link to="/" className="shrink-0" aria-label="Provena home">
                 <BrandMark size={22} />
               </Link>
-              <nav aria-label="Primary" className="flex shrink-0 items-center gap-1">
-                {NAV.filter((item) => !item.admin || user?.role === "admin").map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `rounded-md px-2 py-1 text-sm font-medium ${
-                        isActive ? "bg-hover text-ink" : "text-ink2 hover:text-ink"
-                      }`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
             </div>
 
             <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
@@ -153,12 +137,34 @@ export default function AppShell() {
           </div>
         </header>
 
-        <main className="relative z-10 min-w-0 flex-1">
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <main className="relative z-10 min-w-0 flex-1 pb-20 lg:pb-0">
+          <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-6">
             <Outlet />
           </div>
         </main>
       </div>
+
+      <nav
+        aria-label="Primary mobile navigation"
+        className="fixed inset-x-0 bottom-0 z-40 grid border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        style={{ gridTemplateColumns: `repeat(${NAV.filter((item) => !item.admin || user?.role === "admin").length}, minmax(0, 1fr))` }}
+      >
+        {NAV.filter((item) => !item.admin || user?.role === "admin").map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              `pv-transition flex min-w-0 flex-col items-center gap-1 px-1 py-2 text-[10px] font-medium ${
+                isActive ? "bg-hover text-ink" : "text-ink2 hover:bg-hover hover:text-ink"
+              }`
+            }
+          >
+            <span className="text-ink3">{item.icon}</span>
+            <span className="w-full truncate text-center">{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
       <NewInvestigationDialog open={creating} onClose={() => setCreating(false)} />
     </div>

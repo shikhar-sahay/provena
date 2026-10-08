@@ -120,7 +120,7 @@ export default function InvestigationWorkspace() {
       <div
         role="tablist"
         aria-label="Investigation sections"
-        className="mt-4 flex gap-0.5 overflow-x-auto border-b border-line text-sm"
+        className="mt-4 flex snap-x snap-mandatory gap-0.5 overflow-x-auto border-b border-line text-sm"
       >
         {TABS.map((tab) => (
           <NavLink
@@ -129,7 +129,7 @@ export default function InvestigationWorkspace() {
             end={tab.end}
             role="tab"
             className={({ isActive }) =>
-              `pv-transition -mb-px shrink-0 border-b-2 px-3 py-2 font-medium whitespace-nowrap ${
+              `pv-transition -mb-px shrink-0 snap-start border-b-2 px-3 py-2 font-medium whitespace-nowrap ${
                 isActive
                   ? "border-ink text-ink"
                   : "border-transparent text-ink2 hover:border-linestrong hover:text-ink"
