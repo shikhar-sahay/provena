@@ -4,6 +4,8 @@ Provena is an explainable AI-assisted digital forensic investigation platform de
 
 Built with React, FastAPI, and PostgreSQL, Provena combines structured investigative workflows with transparent, rule-based analysis and optional language-model-assisted reporting. Its AWS-hosted architecture supports centralized access, controlled deployment, and secure application operations.
 
+**Live application:** [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login). The deployed frontend and API operate over HTTPS; local development remains available below.
+
 ## Key capabilities
 
 - Manage workspaces, case teams, priorities, statuses, investigator notes, and scoped search.
@@ -88,9 +90,9 @@ The AWS environment also has an S3 gateway VPC endpoint and separate S3 buckets 
 
 ```mermaid
 flowchart TB
-    B[User browser] -. "DNS resolution in progress" .-> DNS[DuckDNS hostname]
-    B -->|"web request; current scheme to verify"| IGW
-    DNS -. "resolved public IP" .-> IGW
+    B[User browser] -->|"DNS lookup"| DNS[DuckDNS hostname]
+    DNS -->|"current public IP"| IGW
+    B -->|"HTTPS 443"| IGW
     subgraph AWS["AWS ap-south-1"]
       subgraph VPC["Custom VPC"]
         IGW[Internet gateway] --> RT[Public route table]
@@ -105,7 +107,7 @@ flowchart TB
             API --> PG
             API --> FILES
           end
-          SG --> N
+            SG -->|"HTTPS 443; HTTP 80 redirects"| N
         end
         RT --> SG
         EP[S3 gateway endpoint] -. "associated route table required" .-> S3[(Private S3 buckets)]
@@ -114,10 +116,9 @@ flowchart TB
       ROLE[IAM instance role] -. "scoped permissions" .-> EC2
       SSM[Systems Manager Session Manager] -->|"management session"| EC2
     end
-    B -. "HTTPS after TLS setup" .-> N
 ```
 
-DuckDNS, Let's Encrypt certificates, Nginx HTTPS termination, HTTP-to-HTTPS redirection, renewal, and public-IP DNS updates are **configuration in progress**. Production URL: `https://<verified-duckdns-hostname>/` (placeholder until DNS and HTTPS acceptance). The current topology does not use CloudFront, RDS, a load balancer, Auto Scaling, or multi-AZ failover. One small EC2 instance is a shared failure domain for the API, database, and local evidence; coordinated backups and restore tests are important. See [AWS deployment](docs/aws-deployment.md) and [security](docs/security.md).
+DuckDNS updates the hostname when the EC2 public IP changes. Nginx terminates HTTPS with a Let's Encrypt certificate and redirects HTTP to HTTPS; automatic DNS updates and certificate renewal are configured. The current topology does not use CloudFront, RDS, a load balancer, Auto Scaling, or multi-AZ failover. One small EC2 instance is a shared failure domain for the API, database, and local evidence; coordinated backups and restore tests are important. See [AWS deployment](docs/aws-deployment.md), the [team architecture and deployment guide](docs/AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md), and [security](docs/security.md).
 
 ## Technology stack
 
@@ -127,7 +128,7 @@ DuckDNS, Let's Encrypt certificates, Nginx HTTPS termination, HTTP-to-HTTPS redi
 | API and services | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Uvicorn |
 | Data | PostgreSQL 16; local evidence storage in the AWS deployment; optional private S3 backend in code |
 | Analysis | Python parsers and rules, `pypdf`, deterministic correlation and confidence; optional Ollama HTTP narrative provider |
-| AWS operations | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM instance role, S3 buckets, Systems Manager, Nginx, systemd |
+| AWS operations | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM instance role, S3 buckets, Systems Manager; Nginx and systemd run on EC2 |
 | Security controls | bcrypt password hashes, JWT bearer tokens, workspace and case RBAC, SHA-256 integrity baselines, append-only custody and audit records |
 
 The frontend stores its bearer token in `localStorage`, which page JavaScript can access. This is a security trade-off for a deployed web application; see [security](docs/security.md). Provena is not certified forensic software and makes no legal admissibility claim.
@@ -144,6 +145,8 @@ Local prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and Pow
 ```
 
 The Vite development proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. The [development guide](docs/development.md) covers manual setup, configuration, migrations, tests, and optional local Ollama setup.
+
+To use the deployed application instead, open the [live HTTPS login](https://provena-app.duckdns.org/login). Do not use local demo credentials as production credentials.
 
 ```powershell
 # In backend/
@@ -162,8 +165,9 @@ npm run build
 - [AI architecture](docs/ai-architecture.md): extraction, provenance, rules, confidence, review, and Ollama safeguards.
 - [Evidence integrity](docs/evidence-integrity.md): registration, SHA-256 verification, custody, and analysis eligibility.
 - [AWS deployment](docs/aws-deployment.md): Mumbai infrastructure, Nginx/systemd deployment, verification, and limitations.
+- [AWS architecture and deployment review guide](docs/AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md): deployed topology, operations, trade-offs, and technical review questions.
 - [Security](docs/security.md): authentication, IAM, network controls, storage, TLS status, and risks.
 - [Local development](docs/development.md): setup, configuration, migrations, demo, and testing.
 - [Future enhancements](docs/future-enhancements.md): proposed analysis and availability improvements.
 
-Potential future work includes verified DuckDNS/TLS completion, stronger backup and monitoring practices, S3 evidence migration, managed PostgreSQL, higher availability, and carefully evaluated analysis additions. Bayesian scoring, knowledge graphs, cross-case inference, OCR, and spaCy-based NLP are not implemented.
+Potential future work includes stronger backup and monitoring practices, S3 evidence migration, managed PostgreSQL, higher availability, and carefully evaluated analysis additions. Bayesian scoring, knowledge graphs, cross-case inference, OCR, and spaCy-based NLP are not implemented.

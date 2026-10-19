@@ -9,7 +9,7 @@ instance in Mumbai. Nginx serves the built SPA and proxies `/api/` to a
 systemd-managed FastAPI process. PostgreSQL 16 and the selected local evidence
 store also run on that instance. S3 storage is implemented as an alternative
 backend, not selected in the live deployment. See [AWS deployment](aws-deployment.md)
-and [security](security.md). DuckDNS and HTTPS are being configured.
+and [security](security.md). DuckDNS, HTTPS termination, DNS updates, and certificate renewal are operational in the deployed environment.
 
 ## Workspace authorization boundary
 

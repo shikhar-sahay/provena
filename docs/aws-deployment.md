@@ -2,21 +2,24 @@
 
 Provena runs on a single EC2 instance in Asia Pacific (Mumbai), `ap-south-1`. This guide describes that deployment and its operational boundaries. The repository contains application configuration and earlier, unimplemented container/CloudFront plans, but no infrastructure-as-code or live account inventory. Verify commands, service names, mount points, and network rules against the EC2 instance before using them. Do not copy development credentials to production.
 
+Live application: [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login). The [team architecture and deployment review guide](AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md) explains the complete topology and operations.
+
 ## Deployment inventory
 
-| Concern | Reported configuration | Verification still needed |
+| Concern | Deployed configuration | Operational checks |
 | --- | --- | --- |
-| Host | Amazon Linux 2023 on one `t3.micro` EC2 instance | Instance health, AMI revision, memory headroom |
+| Host | Amazon Linux 2023 on `t3.micro` instance `i-013194067a51952e5`, with 2 GB swap | Instance health, AMI revision, memory headroom |
 | Disk | 20 GB EBS root volume | Encryption, utilization, backup retention |
-| Network | Custom VPC, public subnet, internet gateway, route table, security groups | Exact inbound rules and public IP lifecycle |
-| Management | AWS Systems Manager Session Manager | Agent connectivity and instance profile permissions |
+| Network | `provena-vpc`, public subnet, internet gateway, route table, `provena-ec2-sg` with ports 80 and 443 inbound | Periodic rule review and public IP lifecycle |
+| Management | AWS Systems Manager Session Manager; instance role `provena-ec2-role` | Agent connectivity and least-privilege permissions |
 | AWS storage | Three distinct S3 buckets for evidence-related resources, frontend-related resources, and operational backups/migration artifacts | Bucket encryption, public-access blocks, versioning, actual object usage |
 | S3 route | Gateway VPC endpoint | Endpoint association with the EC2 subnet route table |
 | Web | Nginx serves the Vite production build and proxies `/api/` | Live Nginx configuration, caching and security headers |
-| API | FastAPI under systemd, bound to localhost port 8000 | Unit name, working directory, service user, restart policy |
-| Database | PostgreSQL 16 on the EC2 instance | Data directory, backups, local-only listener |
+| API | FastAPI under `provena.service`, bound to `127.0.0.1:8000` | Working directory, service user, restart policy |
+| Database | PostgreSQL 16 database `provena` on EC2 | Data directory, backups, local-only listener |
 | Evidence | Local filesystem through `EVIDENCE_STORAGE_ROOT`; `EVIDENCE_STORAGE_BACKEND=local` | Path, permissions, backups, disk growth |
-| LLM | `LLM_ENABLED=false` | Runtime configuration |
+| Domain and TLS | DuckDNS updates, Let's Encrypt certificate, HTTP-to-HTTPS redirect, automatic renewal | Monitor updater and renewal outcomes |
+| LLM | `LLM_ENABLED=false` | Retain deterministic fallback |
 
 The code supports private S3 evidence storage when explicitly selected, but the deployed application currently uses local files. S3 buckets do not imply S3-backed evidence or frontend hosting. PostgreSQL is on EC2, not RDS. CloudFront, ALB, Auto Scaling, ECS, EKS, Lambda, Elastic Beanstalk, and multi-AZ failover are not part of this deployment.
 
@@ -24,7 +27,7 @@ The code supports private S3 evidence storage when explicitly selected, but the 
 
 ```mermaid
 flowchart LR
-    B[Browser] -->|"web request; HTTPS in progress"| N[Nginx on EC2]
+    B[Browser] -->|"HTTPS via DuckDNS"| N[Nginx on EC2]
     N -->|"/ and static assets"| SPA[React production build]
     N -->|"/api/ proxy"| API[FastAPI on 127.0.0.1:8000]
     API --> PG[(PostgreSQL 16 on EC2)]
@@ -54,18 +57,18 @@ Populate a protected production environment file outside the Git checkout:
 APP_ENV=production
 DATABASE_URL=postgresql+psycopg2://APP_USER:REPLACE_AT_DEPLOYMENT@127.0.0.1:5432/APP_DB
 SECRET_KEY=REPLACE_WITH_RANDOM_VALUE_AT_LEAST_32_CHARACTERS
-CORS_ORIGINS=https://VERIFIED_DUCKDNS_HOSTNAME
+CORS_ORIGINS=https://provena-app.duckdns.org
 EVIDENCE_STORAGE_BACKEND=local
 EVIDENCE_STORAGE_ROOT=/srv/provena/evidence
 LLM_ENABLED=false
 TRUSTED_PROXY_IPS=127.0.0.1
 ```
 
-These are placeholders, not usable credentials. Until HTTPS is operational, set `CORS_ORIGINS` to the exact current origin instead of the future hostname. Because production validation rejects placeholder values, replace them before startup. Protect the file with owner-only read permission. Do not place it under the web root or commit it. Ensure the service account can read and write the evidence directory but cannot read other application secrets unnecessarily.
+The database URL, secret key, and evidence path above are deployment examples, not usable credentials or a record of actual host paths. Production validation rejects placeholder secrets, so replace them before startup. Protect the file with owner-only read permission. Do not place it under the web root or commit it. Ensure the service account can read and write the evidence directory but cannot read other application secrets unnecessarily.
 
 From the release's `backend/` directory, with the production environment loaded, run `python -m alembic upgrade head` explicitly. Do not run development seeds or silently migrate during service startup. Confirm `GET /api/health` and `GET /api/ready` after starting; readiness checks PostgreSQL connectivity.
 
-A systemd unit should use a dedicated non-root user, a fixed working directory, the protected environment file, and a restart policy. Its command should run a single Uvicorn process bound to `127.0.0.1:8000`. Review the live service with `systemctl status SERVICE_NAME` and `journalctl -u SERVICE_NAME`; avoid logging bearer tokens, passwords, or evidence contents. The exact unit name and path must be confirmed on the instance.
+A systemd unit should use a dedicated non-root user, a fixed working directory, the protected environment file, and a restart policy. Its command should run a single Uvicorn process bound to `127.0.0.1:8000`. Review the live service with `systemctl status provena.service` and `journalctl -u provena.service`; avoid logging bearer tokens, passwords, or evidence contents. Confirm the working directory and service user on the instance.
 
 Example unit structure to adapt after inspecting the live host:
 
@@ -119,22 +122,20 @@ server {
 }
 ```
 
-Keep `proxy_pass` without a trailing slash so the `/api/` prefix reaches FastAPI. Validate with `sudo nginx -t` before a reload. The final HTTPS configuration should add a certificate-backed 443 server and make port 80 redirect to HTTPS.
+Keep `proxy_pass` without a trailing slash so the `/api/` prefix reaches FastAPI. Validate with `sudo nginx -t` before a reload. The live Nginx configuration serves HTTPS on port 443 and redirects port 80 to HTTPS; the HTTP-only example above illustrates proxy routing, not the complete live TLS file.
 
-## DuckDNS and HTTPS: configuration in progress
+## DuckDNS and HTTPS
 
-The intended completed path is DuckDNS DNS to the instance's public IP, Let's Encrypt certificate, Nginx HTTPS termination, port 80 redirect to 443, certificate renewal, and a DNS updater when the IP changes. The current web scheme was not independently verified during this documentation pass; describe HTTPS as in progress until the hostname, certificate, redirect, and renewal are tested.
+DuckDNS resolves `provena-app.duckdns.org` to the current EC2 public IP. A root-protected token at `/etc/duckdns/token` supports `/usr/local/bin/update-duckdns.sh`, triggered by `duckdns-update.service` and `duckdns-update.timer` about every five minutes. Certbot obtained the Let's Encrypt certificate and integrates with Nginx; HTTP redirects to HTTPS. Automatic certificate renewal is configured. A renewal dry run succeeded. The certificate was issued October 19, 2026 and expires January 17, 2027 unless renewed. The public IP is not a permanent application address.
 
-Before marking HTTPS operational, verify:
+The deployment checks completed on October 19, 2026 were:
 
-- The DuckDNS name resolves to the current EC2 public IP and updates after an IP change.
-- The certificate covers the exact hostname and is trusted by a browser.
-- HTTP redirects to HTTPS, including deep links, without breaking `/api/`.
-- Renewal is scheduled and a dry run succeeds.
-- Login, evidence upload/download, reports, and all API methods work over HTTPS without mixed content.
-- `CORS_ORIGINS` matches the final origin and Nginx forwards the right scheme and host.
+- HTTPS frontend returned HTTP 200 and HTTP redirected with HTTP 301 to the correct HTTPS URL.
+- DuckDNS resolved to the EC2 public IP and the updater completed successfully.
+- `/api/health` reported healthy FastAPI and PostgreSQL.
+- Certbot's renewal simulation succeeded.
 
-The README production URL remains a placeholder until these checks pass.
+These checks establish the public endpoint and certificate automation; continue to test authenticated workflows, evidence upload/download, and renewal after configuration changes. The canonical URL is [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login).
 
 ## S3 and backup use
 

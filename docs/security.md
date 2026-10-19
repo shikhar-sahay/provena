@@ -22,7 +22,7 @@ PostgreSQL, evidence files, and the frontend share one EC2 failure domain. Confi
 
 ## Transport security
 
-DuckDNS, Let's Encrypt, Nginx TLS termination, HTTP redirection, renewal, and DNS updates are **in progress**. Do not claim that browser-to-EC2 traffic is encrypted until the hostname and certificate are verified. When enabled, use an exact HTTPS origin in `CORS_ORIGINS`, redirect port 80, and test deep links and API upload/download over HTTPS.
+The deployed domain uses a Let's Encrypt certificate with Nginx TLS termination. Port 80 redirects to HTTPS; DuckDNS IP updates and certificate renewal are configured, and a renewal dry run succeeded on October 19, 2026. The certificate expires January 17, 2027 unless renewed. The DuckDNS token is held in a root-protected file outside the repository. HTTPS protects transport but does not replace secret rotation, patching, backups, access review, or application security testing. Keep `CORS_ORIGINS` restricted to the exact production origin and verify uploads and downloads after web-server changes.
 
 ## Reporting and AI trust
 

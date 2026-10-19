@@ -16,6 +16,6 @@ These are proposals, not implemented features or deployment claims. They should 
 - S3-backed evidence storage is supported by the code but not selected on the live EC2 instance. A migration would need byte-by-byte reconciliation and coordinated database backup.
 - Managed PostgreSQL such as RDS, more memory, automated backups, monitoring, and multi-AZ redundancy could reduce single-instance risk, subject to budget and operational approval.
 - CloudFront and private networking are possible later designs but are not part of the current deployment.
-- Completing and verifying DuckDNS/TLS is a near-term deployment task, not a finished capability.
+- Periodically verify DuckDNS updates, HTTPS redirects, and certificate renewal as ongoing operations.
 
 OCR, deep binary forensics, vector search, RAG, and model training are outside the current implementation. None should be presented as a working Provena feature without tests and evidence traceability.
