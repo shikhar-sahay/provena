@@ -1,6 +1,6 @@
 # Security and evidence controls
 
-This document describes application behavior visible in the repository and the team-reported AWS deployment. It is not a security certification.
+This document describes application behavior visible in the repository and the AWS deployment. Provena is not certified forensic software.
 
 ## Identity and authorization
 
@@ -16,7 +16,7 @@ The current EC2 deployment uses local evidence files. Back up the directory with
 
 ## AWS boundaries
 
-The reported deployment uses a public-subnet EC2 instance, security groups, a scoped IAM instance role, private S3 buckets, and Systems Manager Session Manager. Verify that only intended web ports are public, while FastAPI port 8000 and PostgreSQL port 5432 stay local. An S3 gateway endpoint affects EC2-to-S3 routing only when associated with its route table. IAM and bucket policies should permit only the active operational backup or migration prefixes, with no embedded access keys.
+The deployment uses a public-subnet EC2 instance, security groups, a scoped IAM instance role, private S3 buckets, and Systems Manager Session Manager. Verify that only intended web ports are public, while FastAPI port 8000 and PostgreSQL port 5432 stay local. An S3 gateway endpoint affects EC2-to-S3 routing only when associated with its route table. IAM and bucket policies should permit only the active operational backup or migration prefixes, with no embedded access keys.
 
 PostgreSQL, evidence files, and the frontend share one EC2 failure domain. Confirm EBS encryption, filesystem permissions, backups, restore testing, disk alarms, log retention, and instance patching in the AWS account. The repository cannot attest that these operational checks have been completed.
 

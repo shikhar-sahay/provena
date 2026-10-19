@@ -89,7 +89,7 @@ already-validated findings into readable prose. Human validation happens
 
 ## Evidence foundation (implemented) feeds the pipeline (implemented through validation)
 
-The evidence layer now provides what the intelligence milestones consume:
+The evidence layer provides the inputs consumed by the intelligence pipeline:
 
 - stable evidence identifiers (`E-001`) that findings can cite,
 - metadata, timestamps, source provenance, and original filenames,
@@ -228,9 +228,9 @@ Provena implements these capabilities as deterministic platform behavior:
 - **Natural language generation:** optional grounded rendering of accepted
   findings into report prose, with deterministic fallback.
 
-## H. Milestone boundary: what is real and what is next
+## H. Implemented capabilities and future scope
 
-Implemented (Milestone 4 plus reasoning/reporting): information extraction
+Implemented: information extraction
 (regex plus key-aware structured rules over txt, log, csv, json, and
 machine-readable PDF via pypdf), knowledge representation (artifacts with
 locators, correlations with contributors, findings with factors), information

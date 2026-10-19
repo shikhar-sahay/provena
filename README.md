@@ -1,72 +1,25 @@
 # Provena
 
-**A full-stack, explainable AI-assisted digital investigation platform deployed on AWS.** Provena brings case management, evidence integrity, chain of custody, traceable analysis, human review, and immutable reporting into one workspace. The same project demonstrates three connected disciplines:
+Provena is an explainable AI-assisted digital forensic investigation platform designed to streamline evidence management, investigative analysis, and case reporting. It provides a centralized workspace where investigators can organize cases, preserve evidence integrity, maintain chain-of-custody records, examine correlated findings, and generate traceable investigation reports.
 
-| Dimension | What Provena implements |
-| --- | --- |
-| Software engineering | React interface, FastAPI modular monolith, PostgreSQL persistence, workspace and case authorization, tested investigation workflows |
-| Artificial intelligence | Deterministic extraction and correlation, versioned investigative rules, weighted confidence, recommendations, optional grounded report prose |
-| Cloud architecture | A single-instance AWS deployment with EC2, VPC networking, EBS, IAM, Systems Manager, S3 resources, Nginx, and systemd |
+Built with React, FastAPI, and PostgreSQL, Provena combines structured investigative workflows with transparent, rule-based analysis and optional language-model-assisted reporting. Its AWS-hosted architecture supports centralized access, controlled deployment, and secure application operations.
 
-The cloud host runs the same application and AI pipeline used locally. Findings are proposals for a human investigator, not conclusions of guilt. Provena is not certified forensic software and makes no legal admissibility claim.
+## Key capabilities
 
-## Current deployment status
+- Manage workspaces, case teams, priorities, statuses, investigator notes, and scoped search.
+- Register evidence under opaque storage keys with immutable SHA-256 baselines.
+- Record verification outcomes and append-only chain-of-custody events.
+- Process only verified evidence, with explicit outcomes for blocked or unsupported items.
+- Extract provenance-bearing artifacts and correlate shared values across evidence.
+- Propose findings through versioned rules with visible confidence factors and recommendations.
+- Require human acceptance or rejection before findings enter immutable, content-hashed reports.
+- Review investigation timelines and an append-only application audit trail.
 
-The team reports an operational deployment in **Asia Pacific (Mumbai), `ap-south-1`**. The deployment inventory below is supplied by the project team; this repository does not contain live AWS infrastructure definitions or account access to verify individual resources.
+The interface supports administrator, investigator, forensic analyst, and evidence custodian roles. The backend enforces workspace membership and investigation permissions for every protected operation.
 
-| Component | Current deployment |
-| --- | --- |
-| Compute | One Amazon Linux 2023 `t3.micro` EC2 instance with a 20 GB EBS root volume |
-| Network | Custom VPC, public subnet, internet gateway, route tables, security groups, and an S3 gateway VPC endpoint |
-| Web | React/Vite production build served by Nginx; Nginx proxies `/api/` to FastAPI on localhost port 8000 |
-| Application | FastAPI as a systemd service; PostgreSQL 16 on the same EC2 instance, not Amazon RDS |
-| Evidence | Local EC2 filesystem selected by `EVIDENCE_STORAGE_BACKEND=local` and `EVIDENCE_STORAGE_ROOT` |
-| AWS access | EC2 instance role with scoped permissions; Systems Manager Session Manager for administration |
-| S3 | Separate evidence-related, frontend-related, and operations/backup buckets exist; the live application does not store evidence in S3 or serve the frontend from S3 |
-| Narrative model | `LLM_ENABLED=false`; deterministic analysis and report prose continue without Ollama |
+## Architecture overview
 
-**HTTPS configuration is in progress.** The intended completed path uses a free DuckDNS hostname, Let's Encrypt certificate, Nginx TLS termination, HTTP-to-HTTPS redirection, automatic certificate renewal, and DNS updates when the public EC2 IP changes. Do not treat TLS or automatic DNS renewal as operational until verified. No CloudFront, load balancer, Auto Scaling, multi-AZ setup, ECS, EKS, Lambda, or Elastic Beanstalk is deployed.
-
-Production URL: `https://<verified-duckdns-hostname>/` (placeholder, publish only after DNS and HTTPS acceptance).
-
-## AWS architecture
-
-Solid arrows show the reported current path. Dotted arrows show the intended DuckDNS/TLS path or conditional S3 routing. The S3 gateway endpoint carries S3 traffic only if it is associated with the instance subnet's route table. S3 buckets are not the live frontend or evidence store.
-
-```mermaid
-flowchart TB
-    B[User browser] -. "DNS lookup, in progress" .-> DNS[DuckDNS hostname]
-    B -->|"web request; current scheme to verify"| SG
-    DNS -. "resolved public IP" .-> SG
-    subgraph AWS["AWS ap-south-1"]
-      subgraph VPC["Custom VPC"]
-        IGW[Internet gateway] --> RT[Public route table]
-        subgraph SUBNET["Public subnet"]
-          SG[Application security group]
-          subgraph EC2["EC2 t3.micro, Amazon Linux 2023, 20 GB EBS root"]
-            N[Nginx: frontend assets and /api proxy]
-            API[FastAPI systemd service :8000]
-            PG[(PostgreSQL 16)]
-            FILES[(Local evidence files)]
-            N -->|"/api/ on localhost"| API
-            API --> PG
-            API --> FILES
-          end
-          SG -->|"web traffic"| N
-        end
-        RT --> SUBNET
-        EP[S3 gateway endpoint] -. "when associated with route table" .-> S3[(Private S3 buckets: evidence-related, frontend-related, operations)]
-        EC2 -. "IAM-authorized S3 access, if used" .-> EP
-      end
-      ROLE[IAM instance role] -. "scoped permissions" .-> EC2
-      SSM[Systems Manager Session Manager] -->|"management session"| EC2
-    end
-    B -. "HTTPS after certificate setup" .-> N
-```
-
-The current instance is a single point of failure. PostgreSQL and evidence files share its operational fate; backups, restore testing, disk monitoring, and access controls therefore matter. See [AWS deployment](docs/aws-deployment.md) for the current topology and procedure.
-
-## Application architecture
+Provena is a modular monolith. A React single-page application calls the FastAPI REST API; domain services own authorization, case operations, evidence handling, analysis, and reporting. PostgreSQL stores investigation records and analysis results. Raw evidence bytes are held by a separate storage backend, currently the local filesystem in the AWS deployment.
 
 ```mermaid
 flowchart LR
@@ -75,47 +28,43 @@ flowchart LR
     REST --> DOMAIN[Investigation, evidence, custody, audit, reporting services]
     DOMAIN --> PG[(PostgreSQL)]
     DOMAIN --> STORE[Evidence storage interface]
-    STORE --> LOCAL[(Local filesystem, live)]
-    STORE -. "supported in code, not live" .-> S3[(Private S3 objects)]
-    DOMAIN --> AI[In-process explainable AI services]
+    STORE --> LOCAL[(Local filesystem, deployed)]
+    STORE -. "available in code, not selected on EC2" .-> S3[(Private S3 objects)]
+    DOMAIN --> AI[In-process explainable analysis]
     AI --> PG
 ```
 
-The backend is a modular monolith. PostgreSQL stores users, workspace membership, investigations, evidence metadata and digests, custody and verification history, artifacts, correlations, findings, reports, and audit events. Raw evidence bytes live outside PostgreSQL. Alembic manages schema changes. Backend authorization enforces access. Details: [system architecture](docs/architecture.md) and [security](docs/security.md).
+Alembic manages database schema changes. Evidence metadata, digests, verification history, custody events, artifacts, correlations, findings, reports, and audit records live in PostgreSQL. Raw evidence is stored separately. Backend checks remain the authorization boundary; hiding actions in the interface is only a usability aid. See [system architecture](docs/architecture.md), [evidence integrity](docs/evidence-integrity.md), and [security](docs/security.md).
 
-## Deployment request flow
+### Request flow
 
 ```mermaid
 flowchart LR
-    B[Browser] --> N[Nginx on EC2]
-    N -->|"/ and built assets"| STATIC[React files on EC2]
-    N -->|"/api/* with bearer token"| API[FastAPI on localhost:8000]
-    API --> SVC[Workspace, investigation, evidence, AI services]
-    SVC --> PG[(Local PostgreSQL 16)]
+    B[Browser] -->|"/ or frontend route"| N[Nginx on EC2]
+    N -->|static files or index.html| SPA[React production build]
+    B -->|"/api/* with bearer token"| N
+    N -->|"/api/* on localhost"| API[FastAPI :8000]
+    API --> SVC[Authorized domain services]
+    SVC --> PG[(PostgreSQL 16)]
     SVC --> EVID[(Local evidence directory)]
-    B -->|"/api/* request from React"| N
 ```
 
-Nginx serves frontend routes and forwards API routes with their `/api` prefix. FastAPI authenticates and authorizes requests before domain services access PostgreSQL or evidence. The final DuckDNS/HTTPS setup will terminate TLS at Nginx after validation. See the [deployment guide](docs/aws-deployment.md).
+Nginx serves the built frontend and forwards `/api/` requests without stripping their prefix. FastAPI authenticates and authorizes API calls before accessing records or stored evidence. [AWS deployment](docs/aws-deployment.md) explains the host and reverse-proxy setup.
 
-## Investigation workflow
+## Investigation workflow and explainable AI
 
-1. Register or sign in, then create a workspace or join one through an invite. Workspace roles are administrator, investigator, forensic analyst, and evidence custodian.
-2. Create a numbered investigation, assign its lead and team, set priority and status, and record notes.
-3. Register evidence. Provena stores it under an opaque key, records an immutable upload SHA-256 baseline, and starts an append-only custody chain.
-4. Recompute SHA-256 on verification. Results are `verified`, `mismatch`, or `unavailable`; evidence also begins as `not_verified`. Each attempt preserves expected and observed values.
-5. Select evidence for analysis. Only `verified` evidence is processed; other states have explicit blocked outcomes. Supported text, log, CSV, JSON, and machine-readable PDF inputs yield provenance-bearing artifacts.
-6. Inspect shared-value correlations and rule-generated findings. The Why view explains matched conditions, supporting artifacts and evidence, confidence factors, and recommendations.
-7. An investigator accepts or rejects proposals. Reports snapshot accepted findings, case context, custody and evidence summaries, notes, generation metadata, and a SHA-256 content hash. Audit history records the workflow.
-
-Search and dashboard views are scoped to the active workspace. Archived investigations are read-only for ordinary users. Reports are immutable snapshots rather than live re-renderings of current case state.
-
-## Explainable AI pipeline
+1. Create or join a workspace, then open a numbered investigation and assign its lead and team.
+2. Register evidence. Provena streams the upload, computes an immutable SHA-256 baseline, and records its initial custody event.
+3. Verify stored bytes against that baseline. Each attempt records the expected and observed digest and a `verified`, `mismatch`, or `unavailable` result. New evidence begins as `not_verified`.
+4. Select evidence for analysis. Only `verified` evidence enters parsing; other integrity states receive explicit blocked outcomes.
+5. Inspect extracted artifacts and shared-value correlations with their source evidence, locators, context, and extractor version.
+6. Review rule-generated findings, matched conditions, weighted confidence factors, and recommended next steps. An investigator accepts or rejects each proposal.
+7. Generate an immutable report from accepted findings, evidence and custody summaries, notes, and traceability data. The report includes a SHA-256 content hash. Audit events record meaningful actions throughout the workflow.
 
 ```mermaid
 flowchart LR
     U[Evidence upload] --> V{Integrity verified?}
-    V -->|Yes| P[Bounded parsing and extraction]
+    V -->|Yes| P[Bounded parsing and artifact extraction]
     V -->|No| BLOCK[Blocked analysis outcome]
     P --> C[Shared-value correlation]
     C --> R[Versioned rule reasoning]
@@ -123,31 +72,69 @@ flowchart LR
     S --> REC[Rule recommendations]
     REC --> H[Human review]
     H -->|Accepted findings| D[Deterministic report]
-    H -. "optional local Ollama, disabled on AWS" .-> L[Validated narrative prose]
-    L --> D
+    H -. "optional Ollama prose, disabled on EC2" .-> L[Validated narrative]
+    L -. "if enabled and grounded" .-> D
 ```
 
-The pipeline uses regular expressions, key-aware structured rules, normalization, `pypdf` for machine-readable PDFs, correlation, and three versioned rules: `identity-recurrence`, `removable-media-session`, and `external-transfer-sequence`. Artifacts retain source evidence, locator, raw and normalized values, context, and extractor version. Correlations cite contributors. Confidence is a deterministic weighted ranking score from 0 to 100, **not a probability** or Bayesian inference.
+The implemented pipeline uses regular expressions, key-aware structured rules, conservative normalization, and `pypdf` for machine-readable PDFs. It supports text, log, CSV, JSON, and machine-readable PDF evidence, extracts 14 controlled artifact types, and applies three versioned rules: `identity-recurrence`, `removable-media-session`, and `external-transfer-sequence`. Confidence is a deterministic weighted ranking score from 0 to 100, **not a calibrated probability or Bayesian estimate**.
 
-Optional Ollama integration renders accepted structured findings into prose and validates its JSON shape, finding references, and concrete facts against the supplied context. Invalid or unavailable model output falls back to deterministic prose. The LLM does not determine integrity, extract artifacts, run rules, set confidence, or approve findings. **spaCy is not installed or used by the current pipeline.** It is a possible future NLP extension, subject to provenance and evaluation requirements. See [AI architecture](docs/ai-architecture.md) and [future enhancements](docs/future-enhancements.md).
+Optional Ollama integration can turn accepted, structured findings into report prose. Provena checks its JSON structure, referenced finding IDs, and concrete facts against the supplied context; invalid or unavailable model output falls back to deterministic prose. The model does not determine integrity, extract artifacts, run rules, score findings, or approve them. The AWS deployment has `LLM_ENABLED=false`. spaCy is not installed or used by the current pipeline. See [AI architecture](docs/ai-architecture.md) and [future enhancements](docs/future-enhancements.md).
+
+## Cloud infrastructure
+
+Provena runs in **AWS Asia Pacific (Mumbai), `ap-south-1`** on one Amazon Linux 2023 `t3.micro` EC2 instance with a 20 GB EBS root volume. The instance sits in a public subnet of a custom VPC behind security groups and an internet gateway. Nginx serves the React build and proxies API requests to a systemd-managed FastAPI process bound to localhost port 8000. PostgreSQL 16 and the active evidence directory reside on the same EC2 instance. Operators use AWS Systems Manager Session Manager; an IAM instance role scopes AWS access.
+
+The AWS environment also has an S3 gateway VPC endpoint and separate S3 buckets for evidence-related resources, frontend-related resources, and operational backups or migration artifacts. The active application uses `EVIDENCE_STORAGE_BACKEND=local` with `EVIDENCE_STORAGE_ROOT`; bucket presence does not mean evidence is stored in S3 or frontend assets are served from S3. The gateway endpoint carries EC2-to-S3 traffic only if associated with the instance subnet's route table.
+
+```mermaid
+flowchart TB
+    B[User browser] -. "DNS resolution in progress" .-> DNS[DuckDNS hostname]
+    B -->|"web request; current scheme to verify"| IGW
+    DNS -. "resolved public IP" .-> IGW
+    subgraph AWS["AWS ap-south-1"]
+      subgraph VPC["Custom VPC"]
+        IGW[Internet gateway] --> RT[Public route table]
+        subgraph SUBNET["Public subnet"]
+          SG[Application security group]
+          subgraph EC2["EC2 t3.micro, Amazon Linux 2023, 20 GB EBS root"]
+            N[Nginx: frontend and /api proxy]
+            API[FastAPI systemd service :8000]
+            PG[(PostgreSQL 16)]
+            FILES[(Local evidence files)]
+            N -->|"/api/ on localhost"| API
+            API --> PG
+            API --> FILES
+          end
+          SG --> N
+        end
+        RT --> SG
+        EP[S3 gateway endpoint] -. "associated route table required" .-> S3[(Private S3 buckets)]
+        EC2 -. "authorized S3 operations, when used" .-> EP
+      end
+      ROLE[IAM instance role] -. "scoped permissions" .-> EC2
+      SSM[Systems Manager Session Manager] -->|"management session"| EC2
+    end
+    B -. "HTTPS after TLS setup" .-> N
+```
+
+DuckDNS, Let's Encrypt certificates, Nginx HTTPS termination, HTTP-to-HTTPS redirection, renewal, and public-IP DNS updates are **configuration in progress**. Production URL: `https://<verified-duckdns-hostname>/` (placeholder until DNS and HTTPS acceptance). The current topology does not use CloudFront, RDS, a load balancer, Auto Scaling, or multi-AZ failover. One small EC2 instance is a shared failure domain for the API, database, and local evidence; coordinated backups and restore tests are important. See [AWS deployment](docs/aws-deployment.md) and [security](docs/security.md).
 
 ## Technology stack
 
-| Layer | Current technology |
+| Layer | Technology |
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Vitest |
-| Backend | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Uvicorn |
-| Database | PostgreSQL 16 on EC2 in the reported deployment; Docker Compose locally |
-| Analysis | Built-in Python parsing and rules, `pypdf`, deterministic scoring; optional Ollama over HTTP; no spaCy dependency |
-| Cloud | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM role, S3 buckets, Systems Manager |
-| Web operations | Nginx and systemd in the reported deployment; DuckDNS and Let's Encrypt TLS configuration in progress |
-| Security | bcrypt password hashes, JWT bearer tokens, workspace and investigation RBAC, SHA-256 evidence baselines, append-only custody/audit records; HTTPS planned pending verification |
+| API and services | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Uvicorn |
+| Data | PostgreSQL 16; local evidence storage in the AWS deployment; optional private S3 backend in code |
+| Analysis | Python parsers and rules, `pypdf`, deterministic correlation and confidence; optional Ollama HTTP narrative provider |
+| AWS operations | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM instance role, S3 buckets, Systems Manager, Nginx, systemd |
+| Security controls | bcrypt password hashes, JWT bearer tokens, workspace and case RBAC, SHA-256 integrity baselines, append-only custody and audit records |
 
-The frontend stores its bearer token in `localStorage`. This is exposed to injected page JavaScript, so the deployment needs strict input handling, dependency hygiene, and reviewed browser security headers. The application has not been certified or independently security audited.
+The frontend stores its bearer token in `localStorage`, which page JavaScript can access. This is a security trade-off for a deployed web application; see [security](docs/security.md). Provena is not certified forensic software and makes no legal admissibility claim.
 
-## Local development
+## Getting started
 
-Prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and PowerShell.
+Local prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and PowerShell.
 
 ```powershell
 ./scripts/dev.ps1 setup    # local PostgreSQL, dependencies, migrations, development accounts
@@ -156,9 +143,7 @@ Prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and PowerShel
 ./scripts/dev.ps1 web      # Vite on localhost:5173, separate terminal
 ```
 
-The local Vite proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. See the [development guide](docs/development.md) for manual setup, environment variables, migrations, tests, and optional local Ollama setup.
-
-## Verification
+The Vite development proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. The [development guide](docs/development.md) covers manual setup, configuration, migrations, tests, and optional local Ollama setup.
 
 ```powershell
 # In backend/
@@ -171,18 +156,14 @@ npm test
 npm run build
 ```
 
-Backend tests use isolated databases; CI runs backend and frontend checks. The earlier AWS preparation pass exercised an isolated production container stack, but that Docker Compose topology is **not** the reported live Nginx/systemd deployment. Live AWS acceptance and HTTPS completion must be verified separately.
+## Documentation and roadmap
 
-## Documentation
+- [System architecture](docs/architecture.md): modules, authorization, data flow, and service boundaries.
+- [AI architecture](docs/ai-architecture.md): extraction, provenance, rules, confidence, review, and Ollama safeguards.
+- [Evidence integrity](docs/evidence-integrity.md): registration, SHA-256 verification, custody, and analysis eligibility.
+- [AWS deployment](docs/aws-deployment.md): Mumbai infrastructure, Nginx/systemd deployment, verification, and limitations.
+- [Security](docs/security.md): authentication, IAM, network controls, storage, TLS status, and risks.
+- [Local development](docs/development.md): setup, configuration, migrations, demo, and testing.
+- [Future enhancements](docs/future-enhancements.md): proposed analysis and availability improvements.
 
-- [System architecture](docs/architecture.md): modules, authorization, data flow, deployment relationship.
-- [AI architecture](docs/ai-architecture.md): parsers, provenance, correlation, rules, confidence, Ollama safeguards.
-- [Evidence integrity](docs/evidence-integrity.md): SHA-256, verification, custody, storage behavior.
-- [AWS deployment](docs/aws-deployment.md): reported Mumbai infrastructure, Nginx/systemd procedure, checks, and limitations.
-- [Security](docs/security.md): application controls, IAM, network boundary, TLS status, and risks.
-- [Local development](docs/development.md): setup, configuration, migrations, demo, and tests.
-- [Future enhancements](docs/future-enhancements.md): proposed AI, forensic, and availability work.
-
-## Limitations
-
-The AWS deployment currently uses one small EC2 instance, local PostgreSQL, local evidence files, and disabled LLM generation. It has no implemented CloudFront, RDS, Auto Scaling, multi-AZ failover, or automated evidence migration to S3. DuckDNS and TLS remain in progress. OCR, Bayesian scoring, knowledge graphs, cross-case inference, and spaCy-based NLP are not implemented. [Future enhancements](docs/future-enhancements.md) separates these proposals from current behavior.
+Potential future work includes verified DuckDNS/TLS completion, stronger backup and monitoring practices, S3 evidence migration, managed PostgreSQL, higher availability, and carefully evaluated analysis additions. Bayesian scoring, knowledge graphs, cross-case inference, OCR, and spaCy-based NLP are not implemented.

@@ -4,7 +4,7 @@ Provena is a **modular monolith**: a React SPA, a FastAPI backend containing all
 domain and analysis logic, and PostgreSQL. No microservices, no message brokers,
 no separate AI service.
 
-The team-reported AWS deployment runs this monolith on one public-subnet EC2
+The AWS deployment runs this monolith on one public-subnet EC2
 instance in Mumbai. Nginx serves the built SPA and proxies `/api/` to a
 systemd-managed FastAPI process. PostgreSQL 16 and the selected local evidence
 store also run on that instance. S3 storage is implemented as an alternative
@@ -201,7 +201,7 @@ Evidence storage is selected by `EVIDENCE_STORAGE_BACKEND`. The default local
 backend preserves the existing opaque-key filesystem layout. The optional S3
 backend uses private objects, the AWS default credential provider chain, bounded
 streaming, and server-mediated downloads. Domain services use storage
-capabilities rather than filesystem paths. The reported EC2 deployment uses
+capabilities rather than filesystem paths. The EC2 deployment uses
 `local` with `EVIDENCE_STORAGE_ROOT`. See [AWS deployment](aws-deployment.md)
 for the live topology. Switching to S3 would require a separate migration and
 verification of existing evidence bytes.

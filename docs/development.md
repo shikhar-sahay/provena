@@ -223,7 +223,7 @@ remains the only schema-management strategy for PostgreSQL.
   `/evidence`. Runtime uploads are git-ignored; synthetic demo logs live in
   `sample-data/` and can be registered as evidence for walkthroughs.
 
-The reported live Nginx/systemd EC2 deployment is documented in
+The live Nginx/systemd EC2 deployment is documented in
 [AWS deployment](aws-deployment.md). The production Docker Compose file is
 an alternative preparation path, not the live Nginx/systemd setup.
 

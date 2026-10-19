@@ -5,7 +5,7 @@ evidence, proves its integrity, and tracks its custody. It covers the
 implemented foundation and the verified-only analysis gate
 (see `docs/ai-architecture.md`).
 
-The reported AWS deployment selects the local filesystem backend. The S3
+The AWS deployment selects the local filesystem backend. The S3
 implementation described below is available in code but is not the live
 evidence store. See [AWS deployment](aws-deployment.md).
 

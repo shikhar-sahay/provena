@@ -1,6 +1,6 @@
 # AWS deployment: current single-instance architecture
 
-This guide describes the **team-reported deployment** in Asia Pacific (Mumbai), `ap-south-1`. The repository contains application configuration and earlier, unimplemented container/CloudFront plans, but no infrastructure-as-code or live account inventory. Verify commands, service names, mount points, and network rules against the EC2 instance before using them. Do not copy development credentials to production.
+Provena runs on a single EC2 instance in Asia Pacific (Mumbai), `ap-south-1`. This guide describes that deployment and its operational boundaries. The repository contains application configuration and earlier, unimplemented container/CloudFront plans, but no infrastructure-as-code or live account inventory. Verify commands, service names, mount points, and network rules against the EC2 instance before using them. Do not copy development credentials to production.
 
 ## Deployment inventory
 
@@ -18,7 +18,7 @@ This guide describes the **team-reported deployment** in Asia Pacific (Mumbai), 
 | Evidence | Local filesystem through `EVIDENCE_STORAGE_ROOT`; `EVIDENCE_STORAGE_BACKEND=local` | Path, permissions, backups, disk growth |
 | LLM | `LLM_ENABLED=false` | Runtime configuration |
 
-The code supports private S3 evidence storage when explicitly selected, but the deployed application currently uses local files. S3 buckets do not imply S3-backed evidence or frontend hosting. PostgreSQL is on EC2, not RDS. No CloudFront, ALB, Auto Scaling, ECS, EKS, Lambda, Elastic Beanstalk, or multi-AZ failover is reported.
+The code supports private S3 evidence storage when explicitly selected, but the deployed application currently uses local files. S3 buckets do not imply S3-backed evidence or frontend hosting. PostgreSQL is on EC2, not RDS. CloudFront, ALB, Auto Scaling, ECS, EKS, Lambda, Elastic Beanstalk, and multi-AZ failover are not part of this deployment.
 
 ## Request and deployment flow
 
@@ -37,7 +37,7 @@ Keep `VITE_API_URL` unset for a same-origin frontend build. The browser requests
 ## Prerequisites and AWS controls
 
 1. Choose `ap-south-1` and confirm account budget, Free Plan eligibility, quotas, and approved retention. Resource cost and credits are account-specific.
-2. Place the instance in the reported public subnet with an internet-gateway route. Limit inbound web ports to the intended audience. Keep PostgreSQL 5432 and FastAPI 8000 closed externally; permit administration through Systems Manager. Avoid open SSH if Session Manager suffices.
+2. Place the instance in the public subnet with an internet-gateway route. Limit inbound web ports to the intended audience. Keep PostgreSQL 5432 and FastAPI 8000 closed externally; permit administration through Systems Manager. Avoid open SSH if Session Manager suffices.
 3. Attach an IAM instance role with only the S3 actions and object prefixes actually used for backup or migration. The local evidence backend needs no S3 object permission for ordinary evidence operations. Do not store long-lived AWS keys in the environment file.
 4. Check that the S3 gateway endpoint is associated with the public subnet's route table. An endpoint resource by itself does not guarantee that this instance uses it.
 5. Confirm S3 Block Public Access, encryption, versioning and lifecycle/retention on each bucket. Keep the frontend bucket private if it is not actively serving assets.
@@ -138,7 +138,7 @@ The README production URL remains a placeholder until these checks pass.
 
 ## S3 and backup use
 
-The reported S3 buckets are resources for evidence-related future work, frontend-related assets, and operational backups/migration artifacts. The live evidence API reads the EC2 filesystem. A database backup alone cannot restore evidence bytes; back up both PostgreSQL and the evidence directory, preserve checksums and access controls, and test an isolated restore. Verify whether operations-bucket backups are actually scheduled and retained before claiming automation. S3 access through the gateway endpoint depends on route-table association and the instance role policy.
+The S3 buckets are resources for evidence-related future work, frontend-related assets, and operational backups/migration artifacts. The live evidence API reads the EC2 filesystem. A database backup alone cannot restore evidence bytes; back up both PostgreSQL and the evidence directory, preserve checksums and access controls, and test an isolated restore. Verify whether operations-bucket backups are actually scheduled and retained before claiming automation. S3 access through the gateway endpoint depends on route-table association and the instance role policy.
 
 ## Deployment verification
 
@@ -157,4 +157,4 @@ If the API fails, inspect `journalctl`, production configuration validation, dat
 
 ## Trade-offs and older design documents
 
-A single `t3.micro` is economical and simple, but CPU, memory, disk, and service availability share one failure domain. Local PostgreSQL and evidence require coordinated backup and recovery. Private networking, CloudFront, Docker, and S3 evidence were explored as alternative architecture; they are not the reported live topology. See [future enhancements](future-enhancements.md) for possible migration paths.
+A single `t3.micro` is economical and simple, but CPU, memory, disk, and service availability share one failure domain. Local PostgreSQL and evidence require coordinated backup and recovery. Private networking, CloudFront, Docker, and S3 evidence are alternative architectures, not part of the live topology. See [future enhancements](future-enhancements.md) for possible migration paths.
