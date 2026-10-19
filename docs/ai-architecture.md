@@ -4,6 +4,13 @@
 > human validation, grounded optional Ollama narrative, and deterministic
 > fallback reporting are implemented.**
 
+The deployed EC2 configuration has `LLM_ENABLED=false`. Deterministic
+extraction, correlation, rules, confidence, recommendations, and reports
+still operate. **spaCy is not a dependency and has no role in the current
+pipeline**; a possible future integration is listed in
+[future enhancements](future-enhancements.md). AWS hosts this same AI pipeline
+rather than replacing it. See [current AWS deployment](aws-deployment.md).
+
 ## Implemented local narrative provider
 
 Report narrative generation uses a small provider boundary in the modular
@@ -122,8 +129,8 @@ committable input.
 
 ## A. Why Provena uses a hybrid AI architecture
 
-Provena combines two different kinds of AI because they solve different
-problems:
+Provena combines deterministic symbolic AI with an optional language-generation
+component because they solve different problems:
 
 1. **Deterministic evidence processing and symbolic reasoning** (parsers,
    extraction, correlation, rule engine, weighted scoring, recommendation
@@ -133,26 +140,24 @@ problems:
    validated structured findings into professional report prose. It handles
    *how findings read*, never *what they claim*.
 
-A pure-LLM approach cannot preserve evidence integrity, cite verifiable
-derivation steps, or avoid hallucination. A pure-template approach produces
-reports investigators find tedious to finalize. The hybrid keeps truth in
-deterministic code and delegates only wording to the model.
+The deterministic pipeline preserves evidence integrity and recorded derivation
+steps. When enabled, the model only improves wording; grounding validation and
+deterministic fallback address unsupported output. The deployed EC2 instance
+currently uses the deterministic path.
 
 ## B. Why rule-based reasoning counts as AI
 
 Rule-based reasoning is **symbolic AI** in the expert-systems tradition: the
 system encodes investigator domain knowledge as explicit rules and applies it
-to structured facts to derive new hypotheses and next-step recommendations
-(e.g. "IF outbound traffic to an unknown host coincides with USB insertions
-on the same workstation within 24h, THEN suggest reviewing DLP alerts for
-that host, citing both evidence items"). That is machine reasoning over a
-knowledge base, not just form validation. The initial rule set will be small
-and transparent; sophistication grows by adding rules and correlations, not by
-adding opacity.
+to structured facts to derive hypotheses and next-step recommendations. For
+example, the implemented external-transfer rule proposes a finding when file
+access precedes an external upload within 24 hours and the observations share
+a user or host. This is reasoning over recorded facts, not form validation.
+The current three-rule set is intentionally small and transparent.
 
 ## C. Explainability
 
-Every future AI conclusion must be traceable to:
+Every generated finding must be traceable to:
 
 - the supporting evidence items (by id),
 - the extracted artifacts and entities,
@@ -180,8 +185,8 @@ makes the audit log meaningful for analysis events
 
 ## E. Generative AI / Ollama
 
-- A free, local LLM is optional; **Ollama is the implemented inference mechanism**
-  (zero budget, data never leaves the machine).
+- A local LLM is optional; **Ollama is the implemented inference mechanism**
+  when explicitly enabled. It is disabled on the current EC2 deployment.
 - Model choice must remain hardware-conscious: small instruction-tuned models
   (a few billion parameters) are sufficient for rephrasing structured input.
 - The model receives **validated structured findings**, not massive raw
@@ -204,8 +209,9 @@ and remain visible in the audit trail as rejected.
 
 Provena implements these capabilities as deterministic platform behavior:
 
-- **Intelligent agents:** the analysis pipeline perceives evidence and acts by
-  recommending investigative steps, with the investigator in the loop.
+- **Decision support:** the analysis pipeline extracts evidence facts and
+  recommends investigative steps, with the investigator in the loop. It is
+  not an autonomous agent.
 - **Knowledge representation:** structured evidence, entities, rules, and
   finding records with explicit references.
 - **Search and correlation:** deterministic shared-artifact correlation is

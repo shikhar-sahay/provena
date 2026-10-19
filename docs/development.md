@@ -157,14 +157,18 @@ is set.
 | `CORS_ORIGINS`        | Backend | `http://localhost:5173`                        |
 | `SECRET_KEY`          | Backend | dev-only default; set a real value if shared   |
 | `SEED_DEV_PASSWORD`   | Seed    | `provena-dev` (local development only)         |
+| `EVIDENCE_STORAGE_BACKEND` | Backend | `local` (`s3` for private S3 objects)   |
 | `EVIDENCE_STORAGE_ROOT` | Backend | `./evidence-storage` (`/evidence` in Compose) |
+| `S3_EVIDENCE_BUCKET`  | Backend | empty (required for the S3 backend)             |
+| `AWS_REGION`          | Backend | empty (required for the S3 backend)             |
 | `EVIDENCE_MAX_UPLOAD_BYTES` | Backend | `104857600` (100 MiB)                    |
 | `LLM_ENABLED`         | Backend | `false` (deterministic reporting only)             |
 | `LLM_PROVIDER`        | Backend | `deterministic` (`ollama` enables local narrative) |
 | `OLLAMA_BASE_URL`     | Backend | `http://127.0.0.1:11434`                           |
 | `OLLAMA_MODEL`        | Backend | empty (required when `LLM_ENABLED=true`)           |
 | `LLM_TIMEOUT_SECONDS` | Backend | `30.0`                                             |
-| `VITE_API_URL`        | Frontend| `http://localhost:8000` (dev proxy covers `/api` anyway) |
+| `TRUSTED_PROXY_IPS`   | Backend | empty (forwarding headers are not trusted)         |
+| `VITE_API_URL`        | Frontend| unset or empty (same-origin `/api`; Vite dev proxy handles local requests) |
 
 See `.env.example`. Never commit `.env` or any secrets.
 
@@ -191,9 +195,7 @@ python sample-data/make_access_report.py   # from the repository root
 ```
 
 CI (`.github/workflows/ci.yml`, pinned to `ubuntu-24.04`) runs backend
-tests plus frontend lint, tests, and build on every push/PR. Recent runs #4-6
-failed with GitHub-hosted runner acquisition errors and an internal server
-error; those are GitHub infrastructure failures, not Provena failures.
+tests plus frontend lint, tests, and build on push and pull request.
 
 ## Database migrations (Alembic)
 
@@ -212,13 +214,18 @@ remains the only schema-management strategy for PostgreSQL.
 
 ## Evidence storage
 
-- Local filesystem storage under `EVIDENCE_STORAGE_ROOT`. Files are addressed
-  by generated internal keys; the database holds digests and metadata.
+- Storage defaults to the local filesystem under `EVIDENCE_STORAGE_ROOT` and
+  can use an existing private S3 bucket. Both backends use generated internal
+  keys; the database holds digests and metadata.
 - Uploads are capped by `EVIDENCE_MAX_UPLOAD_BYTES` (default 100 MiB) and
   empty files are rejected.
 - In Docker Compose, the API service mounts the `provena_evidence` volume at
   `/evidence`. Runtime uploads are git-ignored; synthetic demo logs live in
   `sample-data/` and can be registered as evidence for walkthroughs.
+
+The reported live Nginx/systemd EC2 deployment is documented in
+[AWS deployment](aws-deployment.md). The production Docker Compose file is
+an alternative preparation path, not the live Nginx/systemd setup.
 
 ## PostgreSQL ports
 

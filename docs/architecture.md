@@ -4,6 +4,13 @@ Provena is a **modular monolith**: a React SPA, a FastAPI backend containing all
 domain and analysis logic, and PostgreSQL. No microservices, no message brokers,
 no separate AI service.
 
+The team-reported AWS deployment runs this monolith on one public-subnet EC2
+instance in Mumbai. Nginx serves the built SPA and proxies `/api/` to a
+systemd-managed FastAPI process. PostgreSQL 16 and the selected local evidence
+store also run on that instance. S3 storage is implemented as an alternative
+backend, not selected in the live deployment. See [AWS deployment](aws-deployment.md)
+and [security](security.md). DuckDNS and HTTPS are being configured.
+
 ## Workspace authorization boundary
 
 `Workspace` is the product organization boundary. `WorkspaceMembership`
@@ -59,7 +66,7 @@ flowchart TB
     API --> Ev["Evidence (implemented)"]
     Ev --> Integ["Integrity Verification (implemented)"]
     Ev --> Cust["Chain of Custody (implemented)"]
-    Ev --> Store["Local Evidence Storage (implemented)"]
+    Ev --> Store["Local or private S3 evidence storage (implemented)"]
     API --> Audit["Audit log (implemented)"]
     API --> Intel["Intelligence (implemented)"]
     Intel --> Runs["Analysis runs + Artifacts (implemented)"]
@@ -74,15 +81,15 @@ flowchart TB
 
 ## Frontend / backend / database relationship
 
-- The SPA is the only client. It calls `/api/*` on the backend (dev proxy in
-  `frontend/vite.config.ts`; `VITE_API_URL` in other environments).
+- The SPA is the browser client. It calls `/api/*` on the backend (dev proxy
+  in `frontend/vite.config.ts`; same-origin Nginx proxy on EC2).
 - The backend owns all business rules, integrity checks, and authorization.
   The frontend never enforces security alone; hidden buttons are convenience,
   backend 401/403/404 responses are the enforcement.
 - PostgreSQL is the system of record for domain data: users, investigations,
   memberships, evidence records, verifications, custody events, audit events.
-  It never stores raw evidence blobs; those live under the configured storage
-  root on the filesystem.
+  It never stores raw evidence blobs; those live in the selected evidence
+  storage backend. The live EC2 deployment selects the local filesystem.
 
 ## Authentication and RBAC (implemented)
 
@@ -90,8 +97,8 @@ flowchart TB
   hashed with bcrypt; hashes never leave the server. Tokens live 8 hours by
   default (`ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY` in `.env`).
 - The React client stores the token in `localStorage`. That storage is readable
-  by page JavaScript, which is an accepted tradeoff for local trusted use;
-  a production deployment should prefer httpOnly cookies. Logout
+  by page JavaScript and is a production security trade-off. A future auth
+  change could use HttpOnly cookies. Logout
   discards the token client-side and records a `USER_LOGOUT` audit event.
 - Roles: `admin`, `investigator`, `forensic_analyst`, `evidence_custodian`.
   Reusable helpers live in `app/modules/auth/dependencies.py`
@@ -188,13 +195,22 @@ communicate via direct Python calls (same process), not HTTP or queues.
 - Behavior tests run under vitest (`npm test`): formatting, error semantics,
   badges, theming, sign-in validation, and analysis labels.
 
-## Evidence, integrity, and custody (implemented)
+## Evidence storage, integrity, and custody (implemented)
+
+Evidence storage is selected by `EVIDENCE_STORAGE_BACKEND`. The default local
+backend preserves the existing opaque-key filesystem layout. The optional S3
+backend uses private objects, the AWS default credential provider chain, bounded
+streaming, and server-mediated downloads. Domain services use storage
+capabilities rather than filesystem paths. The reported EC2 deployment uses
+`local` with `EVIDENCE_STORAGE_ROOT`. See [AWS deployment](aws-deployment.md)
+for the live topology. Switching to S3 would require a separate migration and
+verification of existing evidence bytes.
 
 - `Evidence` rows carry a per-investigation human-readable number (`E-001`),
   metadata, file size, storage key, and the immutable SHA-256 baseline.
-- Uploads stream through `app/modules/evidence/storage.py` (the only code
-  that touches the evidence directory) into `<root>/<investigation-id>/<uuid>`.
-  Responses never expose storage keys or paths.
+- Uploads stream through `app/modules/evidence/storage.py`, the only module that
+  accesses the evidence backend, under `<investigation-id>/<uuid>` opaque keys.
+  Responses never expose storage keys, paths, or S3 object locations.
 - Verification recomputes SHA-256 later and records each attempt with expected
   vs observed digests (`verified`, `mismatch`, `unavailable`); baselines are
   never rewritten.
@@ -226,18 +242,18 @@ communicate via direct Python calls (same process), not HTTP or queues.
 - Scheduled jobs, queues, and vector stores are deliberately absent: runs
   execute synchronously inside the request with per-evidence savepoints.
 
-## File storage concept (implemented)
+## Evidence storage concept (implemented)
 
-- Uploaded evidence is written to the server-side `EVIDENCE_STORAGE_ROOT`
-  (git-ignored `./evidence-storage` locally, a named volume in Compose),
-  stored under generated internal keys.
+- Uploaded evidence is stored under generated internal keys. Local development
+  uses the git-ignored `EVIDENCE_STORAGE_ROOT`; production can select an
+  existing private S3 bucket.
 - The SHA-256 baseline is computed at ingest and re-verified on demand; the
   database holds the key, digest, size, content type, uploader, timestamps,
   verification history, and custody chain.
 - Real evidence must never be committed to the repository. Synthetic demo
   files live in `sample-data/`.
 
-## Investigation workflow (full product vision)
+## Investigation workflow (implemented)
 
 ```mermaid
 flowchart LR
@@ -252,12 +268,9 @@ flowchart LR
     I --> J[Archive Investigation]
 ```
 
-Implemented now: Create Investigation, Assign Team, Register Evidence, Verify
-Integrity, Maintain Chain of Custody, Analyze Evidence (verified-only
-extraction plus shared-value correlation), Investigator Validation (of team,
-status, evidence, custody, and finding decisions via audit), Generate Report
-(deterministic, from accepted findings), Archive Investigation (via `archived`
-status). Grounded Ollama report prose and deterministic fallback are implemented.
+All stages in this diagram are implemented. Ollama report prose is an optional
+provider in code, currently disabled in the AWS deployment. Deterministic
+fallback remains available without a model.
 
 ## Request / data flow (implemented paths)
 

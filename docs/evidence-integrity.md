@@ -5,6 +5,10 @@ evidence, proves its integrity, and tracks its custody. It covers the
 implemented foundation and the verified-only analysis gate
 (see `docs/ai-architecture.md`).
 
+The reported AWS deployment selects the local filesystem backend. The S3
+implementation described below is available in code but is not the live
+evidence store. See [AWS deployment](aws-deployment.md).
+
 ## Concepts (kept separate)
 
 - **Evidence record:** describes the item (identifier, metadata, baseline
@@ -39,18 +43,18 @@ Every stage shown is implemented.
   so large files never load fully into memory. Empty files are rejected;
   files over `EVIDENCE_MAX_UPLOAD_BYTES` (default 100 MiB) are rejected with
   HTTP 413, and partial staging files are removed.
-- Files are stored as `<storage-root>/<investigation-id>/<uuid>` with no
-  extension. The original filename is metadata only and is never used for
-  storage, which rules out path traversal and collisions by construction.
-- Only `app/modules/evidence/storage.py` touches the evidence directory. The
-  database holds the storage key; API responses never expose it.
-- The staging file is promoted atomically after the database transaction
-  commits. If the transaction fails, the staging file is deleted, so ordinary
-  failed uploads leave no orphans. (A crash between commit and promotion would
-  surface honestly as UNAVAILABLE on the next verification.)
-- Storage root is configured with `EVIDENCE_STORAGE_ROOT`
-  (`./evidence-storage` locally, `/evidence` volume in Docker Compose).
-  Runtime uploads are git-ignored; synthetic demo files live in `sample-data/`.
+- Objects use `<investigation-id>/<uuid>` opaque keys with no extension. Local
+  storage places that key below its configured root; S3 uses it as the final
+  private object key. The original filename is metadata only and is never used
+  for storage, which rules out path traversal and collisions by construction.
+- Only `app/modules/evidence/storage.py` accesses stored evidence. The database
+  holds an opaque key; API responses never expose it.
+- Local staging is atomically promoted after the database transaction commits.
+  S3 staging uses multipart upload followed by a server-side copy to the final
+  key. Failed database transactions trigger best-effort staging cleanup.
+- Local storage uses `EVIDENCE_STORAGE_ROOT`; S3 uses an existing private bucket
+  selected with `EVIDENCE_STORAGE_BACKEND`. Runtime uploads are git-ignored;
+  synthetic demo files live in `sample-data/`.
 
 ## SHA-256 baseline
 
@@ -139,3 +143,10 @@ Analysis runs only on `verified` evidence; every other state produces an
 explicit blocked run outcome. A mismatch stays visible to investigators and
 is never silently consumed by processing. See `docs/ai-architecture.md` for
 parsers, artifacts, correlation, rules, and reporting.
+
+The same integrity workflow applies to local and S3 storage. SHA-256 is always
+computed by Provena from uploaded or retrieved bytes. S3 ETags are not integrity
+values. Downloads remain authorized, audited, and server-mediated. Existing
+local objects are not automatically migrated when the backend changes. If S3
+is selected later, operators must reconcile database records and objects,
+verify hashes, and plan recovery from interrupted promotions.
