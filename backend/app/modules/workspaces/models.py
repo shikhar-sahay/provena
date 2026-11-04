@@ -10,10 +10,11 @@ from app.db.session import Base
 
 class Workspace(Base):
     __tablename__ = "workspaces"
+    __table_args__ = (UniqueConstraint("slug", name="workspaces_slug_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
-    slug: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     created_by_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -52,12 +53,13 @@ class WorkspaceMembership(Base):
 
 class WorkspaceInvite(Base):
     __tablename__ = "workspace_invites"
+    __table_args__ = (UniqueConstraint("code_hash", name="workspace_invites_code_hash_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workspace_id: Mapped[int] = mapped_column(
         ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     code_hint: Mapped[str] = mapped_column(String(16), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     created_by_id: Mapped[int] = mapped_column(

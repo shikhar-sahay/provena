@@ -65,8 +65,14 @@ and the [Starlette security advisories](https://github.com/Kludex/starlette/secu
 CI uses Node 24-compatible official checkout/setup actions, keeps Python 3.13
 and Node 22 application runtimes, and explicitly runs frontend type checking.
 An isolated PostgreSQL 16 service checks fresh migrations and schema drift.
-Local Docker/PostgreSQL was unavailable during implementation; SQLite behavior
-tests and offline PostgreSQL SQL compilation do not prove concurrency safety.
+Docker was unavailable locally. A standalone PostgreSQL 16.15 cluster in a
+new temporary directory, bound only to loopback port 55477, verified the full
+migration chain, `alembic check`, and parallel idempotent registration. It used
+only a fresh synthetic database and was stopped afterward. The drift check
+exposed legacy workspace metadata declaring unique indexes where the published
+migration creates unique constraints plus ordinary indexes. Model declarations
+now match that existing schema; published migrations were not rewritten.
+SQLite tests alone still do not prove PostgreSQL concurrency safety.
 
 Local migration backups are excluded by `/migration-backup/` in `.gitignore`.
 Ignore rules do not protect already tracked files or deliberate force-adds.

@@ -148,5 +148,9 @@ remain separate ongoing work and are not included merely to match a test count.
 promotion errors, database commit failures, lost acknowledgements and retries.
 S3 tests use an in-memory fake and make no AWS requests. Frontend tests cover
 registration/verification/recovery messages. PostgreSQL CI applies the migration,
-checks schema drift and tests parallel idempotent registration. Local Docker was
-unavailable; local offline SQL compilation is not a substitute for that CI check.
+checks schema drift and tests parallel idempotent registration. Docker was
+unavailable locally, so a standalone PostgreSQL 16.15 server was
+initialized in a new temporary directory on loopback port 55477. Full migrations,
+schema drift checking and the parallel registration test passed against that
+fresh synthetic database. The temporary server was stopped afterward. Offline
+SQL compilation and SQLite tests alone are not PostgreSQL execution tests.
