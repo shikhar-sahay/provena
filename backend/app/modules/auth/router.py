@@ -8,11 +8,25 @@ from app.db.session import get_db
 from app.modules.audit.service import Actions, ResourceTypes, record
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import LoginRequest, MessageResponse, TokenResponse
-from app.modules.users.models import User
+from app.modules.users.models import Role, User
 from app.modules.users.schemas import UserRead, UserRegister
 from app.modules.users.service import create_registered_user, get_by_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _user_read(db: Session, user: User) -> UserRead:
+    from app.modules.workspaces.service import get_membership
+
+    data = UserRead.model_validate(user)
+    membership = get_membership(db, user)
+    if membership is None:
+        # Project unavailable context without changing the global account or
+        # another browser's workspace selection. Onboarding offers alternatives.
+        data.active_workspace_id = None
+    else:
+        data.role = Role(membership.role)
+    return data
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -26,7 +40,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         resource_id=user.id, actor_id=user.id, metadata={"username": user.username, "source": "self_registration"},
     )
     db.commit()
-    return TokenResponse(access_token=create_access_token(user.id), user=UserRead.model_validate(user))
+    return TokenResponse(access_token=create_access_token(user.id), user=_user_read(db, user))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -46,7 +60,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         actor_id=user.id,
     )
     db.commit()
-    return TokenResponse(access_token=create_access_token(user.id), user=UserRead.model_validate(user))
+    return TokenResponse(access_token=create_access_token(user.id), user=_user_read(db, user))
 
 
 @router.post("/logout", response_model=MessageResponse)
@@ -64,5 +78,5 @@ def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 
 @router.get("/me", response_model=UserRead)
-def me(user: User = Depends(get_current_user)):
-    return UserRead.model_validate(user)
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _user_read(db, user)

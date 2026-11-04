@@ -43,8 +43,11 @@ def test_admin_can_deactivate_and_reactivate(client, admin, investigator, db_ses
             "/api/auth/login",
             json={"username_or_email": "investigator", "password": "password-123"},
         ).status_code
-        == 401
+        == 200
     )
+    db_session.refresh(investigator)
+    assert investigator.is_active is True
+    assert client.get("/api/investigations", headers=auth_headers(login(client, "investigator"))).status_code == 403
     reactivated = client.patch(
         f"/api/admin/users/{investigator.id}",
         headers=auth_headers(admin_token),

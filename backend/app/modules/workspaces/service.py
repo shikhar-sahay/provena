@@ -43,6 +43,7 @@ def get_membership(db: Session, user: User, workspace_id: int | None = None) -> 
             WorkspaceMembership.workspace_id == target,
             WorkspaceMembership.user_id == user.id,
             WorkspaceMembership.is_active.is_(True),
+            WorkspaceMembership.workspace.has(Workspace.is_active.is_(True)),
         )
     ).scalar_one_or_none()
 
@@ -183,13 +184,11 @@ def join_workspace(db: Session, user: User, code: str) -> Workspace:
     )).scalar_one_or_none()
     if existing is not None and existing.is_active:
         raise HTTPException(status_code=409, detail="You are already a member of this workspace.")
-    if existing is None:
-        db.add(WorkspaceMembership(
-            workspace_id=invite.workspace_id, user_id=user.id, role=invite.role, is_active=True
-        ))
-    else:
-        existing.is_active = True
-        existing.role = invite.role
+    if existing is not None:
+        raise HTTPException(status_code=403, detail="Workspace membership is suspended. Ask an administrator to restore access.")
+    db.add(WorkspaceMembership(
+        workspace_id=invite.workspace_id, user_id=user.id, role=invite.role, is_active=True
+    ))
     invite.use_count += 1
     user.active_workspace_id = invite.workspace_id
     user.role = invite.role
@@ -203,10 +202,62 @@ def join_workspace(db: Session, user: User, code: str) -> Workspace:
     return workspace
 
 
-def update_member_role(db: Session, actor: User, user_id: int, role: Role) -> WorkspaceMembership:
+def _lock_admin_workspace(db: Session, actor: User) -> WorkspaceMembership:
+    # All role and suspension changes lock the same workspace row before
+    # reading membership state, serializing last-administrator decisions.
+    workspace = db.execute(
+        select(Workspace).where(Workspace.id == actor.active_workspace_id).with_for_update()
+    ).scalar_one_or_none()
+    if workspace is None or not workspace.is_active:
+        raise HTTPException(status_code=403, detail="Workspace access required.")
+    db.expire_all()
     actor_membership = require_membership(db, actor)
     if actor_membership.role != Role.ADMIN.value:
-        raise HTTPException(status_code=403, detail="Only workspace administrators can manage roles.")
+        raise HTTPException(status_code=403, detail="Only workspace administrators can manage members.")
+    return actor_membership
+
+
+def _protect_last_admin(db: Session, target: WorkspaceMembership) -> None:
+    if not target.is_active or target.role != Role.ADMIN.value or not target.user.is_active:
+        return
+    admins = db.execute(
+        select(func.count()).select_from(WorkspaceMembership).join(User).where(
+            WorkspaceMembership.workspace_id == target.workspace_id,
+            WorkspaceMembership.role == Role.ADMIN.value,
+            WorkspaceMembership.is_active.is_(True),
+            User.is_active.is_(True),
+        )
+    ).scalar_one()
+    if admins <= 1:
+        raise HTTPException(status_code=400, detail="At least one active workspace administrator is required.")
+
+
+def set_member_active(db: Session, actor: User, user_id: int, active: bool) -> WorkspaceMembership:
+    actor_membership = _lock_admin_workspace(db, actor)
+    target = db.execute(select(WorkspaceMembership).where(
+        WorkspaceMembership.workspace_id == actor_membership.workspace_id,
+        WorkspaceMembership.user_id == user_id,
+    )).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Workspace member not found.")
+    if not active:
+        _protect_last_admin(db, target)
+        if target.user_id == actor.id:
+            raise HTTPException(status_code=400, detail="You cannot suspend your own workspace membership.")
+    if target.is_active != active:
+        target.is_active = active
+        record(
+            db, action="WORKSPACE_MEMBERSHIP_ACTIVATED" if active else "WORKSPACE_MEMBERSHIP_SUSPENDED",
+            resource_type=ResourceTypes.WORKSPACE, resource_id=target.workspace_id,
+            actor_id=actor.id, metadata={"user_id": target.user_id, "is_active": active},
+        )
+    db.commit()
+    db.refresh(target)
+    return target
+
+
+def update_member_role(db: Session, actor: User, user_id: int, role: Role) -> WorkspaceMembership:
+    actor_membership = _lock_admin_workspace(db, actor)
     target = db.execute(select(WorkspaceMembership).where(
         WorkspaceMembership.workspace_id == actor_membership.workspace_id,
         WorkspaceMembership.user_id == user_id,
@@ -214,13 +265,7 @@ def update_member_role(db: Session, actor: User, user_id: int, role: Role) -> Wo
     if target is None:
         raise HTTPException(status_code=404, detail="Workspace member not found.")
     if target.role == Role.ADMIN.value and role != Role.ADMIN:
-        admins = db.execute(select(func.count()).select_from(WorkspaceMembership).where(
-            WorkspaceMembership.workspace_id == actor_membership.workspace_id,
-            WorkspaceMembership.role == Role.ADMIN.value,
-            WorkspaceMembership.is_active.is_(True),
-        )).scalar_one()
-        if admins <= 1:
-            raise HTTPException(status_code=400, detail="At least one active workspace administrator is required.")
+        _protect_last_admin(db, target)
     target.role = role.value
     target_user = db.get(User, target.user_id)
     if target_user is not None and target_user.active_workspace_id == target.workspace_id:

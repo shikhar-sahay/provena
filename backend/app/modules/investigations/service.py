@@ -61,10 +61,14 @@ def can_access(db: Session, inv: Investigation, user: User) -> bool:
     if user.active_workspace_id != inv.workspace_id:
         return False
     workspace_role = workspace_service.role_for(db, user, inv.workspace_id)
-    return workspace_role == Role.ADMIN.value or is_member(db, inv.id, user.id)
+    return workspace_role is not None and (
+        workspace_role == Role.ADMIN.value or is_member(db, inv.id, user.id)
+    )
 
 
 def can_manage(db: Session, inv: Investigation, user: User) -> bool:
+    if not can_access(db, inv, user):
+        return False
     if workspace_service.is_admin(db, user, inv.workspace_id):
         return True
     return user.id in (inv.created_by_id, inv.lead_investigator_id)

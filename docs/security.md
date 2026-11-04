@@ -4,6 +4,65 @@ This document describes application behavior visible in the repository and the A
 
 ## Identity and authorization
 
+### Workspace administration (M0)
+
+`GET /api/admin/users` and `PATCH /api/admin/users/{id}` are scoped to the
+administrator's current workspace. Their `role` and `is_active` fields describe
+workspace membership, not the global account. The existing PATCH payload is
+retained; setting `is_active=false` suspends access to this workspace only.
+Sign-in and other authorized workspaces remain available. There is no supported
+platform-superadministrator API; global account availability is not editable by
+workspace administrators.
+
+Suspended memberships remain visible in administration lists, but are excluded
+from active team-selection lists. Restoration is an explicit administrator
+action; an invitation cannot bypass suspension. Membership changes are audited.
+The acting administrator cannot suspend their own membership. Role changes and
+suspensions protect the last active administrator of the affected workspace,
+counting active memberships of globally active users, rather than cached global
+roles. Both operations lock the workspace row on PostgreSQL before checking.
+
+Every case access requires active membership in an active workspace, the selected
+workspace must match, and case-team or workspace-administrator permission must
+also hold. Surviving case membership does not bypass suspension. These checks
+cover evidence, downloads, analysis, findings, notes, reports, custody and audit.
+An unavailable selected workspace is projected as absent in auth responses;
+onboarding offers the user's remaining authorized workspaces. Existing browser
+state may require a refresh after suspension; backend checks apply immediately.
+No schema migration is needed because membership already stores `is_active`.
+
+### Multipart dependencies and CI
+
+`python-multipart>=0.0.27,<0.1` excludes versions affected by
+[GHSA-pp6c-gr5w-3c5g](https://github.com/Kludex/python-multipart/security/advisories/GHSA-pp6c-gr5w-3c5g).
+Fresh resolution was tested with python-multipart 0.0.33, FastAPI 0.116.2 and
+Starlette 0.48.0. Synthetic tests cover ordinary uploads, exact size limits,
+oversized and empty files, missing boundaries, malformed headers, incomplete
+parts and excessive part-header values. Rejected requests must not register
+evidence or leave stored files.
+
+CI runs `python -m pip_audit -r backend/requirements.txt` in a separate job.
+It checks freshly resolved direct and transitive requirements against published
+advisories; it does not attest to production's installed packages, unpublished
+vulnerabilities, frontend packages or operating-system packages. Advisory service
+and package-index access are required. Findings fail the job; no blanket ignore
+or automatic production upgrade is configured. Backend requirements remain
+bounded ranges, not an exact deployment lockfile.
+
+The M0 local audit command exited 1, reporting 14 advisory entries across
+pytest 8.4.2 and Starlette 0.48.0 (including duplicate entries). It did not flag
+python-multipart 0.0.33. These are scanner findings, not locally demonstrated
+exploits. CI will remain red for these existing dependency findings until a
+separate reviewed compatibility update resolves them. M0 deliberately does not
+upgrade FastAPI/Starlette or pytest across their current upper bounds, or hide
+the findings with ignores. PostgreSQL concurrency tests were not executed in
+the M0 environment because the local Docker daemon was unavailable; SQLite
+tests verify authorization behavior but not row-lock serialization.
+
+Local migration backups are excluded by `/migration-backup/` in `.gitignore`.
+Ignore rules do not protect already tracked files or deliberate force-adds.
+Operators must still review the staged diff; backup contents are never test data.
+
 Provena hashes passwords with bcrypt and issues signed JWT bearer tokens. Workspace membership establishes the first authorization boundary. Investigation membership and roles further restrict case access and actions. Administrators are scoped to their workspace. Backend checks enforce access to evidence, analysis, findings, reports, and downloads; frontend controls are only user-interface guidance.
 
 The browser stores the token in `localStorage`. Page JavaScript can read it if script injection occurs. Keep dependencies current, review content security policy and Nginx headers, and consider HttpOnly cookies in a future authentication change. Never log tokens or place them in URLs. Production must use a strong unique `SECRET_KEY` and exact allowed origins.

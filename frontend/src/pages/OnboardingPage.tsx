@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import type { Workspace } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLockup } from "../components/Brand";
 import { Button } from "../components/Button";
@@ -15,6 +16,31 @@ export default function OnboardingPage() {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listWorkspaces().then((items) => {
+      if (!cancelled) setWorkspaces(items);
+    }).catch((err) => {
+      if (!cancelled) setError(actionErrorMessage(err, "Could not load available workspaces."));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function selectExisting(id: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.selectWorkspace(id);
+      await refresh();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(actionErrorMessage(err, "Could not select the workspace."));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -38,6 +64,10 @@ export default function OnboardingPage() {
         <div className="mb-6 flex justify-center"><BrandLockup height={30} /></div>
         <form onSubmit={(event) => void submit(event)} className="space-y-5 rounded-lg border border-line bg-surface p-6 shadow-(--shadow)">
           <div><h1 className="text-base font-semibold">Set up your workspace</h1><p className="mt-1 text-sm text-ink2">A workspace is the organization boundary for members, investigations, and search.</p></div>
+          {workspaces.length > 0 && <div className="space-y-2">
+            <p className="text-sm text-ink2">Continue in an available workspace:</p>
+            {workspaces.map((workspace) => <Button key={workspace.id} type="button" variant="secondary" disabled={busy} onClick={() => void selectExisting(workspace.id)} className="w-full">{workspace.name}</Button>)}
+          </div>}
           <div className="grid grid-cols-2 rounded-md border border-line p-1">
             <button type="button" onClick={() => { setMode("create"); setValue(""); }} className={`rounded px-3 py-1.5 text-sm ${mode === "create" ? "bg-hover font-medium" : "text-ink2"}`}>Create workspace</button>
             <button type="button" onClick={() => { setMode("join"); setValue(""); }} className={`rounded px-3 py-1.5 text-sm ${mode === "join" ? "bg-hover font-medium" : "text-ink2"}`}>Join with code</button>

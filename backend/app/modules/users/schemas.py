@@ -62,6 +62,7 @@ class UserMembership(BaseModel):
 
 
 class UserAdminRead(BaseModel):
+    """Roster entry: role and is_active describe current workspace membership."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -75,4 +76,5 @@ class UserAdminRead(BaseModel):
 
 
 class UserActiveUpdate(BaseModel):
+    """Change current workspace membership, never global account availability."""
     is_active: bool

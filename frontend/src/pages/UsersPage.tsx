@@ -44,7 +44,7 @@ export default function UsersPage() {
     try {
       const updated = await api.adminSetActive(target.id, !target.is_active);
       setUsers((current) => current?.map((u) => (u.id === updated.id ? updated : u)) ?? null);
-      notify("success", updated.is_active ? "Account reactivated." : "Account deactivated.");
+      notify("success", updated.is_active ? "Workspace access restored." : "Workspace access suspended.");
     } catch (err) {
       notify("error", actionErrorMessage(err, "Could not update the account."));
     }
@@ -54,7 +54,7 @@ export default function UsersPage() {
     <div className="space-y-4">
       <PageHeader
         title="Users"
-        description="Accounts, roles, activation, and investigation access. Changes are audited."
+        description="Members, roles, and access in the current workspace. Changes are audited."
         actions={
           <Button variant="primary" size="sm" icon={<UserPlus size={14} />} onClick={() => setCreating(true)}>
             New user
@@ -103,7 +103,7 @@ export default function UsersPage() {
                     {account.is_active ? (
                       <span className="text-[13px] text-success-ink">Active</span>
                     ) : (
-                      <span className="text-[13px] text-ink3">Deactivated</span>
+                      <span className="text-[13px] text-ink3">Suspended</span>
                     )}
                   </td>
                   <td className="max-w-xs px-3 py-2 text-[13px] text-ink2">
@@ -123,7 +123,7 @@ export default function UsersPage() {
                         size="sm"
                         onClick={() => void toggleActive(account)}
                       >
-                        {account.is_active ? "Deactivate" : "Reactivate"}
+                        {account.is_active ? "Suspend access" : "Restore access"}
                       </Button>
                     )}
                   </td>
@@ -136,8 +136,8 @@ export default function UsersPage() {
 
       <p className="flex items-start gap-1.5 text-xs text-ink3">
         <ShieldAlert size={13} className="mt-0.5 shrink-0" />
-        Deactivation blocks sign-in immediately. Your own account and the last active admin are
-        protected from deactivation.
+        Suspension blocks this workspace only. Sign-in and other workspaces remain available.
+        Your own membership and the last active workspace admin are protected.
       </p>
 
       <CreateUserDialog

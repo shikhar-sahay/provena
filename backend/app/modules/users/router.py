@@ -5,7 +5,6 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -13,7 +12,7 @@ from app.modules.audit.service import Actions, ResourceTypes, record
 from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.users.models import Role, User
 from app.modules.users.schemas import UserActiveUpdate, UserAdminRead, UserCreate, UserMembership, UserRead
-from app.modules.users.service import count_active_admins, create_user, list_active, list_all, set_active
+from app.modules.users.service import create_user
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -23,7 +22,7 @@ def list_users(user: User = Depends(get_current_user), db: Session = Depends(get
     from app.modules.workspaces import service as workspace_service
     result = []
     for item in workspace_service.list_members(db, user):
-        if not item.user.is_active:
+        if not item.is_active or not item.user.is_active:
             continue
         data = UserRead.model_validate(item.user)
         data.role = Role(item.role)
@@ -89,10 +88,11 @@ def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends
             UserMembership(id=inv_id, case_number=case_number, title=title)
         )
     out = []
-    accounts = [item.user for item in workspace_service.list_members(db, admin)]
-    for account in accounts:
-        data = UserAdminRead.model_validate(account)
-        data.investigations = by_user.get(account.id, [])
+    for membership in workspace_service.list_members(db, admin):
+        data = UserAdminRead.model_validate(membership.user)
+        data.role = Role(membership.role)
+        data.is_active = membership.is_active
+        data.investigations = by_user.get(membership.user_id, [])
         out.append(data)
     return out
 
@@ -104,23 +104,8 @@ def admin_update_user(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    from app.modules.users.models import Role
-
-    target = db.get(User, user_id)
     from app.modules.workspaces import service as workspace_service
-    member_ids = {item.user_id for item in workspace_service.list_members(db, admin)}
-    if target is None or target.id not in member_ids:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    if not payload.is_active:
-        if target.id == admin.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You cannot deactivate your own account.",
-            )
-        if target.role == Role.ADMIN.value and count_active_admins(db) <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one active admin is required.",
-            )
-    updated = set_active(db, target, payload.is_active)
-    return UserAdminRead.model_validate(updated)
+
+    membership = workspace_service.set_member_active(db, admin, user_id, payload.is_active)
+    # Keep list and mutation responses consistent, including case assignments.
+    return next(item for item in admin_list_users(admin, db) if item.id == membership.user_id)

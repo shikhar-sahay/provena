@@ -574,6 +574,9 @@ export const api = {
   listWorkspaces() {
     return apiFetch<Workspace[]>("/api/workspaces");
   },
+  selectWorkspace(workspaceId: number) {
+    return apiFetch<Workspace>(`/api/workspaces/${workspaceId}/select`, { method: "POST" });
+  },
   createWorkspace(name: string) {
     return apiFetch<Workspace>("/api/workspaces", {
       method: "POST", body: JSON.stringify({ name }),
