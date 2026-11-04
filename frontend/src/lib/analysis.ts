@@ -57,7 +57,7 @@ export function artifactTypeLabel(artifactType: string): string {
   return ARTIFACT_TYPE_LABELS[artifactType] ?? artifactType;
 }
 
-export function locatorLabel(locator: Record<string, unknown>): string {
+function baseLocatorLabel(locator: Record<string, unknown>): string {
   const kind = locator["kind"];
   if (kind === "line" && typeof locator["line"] === "number") {
     return `Line ${locator["line"]}`;
@@ -72,4 +72,12 @@ export function locatorLabel(locator: Record<string, unknown>): string {
     return `Page ${String(locator["page"] ?? "?")}`;
   }
   return "Source location";
+}
+
+
+export function locatorLabel(locator: Record<string, unknown>): string {
+  const span = locator["span"];
+  const range = Array.isArray(span) && span.length === 2 && span.every(Number.isInteger)
+    ? ` · characters [${span[0]}, ${span[1]})` : "";
+  return baseLocatorLabel(locator) + range;
 }

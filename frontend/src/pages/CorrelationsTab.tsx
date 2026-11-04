@@ -1,3 +1,4 @@
+import { SourceDetails } from "../components/SourceDetails";
 // Correlations tab: shared entities across evidence, each expandable to the
 // contributing artifact instances with provenance. No conclusions attached.
 
@@ -123,6 +124,7 @@ export default function CorrelationsTab({ invId }: { invId: number }) {
                             {artifact.extractor_name}-v{artifact.extractor_version}
                           </span>
                         </div>
+                        <SourceDetails locator={artifact.locator} />
                         {artifact.raw_value !== artifact.normalized_value && (
                           <p className="mt-0.5 font-mono text-xs text-ink3">
                             As observed: {artifact.raw_value}

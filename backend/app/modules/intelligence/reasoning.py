@@ -92,6 +92,7 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
                 input_sha256=a.input_sha256,
                 upload_keyword_offsets=tuple((a.locator or {}).get("upload_keyword_offsets", [])),
                 file_access=(a.locator or {}).get("file_access", False),
+                time_precision=((a.locator or {}).get("timestamp") or {}).get("precision"),
                 context=a.context,
                 span=span,
             )

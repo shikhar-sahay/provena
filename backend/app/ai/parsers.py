@@ -6,7 +6,7 @@ import io
 import json
 from dataclasses import dataclass
 
-PARSER_VERSION = "2"
+PARSER_VERSION = "2.1"
 MAX_LINE_CHARS = 10_000
 MAX_TEXT_BYTES = MAX_JSON_BYTES = 10 * 1024 * 1024
 MAX_JSON_DEPTH = 20
@@ -20,6 +20,9 @@ MAX_CONTEXT_CHARS = 280
 
 class ParserError(Exception):
     """Malformed, oversized or unsupported input, with no usable parse."""
+    def __init__(self, message: str, coverage=None):
+        super().__init__(message)
+        self.coverage = coverage
 
 
 class NoTextError(ParserError):
@@ -33,6 +36,7 @@ class SourceUnit:
     context: str
     text: str | None = None
     field_name: str | None = None
+    identity_key: str | None = None
 
     @property
     def scan_text(self) -> str:
@@ -56,7 +60,7 @@ class ParsedSource(list[SourceUnit]):
         if reason not in self.coverage["warnings"]:
             self.coverage["warnings"].append(reason)
 
-    def add(self, text: str, locator: dict, key: str, prefix: str = "", field_name=None) -> bool:
+    def add(self, text: str, locator: dict, key: str, prefix: str = "", field_name=None, identity_key=None) -> bool:
         remaining = MAX_SCAN_CHARS - self.coverage["characters_scanned"]
         if len(self) >= MAX_SOURCE_UNITS or remaining <= 0:
             self.warn("Source unit or total character budget reached; remaining records were not scanned.")
@@ -66,7 +70,7 @@ class ParsedSource(list[SourceUnit]):
             self.warn("One or more source values exceeded the character budget; only declared prefixes were scanned.")
         locator = {**locator, "scanned_characters": len(scan), "source_characters": len(text),
                    "parser_version": PARSER_VERSION}
-        self.append(SourceUnit(locator, key, _bound_context(prefix + scan), scan, field_name))
+        self.append(SourceUnit(locator, key, _bound_context(prefix + scan), scan, field_name, identity_key))
         self.coverage["units_processed"] = len(self)
         self.coverage["characters_scanned"] += len(scan)
         return True
@@ -132,7 +136,7 @@ def parse_csv(data: bytes) -> ParsedSource:
                     "column_index": index + 1, "physical_line_end": reader.line_num,
                     "record_key": f"csv:{row_number}", "offset_basis": "decoded_cell_codepoints",
                     "exact_file_offsets": False, "encoding": "utf-8-sig"}
-                if not out.add(value, locator, f"csv:{row_number}:{header}", f"{header}: ", header):
+                if not out.add(value, locator, f"csv:{row_number}:{header}", f"{header}: ", header, f"csv:{row_number}:{index + 1}"):
                     return out
     except (csv.Error, OverflowError) as exc:
         raise ParserError("CSV could not be parsed within supported limits.") from exc
@@ -146,11 +150,23 @@ def parse_json(data: bytes) -> ParsedSource:
         raise ParserError("JSON exceeds the size limit for analysis.")
     out = ParsedSource("json")
     try:
-        document = json.loads(data.decode("utf-8"))
+        def unique_object(pairs):
+            out = {}
+            for key, value in pairs:
+                if key in out:
+                    raise ValueError("Duplicate JSON keys")
+                out[key] = value
+            return out
+        def reject_constant(value):
+            raise ValueError("Non-standard JSON constant")
+        document = json.loads(data.decode("utf-8"), object_pairs_hook=unique_object, parse_constant=reject_constant)
     except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ParserError("JSON is malformed or exceeds supported nesting.") from exc
 
     def walk(node, path, pointer, depth, parent, field_name=None):
+        if len(pointer) > 1000:
+            out.warn("JSON path length budget reached; deeper values were not scanned.")
+            return True
         if depth > MAX_JSON_DEPTH:
             out.warn("JSON nesting budget reached; deeper values were not scanned.")
             return True
@@ -169,7 +185,7 @@ def parse_json(data: bytes) -> ParsedSource:
                 return out.add(value, {"kind": "json", "path": path[:500], "pointer": pointer[:1000],
                     "record_key": f"json:{parent}", "offset_basis": "decoded_scalar_codepoints",
                     "exact_file_offsets": False, "encoding": "utf-8"},
-                    f"json:{path}", f"{path} = ", field_name)
+                    f"json:{path}", f"{path} = ", field_name, f"json:{pointer}")
         return True
 
     walk(document, "$", "", 0, "")
@@ -205,10 +221,11 @@ def parse_pdf(data: bytes) -> ParsedSource:
             out.warn("One or more PDF pages could not be extracted within supported limits.")
             out.coverage["skipped_pages"].append({"page": number, "reason": "Page extraction failed or content budget exceeded."})
             continue
-        out.coverage["processed_pages"].append(number)
         if not text.strip():
             out.warn("One or more PDF pages contain no extractable text; image content was not examined.")
             out.coverage["skipped_pages"].append({"page": number, "reason": "No extractable text; OCR unavailable."})
+            continue
+        out.coverage["processed_pages"].append(number)
         for line_number, raw in enumerate(text.splitlines(), 1):
             if raw.strip() and not out.add(raw, {"kind": "pdf", "page": number, "line": line_number,
                     "record_key": f"pdf:{number}:{line_number}", "offset_basis": "extracted_line_codepoints",
@@ -216,7 +233,7 @@ def parse_pdf(data: bytes) -> ParsedSource:
                 out.coverage["unprocessed_page_count"] += min(total, MAX_PDF_PAGES) - number
                 return out
     if sum(len(u.scan_text.strip()) for u in out) < MIN_MEANINGFUL_TEXT_CHARS:
-        raise NoTextError(NO_TEXT_MESSAGE)
+        raise NoTextError(NO_TEXT_MESSAGE, coverage=out.coverage)
     return out
 
 

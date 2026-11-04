@@ -105,3 +105,25 @@ def test_run_persists_partial_coverage_and_repeated_source_spans(client, investi
     assert len(ips) == 2
     assert ips[0]['source_key'] != ips[1]['source_key']
     assert all(a['locator']['span'][0] >= 320 and len(a['context']) <= 280 for a in ips)
+
+def test_json_collision_and_duplicate_keys_are_not_silently_merged():
+    result = parsers.parse_json(b'{"a.b":"192.0.2.1","a":{"b":"192.0.2.1"}}')
+    assert result[0].identity_key != result[1].identity_key
+    assert {u.locator['pointer'] for u in result} == {'/a.b', '/a/b'}
+    with pytest.raises(parsers.ParserError):
+        parsers.parse_json(b'{"ip":"192.0.2.1","ip":"203.0.113.5"}')
+
+
+def test_all_failed_pdf_pages_keep_failure_coverage(monkeypatch):
+    class Page:
+        def get_contents(self):
+            raise ValueError('synthetic')
+    class Reader:
+        pages = [Page(), Page()]
+        def __init__(self, *a, **kw):
+            pass
+    monkeypatch.setattr('pypdf.PdfReader', Reader)
+    with pytest.raises(parsers.NoTextError) as failure:
+        parsers.parse_pdf(b'synthetic')
+    assert failure.value.coverage['total_pages'] == 2
+    assert len(failure.value.coverage['skipped_pages']) == 2

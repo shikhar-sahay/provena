@@ -1,3 +1,4 @@
+import { SourceDetails } from "../components/SourceDetails";
 // Artifacts tab: dense table with type/evidence/search filters, a pager,
 // and a provenance drawer per artifact.
 
@@ -264,6 +265,7 @@ export function ArtifactDetail({
         </div>
         <div>
           <dt className="text-xs text-ink3">Source</dt>
+          <dd><SourceDetails locator={artifact.locator} /></dd>
           <dd className="mt-0.5 flex items-center justify-between gap-2">
             <span className="font-mono text-[13px]">{locatorLabel(artifact.locator)}</span>
             <button

@@ -152,7 +152,7 @@ def test_hash_mac_port_timestamp_file_process():
     assert ("MAC_ADDRESS", "AA-BB-CC-DD-EE-FF", "aa:bb:cc:dd:ee:ff") in found
     assert ("PORT", "5432", "5432") in found
     assert ("PROCESS_NAME", "svchost.exe", "svchost.exe") in found
-    assert ("TIMESTAMP", "2026-01-13 02:15:01", "2026-01-13T02:15:01+00:00") in found
+    assert ("TIMESTAMP", "2026-01-13 02:15:01", "2026-01-13T02:15:01") in found
     assert ("FILE_NAME", "Q4-Forecast.xlsx", "Q4-Forecast.xlsx") in found
 
 
@@ -176,7 +176,7 @@ def test_normalize_rejects_invalid():
 
 
 def test_extractor_version_pinned():
-    assert EXTRACTOR_VERSION == "2.1"
+    assert EXTRACTOR_VERSION == "2.2"
     assert all(e.name for e in extractors.EXTRACTORS)
 
 

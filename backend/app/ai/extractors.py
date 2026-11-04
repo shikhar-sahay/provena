@@ -45,7 +45,7 @@ PROCESS_RE = re.compile(r"\b([A-Za-z][\w-]{1,60})\.exe\b", re.IGNORECASE)
 HASH_RE = re.compile(r"\b(?:[0-9a-fA-F]{64}|[0-9a-fA-F]{40}|[0-9a-fA-F]{32})\b")
 MAC_RE = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
 TIMESTAMP_RE = re.compile(
-    r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?\b"
+    r"(?<![\w])\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:[Zz]|[+-]\d{2}:?\d{2})?(?![\w:+.\d-])"
     r"|\b\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4}\b"
 )
 WORKSTATION_RE = re.compile(r"(?<![\w.-])[A-Za-z]{1,12}-\d{1,4}\b")
@@ -267,7 +267,7 @@ EXTRACTORS: list[Extractor] = [
     Extractor("keyvalue-pattern", "structured", _keyvalue_run),
 ]
 
-EXTRACTOR_VERSION = "2.1"
+EXTRACTOR_VERSION = "2.2"
 
 
 def extract_all(unit: SourceUnit) -> list[tuple[Extractor, Extraction]]:

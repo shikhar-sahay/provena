@@ -1,5 +1,6 @@
 """Reasoning tests: rules, Why data, validation RBAC, notes, reports."""
 
+import re
 from sqlalchemy import func, select
 
 from app.ai.rules import ArtifactFact, ExternalTransferSequenceRule, FactView
@@ -22,7 +23,9 @@ def _demo_run(client, token, inv_id, storage_dir=None):
     ]
     ids = []
     for filename, title in files:
-        content = (SAMPLE_DATA / filename).read_bytes()
+        # Positive temporal-rule fixtures explicitly declare synthetic UTC.
+        # Repository sample logs intentionally retain their unknown wall time.
+        content = re.sub(rb"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", rb"\1+00:00", (SAMPLE_DATA / filename).read_bytes())
         response = upload(client, token, inv_id, content=content, filename=filename, title=title)
         assert response.status_code == 201, response.text
         item = response.json()

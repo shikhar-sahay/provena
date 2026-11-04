@@ -22,7 +22,7 @@ from fastapi import HTTPException, status
 from app.ai import correlate as correlate_engine
 from app.ai import extractors
 from app.ai import parsers
-from app.ai.normalize import normalize
+from app.ai.normalize import normalize, timestamp_details
 from app.ai.parsers import ParserError, SourceUnit
 from app.modules.audit.service import Actions, ResourceTypes, record
 from app.modules.evidence import storage
@@ -171,7 +171,7 @@ def _get_or_create_artifact(
     locator_override: dict | None = None,
     extractor,
 ) -> Artifact:
-    source_key = unit.locator_key
+    source_key = unit.identity_key or unit.locator_key
     if locator_override is not None:
         source_key += ":" + str(locator_override.get("column_index", "")) + ":" + str(locator_override.get("span", ""))
     if len(source_key) > 255:
@@ -244,7 +244,7 @@ def _process_evidence(
     try:
         units = parsers.PARSERS[ext](data)
     except parsers.NoTextError as exc:
-        db.info["parser_coverage"] = {"status": "rejected", "parser_version": parsers.PARSER_VERSION, "warnings": [str(exc)]}
+        db.info["parser_coverage"] = {**(exc.coverage or {}), "status": "rejected", "parser_version": parsers.PARSER_VERSION, "warnings": (exc.coverage or {}).get("warnings", []) + [str(exc)]}
         return RunEvidenceStatus.FAILED.value, str(exc), 0
     except ParserError:
         db.info["parser_coverage"] = {"status": "rejected", "parser_version": parsers.PARSER_VERSION, "warnings": ["Input malformed or exceeds supported format limits."]}
@@ -261,6 +261,10 @@ def _process_evidence(
                 units.coverage["artifact_limit"] = MAX_ARTIFACTS_PER_EVIDENCE
                 return RunEvidenceStatus.PARTIAL.value, "Parser or extraction coverage is partial; inspect coverage warnings.", count
             locator = dict(unit.locator)
+            if extraction.artifact_type == "TIMESTAMP":
+                locator["timestamp"] = timestamp_details(extraction.raw_value)
+            locator["excerpt_start"] = max(0, (extraction.span or (0, 0))[0] - 80)
+            locator["excerpt_whitespace_collapsed"] = True
             locator["record_key"] = str(locator.get("record_key", unit.locator_key))
             # Store small deterministic positional cues, not unbounded scan content.
             words = list(re.finditer(r"\b(?:upload|uploaded|exfil|sent|transmit)\b", unit.scan_text, re.I))
@@ -279,7 +283,7 @@ def _process_evidence(
                 normalized_value=normalized,
                 unit=SourceUnit(unit.locator, unit.locator_key,
                     parsers._bound_context(unit.scan_text[max(0, (extraction.span or (0, 0))[0] - 80):]),
-                    unit.text, unit.field_name),
+                    unit.text, unit.field_name, unit.identity_key),
                 locator_override=locator,
                 extractor=extractor,
             )

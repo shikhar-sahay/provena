@@ -37,6 +37,7 @@ class ArtifactFact:
     upload_keyword_offsets: tuple[int, ...] | None = None
     file_access: bool | None = None
     verified: bool = True
+    time_precision: str | None = None
 
 
 @dataclass
@@ -119,14 +120,14 @@ class FactView:
     def timestamps_on_unit(self, evidence_id: int, locator_key: str) -> list[datetime]:
         out = []
         for artifact in self.units.get((evidence_id, locator_key), []):
-            if artifact.artifact_type != "TIMESTAMP":
+            if artifact.artifact_type != "TIMESTAMP" or artifact.time_precision == "minute":
                 continue
             try:
                 parsed = datetime.fromisoformat(artifact.normalized_value)
             except ValueError:
                 continue
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                continue  # Unknown local time cannot support cross-source chronology.
             out.append(parsed)
         return out
 
@@ -323,7 +324,7 @@ class ExternalTransferSequenceRule(Rule):
                             continue
                         for file_time in facts.timestamps_on_unit(f_evidence, f_key):
                             delta = (up_time - file_time).total_seconds()
-                            if not 0 <= delta <= EXTERNAL_WINDOW_HOURS * 3600:
+                            if not 0 < delta <= EXTERNAL_WINDOW_HOURS * 3600:
                                 continue
                             link = self._shared_link(facts, up_evidence, up_key, f_evidence, f_key)
                             if link is None:

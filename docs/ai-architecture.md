@@ -127,3 +127,30 @@ retrieves the latest accounting, and reports snapshot it. Upload pairing has a
 incomplete and total possible results are unknown. Raising the output limit does
 not override processing budgets. Source coverage warnings accompany findings;
 no result claims to describe unexamined content.
+
+## M2 timestamp fidelity
+
+Extractor 2.2/parser 2.1 preserve timestamp originals, explicit source offsets,
+normalization version and precision in artifact locators and report support.
+Known offsets normalize to UTC. Naive wall times, DST folds/gaps without an
+explicit offset, and RFC 3339 negative-zero offsets remain timezone-unknown;
+they are never silently assigned UTC. Named-zone interpretation is not inferred.
+Nanosecond precision beyond Python's six fractional digits is unsupported rather
+than silently truncated. Explicit-offset minute precision is retained but not
+used to assert event order. Temporal rules require comparable offset-aware
+second-or-finer readings and strictly positive time separation. Clock accuracy
+and synchronization are not established by an offset alone.
+
+Existing sample logs have naive wall times; they can demonstrate extraction and
+co-occurrence, but do not establish the cross-source UTC upload sequence. Positive
+temporal tests supply explicitly offset synthetic timestamps. A future source
+profile/timezone workflow requires its own versioned design; M2 does not invent
+missing timezone facts or implement a full incident timeline.
+
+
+Parser 2.1 also separates JSON Pointer identities from readable dotted paths,
+rejects duplicate object keys instead of losing earlier values, and retains PDF
+failure coverage when all pages fail. Path length is limited to 1,000 codepoints;
+omitted deeper JSON paths are reported. CSV cells use column ordinals for
+identity, including duplicate headers. The CSV reader's field-size limit also
+applies; exceeding it rejects the parse explicitly.

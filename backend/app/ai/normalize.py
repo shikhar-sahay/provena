@@ -19,8 +19,9 @@ distinct entities. Rules per type:
 - FILE_NAME: strip only, for the same reason as paths.
 - HASH: lowercase hexadecimal. Non-hex or wrong-length input is rejected.
 - USB_DEVICE: strip only. Serial and vendor strings are opaque identifiers.
-- TIMESTAMP: ISO-8601 in UTC (``YYYY-MM-DDTHH:MM:SS+00:00``). Naive inputs
-  are assumed UTC and recorded as such. Unparseable input is rejected.
+- TIMESTAMP: UTC only when the source explicitly states an offset. Naive
+  values retain local wall time without an offset; original precision and
+  timezone uncertainty are recorded separately. Unparseable input is rejected.
 - PORT: integer 1-65535 as a string. Out-of-range input is rejected.
 - MAC_ADDRESS: lowercase colon-separated octets. Invalid input is rejected.
 - PROCESS_NAME: casefold the basename. ``SVCHOST.EXE`` and ``svchost.exe``
@@ -33,6 +34,7 @@ pipeline skips them instead of persisting junk.
 from __future__ import annotations
 
 import ipaddress
+import re
 from datetime import datetime, timezone
 
 
@@ -88,17 +90,43 @@ TIMESTAMP_FORMATS = (
 )
 
 
-def _normalize_timestamp(raw: str) -> str | None:
-    value = raw.strip().replace("Z", "+00:00")
-    for format_string in TIMESTAMP_FORMATS:
+def timestamp_details(raw: str) -> dict | None:
+    """Preserve wall-clock uncertainty; never infer a source timezone or DST fold."""
+    original = raw.strip()
+    fraction = re.search(r"\d{2}:\d{2}:\d{2}\.(\d+)", original)
+    if fraction and len(fraction[1]) > 6:
+        return None  # No silent nanosecond-to-microsecond truncation.
+    value = re.sub(r"[Zz]$", "+00:00", original)
+    parsed = None
+    if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", value):
         try:
-            parsed = datetime.strptime(value, format_string)
+            parsed = datetime.fromisoformat(value)
         except ValueError:
-            continue
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc).isoformat()
-    return None
+            pass
+    if parsed is None:
+        for fmt in TIMESTAMP_FORMATS:
+            try:
+                parsed = datetime.strptime(value, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        return None
+    offset = re.search(r"(Z|z|[+-]\d{2}:?\d{2})$", original)
+    # RFC 3339 negative zero explicitly means an unknown local offset.
+    known = parsed.tzinfo is not None and not original.endswith(("-00:00", "-0000"))
+    utc = parsed.astimezone(timezone.utc).isoformat() if known else None
+    normalized = utc if known else parsed.replace(tzinfo=None).isoformat()
+    return {"original": original, "timezone_status": "explicit_offset" if known else "unknown",
+        "source_offset": offset[0] if offset else None, "utc": utc,
+        "normalized_value": normalized, "precision": (f"fraction_{len(fraction[1])}" if fraction
+            else "second" if re.search(r"\d{2}:\d{2}:\d{2}", original) else "minute"),
+        "normalization_version": "2"}
+
+
+def _normalize_timestamp(raw: str) -> str | None:
+    details = timestamp_details(raw)
+    return details["normalized_value"] if details else None
 
 
 def _normalize_port(raw: str) -> str | None:
