@@ -61,9 +61,10 @@ def ensure_finding_review(db: Session, inv: Investigation | None, user: User) ->
     return inv
 
 
-def build_facts(db: Session, inv: Investigation) -> FactView:
+def build_facts(db: Session, inv: Investigation, artifacts=None) -> FactView:
     from app.modules.intelligence.provenance import active_artifacts, artifact_identity
-    artifacts = active_artifacts(db, inv.id)
+    if artifacts is None:
+        artifacts = active_artifacts(db, inv.id)
     evidence_numbers = {
         row.id: row.evidence_number
         for row in db.execute(
@@ -160,28 +161,30 @@ def generate_findings(
     from app.modules.intelligence.service import _rebuild_correlations
     _rebuild_correlations(db, inv)
     db.flush()
-    facts = build_facts(db, inv)
+    source = {a.id: a for a in active_artifacts(db, inv.id)}
+    facts = build_facts(db, inv, list(source.values()))
     proposed = rules.evaluate_all(facts, per_rule_limit)
     from app.modules.intelligence.provenance import semantic_hash
     input_set_sha256 = semantic_hash(sorted(f.support_key for f in facts.artifacts if f.support_key))
     for row in proposed.coverage:
         row["input_set_sha256"] = input_set_sha256
     db.info["finding_coverage"] = proposed.coverage
-    source = {a.id: a for a in active_artifacts(db, inv.id)}
+    current_coverage = coverage_for_artifacts(db, source.values())
+    identities = {aid: artifact_identity(a) for aid, a in source.items()}
     created = 0
     for item in proposed:
         item.artifact_ids = sorted(set(item.artifact_ids))
         item.evidence_ids = sorted(set(item.evidence_ids))
         item.correlation_ids = sorted(set(item.correlation_ids))
-        item.support_keys = sorted({artifact_identity(source[aid]) for aid in item.artifact_ids})
-        coverage = coverage_for_artifacts(db, [source[aid] for aid in item.artifact_ids])
+        item.support_keys = sorted({identities[aid] for aid in item.artifact_ids})
+        coverage = {str(eid): current_coverage[str(eid)] for eid in item.evidence_ids}
         item.coverage = coverage
         if any(c.get("status") != "complete" for c in coverage.values()):
             item.summary += " Source coverage is partial or unknown; this finding does not describe unexamined content."
         item.title = item.title[:255]
         item.summary = item.summary[:2000]
         snapshot = {"identity_version": "2", "artifacts": [
-            {"id": aid, "semantic_key": artifact_identity(source[aid]),
+            {"id": aid, "semantic_key": identities[aid],
              "evidence_id": source[aid].evidence_id, "input_sha256": source[aid].input_sha256,
              "extractor_version": source[aid].extractor_version, "locator": source[aid].locator}
             for aid in sorted(set(item.artifact_ids))], "coverage": coverage,

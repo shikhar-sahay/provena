@@ -168,3 +168,23 @@ structures and form invocations. Decoder/structure failures become explicit
 rejected or skipped-page outcomes. The configuration is restored after each
 parse, including exceptions. These bounds reduce resource exhaustion risk;
 they are not an operating-system memory or time sandbox for hostile PDFs.
+
+
+M2 keeps run-to-artifact membership explicit without a query and flush per link;
+links flush within the same analytical transaction. Reasoning reuses its loaded
+support and coverage maps. A manual synthetic probe is available as
+`python tests/benchmark_analysis.py` from `backend/`. It overrides database and
+storage configuration before importing the app, uses SQLite in memory and new
+temporary local storage, and never reads production evidence.
+
+Three fresh trials of 3 files x 80 offset-aware records (1,500 artifacts, five
+findings) on the same Windows/Python 3.13 environment measured median analysis
+2.669s for M1 and 3.283s for optimized M2; reasoning 0.099s and 0.322s respectively.
+The additional provenance has measurable cost, about 23% for this extraction
+workload. These small local SQLite probes are not capacity or PostgreSQL latency
+benchmarks. A pure-parser 1,000-line probe with allocation tracing measured
+0.136s to 0.126s on short records and 0.191s to 0.263s on long records; the long
+probe previously missed every late IP and now emits 2,000 extraction records
+(regex plus structured derivations). Traced peak allocations were about 1.10
+versus 1.53 MB for short input and 2.23 versus 3.12 MB for long input. These are
+Python allocations, not whole-process memory measurements.

@@ -85,3 +85,11 @@ def test_rule_coverage_is_persisted_and_expansion_retrieves_more(client, investi
     expanded = client.post(f'{base}/analysis/findings/generate?per_rule_limit=200', headers=headers).json()
     assert expanded['new_count'] == 5
     assert len(expanded['findings']) == 30
+
+def test_output_cap_selection_does_not_depend_on_artifact_sequence_allocation():
+    first = [fact(i, 1, 'USB_DEVICE', f'USB-{i:03d}', record=f'line:{i}') for i in range(1,31)]
+    second = [replace(m, id=1000-m.id) for m in first]
+    a = rules.evaluate_all(FactView(first, {}, True))
+    b = rules.evaluate_all(FactView(second, {}, True))
+    assert len(a) == len(b) == 25
+    assert [f.inputs_key() for f in a] == [f.inputs_key() for f in b]

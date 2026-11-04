@@ -251,6 +251,7 @@ def _process_evidence(
         return RunEvidenceStatus.FAILED.value, "Evidence could not be parsed within supported format limits.", 0
     db.info["parser_coverage"] = units.coverage
     count = 0
+    run_members: set[int] = set()
     for unit in units:
         for extractor, extraction in extractors.extract_all(unit):
             normalized = normalize(extraction.artifact_type, extraction.raw_value)
@@ -287,10 +288,10 @@ def _process_evidence(
                 locator_override=locator,
                 extractor=extractor,
             )
-            if db.get(AnalysisRunArtifact, (run.id, artifact.id)) is None:
+            if artifact.id not in run_members:
                 db.add(AnalysisRunArtifact(run_id=run.id, artifact_id=artifact.id))
-                db.flush()
-            count += 1
+                run_members.add(artifact.id)
+                count += 1
     if units.coverage["status"] == "partial":
         return RunEvidenceStatus.PARTIAL.value, "Parser or extraction coverage is partial; inspect coverage warnings.", count
     return RunEvidenceStatus.PROCESSED.value, None, count

@@ -1,3 +1,4 @@
+import { ScoreExplanation } from "../components/ScoreExplanation";
 import { RuleCoverageView } from "../components/RuleCoverageView";
 import { ParserCoverageView } from "../components/ParserCoverageView";
 // Findings tab: rule proposals with full Why provenance, human validation,
@@ -273,9 +274,7 @@ function FindingDetail({
             </li>
           ))}
         </ol>
-        <p className="mt-1.5 text-xs text-ink3">
-          Weights sum to the confidence score. Deterministic ranking, not a calibrated probability.
-        </p>
+        <ScoreExplanation score={finding.confidence} weights={finding.factors.map((factor) => factor.weight)} />
       </section>
 
       <section>

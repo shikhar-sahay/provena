@@ -58,11 +58,13 @@ class ProposedFinding:
     coverage: dict = field(default_factory=dict)
 
     def inputs_key(self) -> str:
+        if not self.support_keys:
+            raise ValueError("Semantic supporting identities are required before deduplication.")
         canonical = json.dumps(
             {
                 "rule_id": self.rule_id,
                 "rule_version": self.rule_version,
-                "support": sorted(self.support_keys) if self.support_keys else sorted(self.artifact_ids),
+                "support": sorted(self.support_keys),
                 "claim": [self.title, self.summary, self.severity, self.confidence, self.factors],
                 "coverage": self.coverage,
             },
@@ -94,6 +96,8 @@ class FactView:
     ):
         self.artifacts = artifacts
         self.correlations = correlations
+        # Legacy constructor argument retained for callers; scoring consults
+        # only the verified flags of the actual supporting facts.
         self.all_verified = all_verified
         self.rule_coverage: dict[str, dict] = {}
         self.by_type_value: dict[tuple[str, str], list[ArtifactFact]] = {}
@@ -457,8 +461,16 @@ class Evaluation(list[ProposedFinding]):
 def evaluate_all(facts: FactView, per_rule_limit: int = MAX_FINDINGS_PER_RULE) -> Evaluation:
     """Explicit deterministic output limits; callers can request up to 200/rule."""
     findings = Evaluation()
+    identities = {
+        m.id: m.support_key or hashlib.sha256(json.dumps([
+            m.evidence_id, m.artifact_type, m.normalized_value, m.locator_key, m.input_sha256,
+        ], sort_keys=True).encode()).hexdigest()
+        for m in facts.artifacts
+    }
     for rule in RULES:
         proposed = rule.evaluate(facts)
+        for item in proposed:
+            item.support_keys = sorted({identities[aid] for aid in item.artifact_ids})
         proposed.sort(key=lambda f: (-f.confidence, f.title, f.inputs_key()))
         emitted = proposed[:per_rule_limit]
         findings.extend(emitted)

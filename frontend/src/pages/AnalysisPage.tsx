@@ -183,7 +183,7 @@ function AnalysisOverview({
   return (
     <div className="space-y-4">
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
-        <OverviewStat label="Evidence processed" value={lastRun?.evidence_count ?? 0} />
+        <OverviewStat label="Evidence selected" value={lastRun?.evidence_count ?? 0} />
         <OverviewStat label="Artifacts extracted" value={artifactTotal} />
         <OverviewStat label="Correlations" value={correlationCount} />
         <OverviewStat label="Findings" value={findingTotal} />
@@ -244,8 +244,8 @@ function AnalysisOverview({
                 <li key={run.id} className="px-4 py-2.5 text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono font-medium">{run.run_label ?? `RUN-${run.run_number}`}</span>
-                    <Badge tone={run.status === "completed" ? "success" : run.status === "failed" ? "danger" : "neutral"}>
-                      {RUN_STATUS_LABELS[run.status]}
+                    <Badge tone={run.status === "completed" ? (run.evidence_outcomes.some((o) => o.status !== "processed" || !o.coverage) ? "warning" : "success") : run.status === "failed" ? "danger" : "neutral"}>
+                      {run.status === "completed" && run.evidence_outcomes.some((o) => o.status !== "processed" || !o.coverage) ? "Completed with omissions or unknown coverage" : RUN_STATUS_LABELS[run.status]}
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-ink3">
