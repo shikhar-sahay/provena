@@ -224,3 +224,29 @@ def test_s3_backed_analysis_and_authorized_download(
     assert "EVIDENCE_REGISTERED" in actions
     assert "EVIDENCE_VERIFIED" in actions
     assert "EVIDENCE_DOWNLOADED" in actions
+
+@pytest.mark.parametrize('root,candidate', [
+    (r'C:\synthetic\evidence', r'\\?\C:\synthetic\evidence\1\abcdef'),
+    (r'\\server\share\evidence', r'\\?\UNC\server\share\evidence\1\abcdef'),
+])
+def test_windows_extended_namespace_comparison_retains_boundary(root, candidate):
+    from app.modules.evidence.storage import _windows_comparison_path
+    normalized = _windows_comparison_path(root)
+    assert normalized in _windows_comparison_path(candidate).parents
+    assert normalized not in _windows_comparison_path(r'C:\synthetic\outside\1\abcdef').parents
+
+
+def test_parallel_local_staging_keeps_resolved_path_boundary(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from app.modules.evidence.storage import LocalEvidenceStorage
+    for trial in range(20):
+        store = LocalEvidenceStorage(tmp_path / str(trial))
+        barrier = Barrier(2)
+        def stage():
+            barrier.wait(timeout=10)
+            return store.stage(io.BytesIO(b'synthetic bytes'), 1, 100)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            uploads = list(pool.map(lambda _: stage(), range(2)))
+        assert all(upload.size == len(b'synthetic bytes') for upload in uploads)
+        assert uploads[0].storage_key != uploads[1].storage_key

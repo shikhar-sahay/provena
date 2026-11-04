@@ -9,7 +9,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import BinaryIO, ContextManager, Iterator, Protocol
 
 from app.core.config import settings
@@ -52,6 +52,20 @@ def storage_key_from_staging(staging_key: str) -> str:
     return validate_storage_key(staging_key.removeprefix(prefix))
 
 
+def _windows_comparison_path(path) -> PureWindowsPath:
+    """Compare resolved Windows paths consistently across extended namespaces.
+
+    Keep the original resolved path for I/O and normalize only the comparison.
+    This does not resolve or trust unvalidated caller-supplied storage keys.
+    """
+    value = str(path)
+    if value.startswith("\\\\?\\UNC\\"):
+        value = "\\\\" + value[8:]
+    elif value.startswith("\\\\?\\"):
+        value = value[4:]
+    return PureWindowsPath(value)
+
+
 class LocalEvidenceStorage:
     def __init__(self, root: str | Path):
         self.root = Path(root)
@@ -64,7 +78,9 @@ class LocalEvidenceStorage:
         validate_storage_key(storage_key)
         root = self._root()
         candidate = (root / Path(*storage_key.split("/"))).resolve()
-        if root not in candidate.parents:
+        comparison_root = _windows_comparison_path(root) if os.name == "nt" else root
+        comparison_candidate = _windows_comparison_path(candidate) if os.name == "nt" else candidate
+        if comparison_root not in comparison_candidate.parents:
             raise ValueError("Storage key escapes the storage root.")
         return candidate
 

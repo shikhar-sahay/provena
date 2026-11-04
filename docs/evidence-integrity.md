@@ -154,3 +154,19 @@ initialized in a new temporary directory on loopback port 55477. Full migrations
 schema drift checking and the parallel registration test passed against that
 fresh synthetic database. The temporary server was stopped afterward. Offline
 SQL compilation and SQLite tests alone are not PostgreSQL execution tests.
+
+
+## M2 analytical support compatibility
+
+Run-to-artifact memberships and immutable correlation support snapshots now
+preserve exactly which extraction results were used. Parser coverage and source
+timezone uncertainty travel with findings and reports. New processing versions
+require new review where support changes; historical reports and decisions are
+not rewritten. See [analysis architecture](ai-architecture.md).
+
+Windows local storage compares resolved paths consistently across ordinary and
+extended (`\\?\`) namespaces. Only the comparison representation is normalized;
+validated keys, resolved-path containment and the original path used for I/O
+remain enforced. Parallel staging tests cover the previously intermittent false
+containment failure. This is not permission to follow evidence links outside the
+configured storage root.
