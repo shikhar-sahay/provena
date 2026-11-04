@@ -390,6 +390,17 @@ export interface CorrelationDetail extends Correlation {
 
 export type FindingStatus = "pending_review" | "accepted" | "rejected";
 
+export interface RuleCoverage {
+  rule_id: string;
+  proposed_count: number;
+  emitted_count: number;
+  omitted_count: number;
+  output_limit: number;
+  evaluation_complete: boolean;
+  candidate_pairs_checked?: number;
+  pair_limit?: number;
+}
+
 export interface Finding {
   support_snapshot?: { identity_version: string; coverage: Record<string, ParserCoverage> } | null;
   support_current?: boolean;
@@ -817,9 +828,12 @@ export const api = {
       `/api/investigations/${invId}/analysis/correlations/${correlationId}`,
     );
   },
-  generateFindings(invId: number) {
-    return apiFetch<{ findings: Finding[]; new_count: number }>(
-      `/api/investigations/${invId}/analysis/findings/generate`,
+  findingCoverage(invId: number) {
+    return apiFetch<RuleCoverage[]>(`/api/investigations/${invId}/analysis/findings/coverage`);
+  },
+  generateFindings(invId: number, perRuleLimit = 25) {
+    return apiFetch<{ findings: Finding[]; new_count: number; rule_coverage: RuleCoverage[] }>(
+      `/api/investigations/${invId}/analysis/findings/generate?per_rule_limit=${perRuleLimit}`,
       { method: "POST" },
     );
   },

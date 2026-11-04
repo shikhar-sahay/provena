@@ -91,6 +91,7 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
                 support_key=artifact_identity(a),
                 input_sha256=a.input_sha256,
                 upload_keyword_offsets=tuple((a.locator or {}).get("upload_keyword_offsets", [])),
+                file_access=(a.locator or {}).get("file_access", False),
                 context=a.context,
                 span=span,
             )
@@ -145,7 +146,7 @@ def support_current(db: Session, finding: Finding) -> bool:
 
 
 def generate_findings(
-    db: Session, inv: Investigation, user: User, run_id: int | None = None
+    db: Session, inv: Investigation, user: User, run_id: int | None = None, per_rule_limit: int = 25
 ) -> tuple[list[Finding], int]:
     """Evaluate every rule; create new pending findings, refresh untouched ones.
 
@@ -158,7 +159,8 @@ def generate_findings(
     from app.modules.intelligence.service import _rebuild_correlations
     _rebuild_correlations(db, inv)
     db.flush()
-    proposed = rules.evaluate_all(build_facts(db, inv))
+    proposed = rules.evaluate_all(build_facts(db, inv), per_rule_limit)
+    db.info["finding_coverage"] = proposed.coverage
     source = {a.id: a for a in active_artifacts(db, inv.id)}
     created = 0
     for item in proposed:
@@ -168,6 +170,10 @@ def generate_findings(
         item.support_keys = sorted({artifact_identity(source[aid]) for aid in item.artifact_ids})
         coverage = coverage_for_artifacts(db, [source[aid] for aid in item.artifact_ids])
         item.coverage = coverage
+        if any(c.get("status") != "complete" for c in coverage.values()):
+            item.summary += " Source coverage is partial or unknown; this finding does not describe unexamined content."
+        item.title = item.title[:255]
+        item.summary = item.summary[:2000]
         snapshot = {"identity_version": "2", "artifacts": [
             {"id": aid, "semantic_key": artifact_identity(source[aid]),
              "evidence_id": source[aid].evidence_id, "input_sha256": source[aid].input_sha256,
@@ -224,6 +230,7 @@ def generate_findings(
         actor_id=user.id,
         metadata={
             "new_count": created,
+            "rule_coverage": proposed.coverage,
             "rules": sorted({item.rule_id for item in proposed}),
             "run_id": run_id,
         },
@@ -496,6 +503,7 @@ def generate_report(
             for e in ev_service.investigation_timeline(db, full)
         ],
         "accepted_findings": findings_payload,
+        "rule_coverage": latest_rule_coverage(db, full),
         "recommendations": recommendations,
         "investigator_notes": [
             {"author": n.author.username if n.author else None,
@@ -557,3 +565,12 @@ def get_report(db: Session, inv: Investigation, report_id: int):
         Report.investigation_id == inv.id, Report.id == report_id
     )
     return db.execute(stmt).scalar_one_or_none()
+
+
+def latest_rule_coverage(db: Session, inv: Investigation) -> list[dict]:
+    from app.modules.audit.models import AuditEvent
+    row = db.execute(select(AuditEvent).where(
+        AuditEvent.action == Actions.AI_FINDING_GENERATED,
+        AuditEvent.resource_type == ResourceTypes.INVESTIGATION,
+        AuditEvent.resource_id == str(inv.id)).order_by(AuditEvent.id.desc())).scalars().first()
+    return (row.event_metadata or {}).get("rule_coverage", []) if row else []

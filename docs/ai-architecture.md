@@ -318,3 +318,29 @@ are retained, never retroactively assigned new provenance or approval. Reports
 snapshot support and coverage alongside the original finding. PostgreSQL
 investigation row locks serialize analysis, correlation rebuilds, proposals and
 report numbering. These are transaction controls, not a distributed job queue.
+
+## M2 rule support, scores and output accounting
+
+Rule version 2 associates removable-media identifiers only within a structural
+record (text line, CSV row or JSON parent object). Unique fields are described
+as co-recorded entities, never an established session. Missing or multiple fields
+remain explicitly ambiguous observations. Whole-file co-occurrence cannot join
+unrelated users, hosts and devices.
+
+All scores equal the sum of their declared factors. Verification concerns only
+cited supporting inputs. Identity recurrence counts distinct normalized record
+patterns for additional weight, not copies or partitions of the same logs.
+These patterns do not establish independent acquisition sources. Upload sequence
+scores no longer have an unexplained base contribution; link artifacts are
+included in support. An upload cue and explicit file-access cue are required;
+destination ownership and actual movement still require independent validation.
+
+Rules enumerate deterministically and emit 25 proposals per rule by default.
+Generation accepts `per_rule_limit=1..200`, also exposed by the UI expansion
+action. Counts of enumerated, emitted and omitted proposals and the configured
+limit persist in the generation audit event; `GET .../analysis/findings/coverage`
+retrieves the latest accounting, and reports snapshot it. Upload pairing has a
+100,000-candidate comparison budget. If exhausted, evaluation is explicitly
+incomplete and total possible results are unknown. Raising the output limit does
+not override processing budgets. Source coverage warnings accompany findings;
+no result claims to describe unexamined content.

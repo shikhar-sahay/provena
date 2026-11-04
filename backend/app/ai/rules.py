@@ -4,8 +4,7 @@ Rules match structured patterns (shared identities, devices, hosts, ordered
 transfers) and produce proposed findings with deterministic weighted
 confidence. A finding is decision support, never a conclusion: scores rank
 and prioritize, they are not calibrated probabilities, and every factor is
-recorded for the Why view. Milestone 5 owns guilt, intent, and certainty;
-nothing here claims them.
+recorded for the Why view. No rule determines guilt, intent or certainty.
 """
 
 from __future__ import annotations
@@ -15,11 +14,12 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-RULE_VERSION = "1"
+RULE_VERSION = "2"
 
 UPLOAD_KEYWORDS = ("upload", "uploaded", "exfil", "sent", "transmit")
 EXTERNAL_WINDOW_HOURS = 24
 MAX_FINDINGS_PER_RULE = 25
+MAX_TRANSFER_PAIRS = 100_000
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,8 @@ class ArtifactFact:
     support_key: str | None = None
     input_sha256: str | None = None
     upload_keyword_offsets: tuple[int, ...] | None = None
+    file_access: bool | None = None
+    verified: bool = True
 
 
 @dataclass
@@ -92,6 +94,7 @@ class FactView:
         self.artifacts = artifacts
         self.correlations = correlations
         self.all_verified = all_verified
+        self.rule_coverage: dict[str, dict] = {}
         self.by_type_value: dict[tuple[str, str], list[ArtifactFact]] = {}
         self.units: dict[tuple[int, str], list[ArtifactFact]] = {}
         for artifact in artifacts:
@@ -104,6 +107,14 @@ class FactView:
 
     def evidence_of(self, artifact_type: str, value: str) -> set[int]:
         return {a.evidence_id for a in self.by_type_value.get((artifact_type, value), [])}
+
+    def supporting_verified(self, members: list[ArtifactFact]) -> bool:
+        return bool(members) and all(m.verified for m in members)
+
+    def record_patterns(self, members: list[ArtifactFact]) -> int:
+        # Splitting or copying logs does not create independent observations.
+        return len({tuple(sorted({(a.artifact_type, a.normalized_value)
+                    for a in self.units[(m.evidence_id, m.locator_key)]})) for m in members})
 
     def timestamps_on_unit(self, evidence_id: int, locator_key: str) -> list[datetime]:
         out = []
@@ -122,7 +133,7 @@ class FactView:
 
 def _cap(findings: list[ProposedFinding]) -> list[ProposedFinding]:
     findings.sort(key=lambda f: (-f.confidence, f.title))
-    return findings[:MAX_FINDINGS_PER_RULE]
+    return findings
 
 
 class IdentityRecurrenceRule(Rule):
@@ -152,12 +163,14 @@ class IdentityRecurrenceRule(Rule):
             evidence_ids = {m.evidence_id for m in members}
             if len(evidence_ids) < 3:
                 continue
-            confidence = min(30 + 15 * (len(evidence_ids) - 2), 95)
+            patterns = facts.record_patterns(members)
+            additional = min(15 * max(patterns - 2, 0), 65)
+            confidence = 30 + additional
             factors = [
                 {"factor": "identity recurrence", "weight": 30,
                  "detail": f"{value} in {len(evidence_ids)} evidence items"},
-                {"factor": "additional evidence", "weight": min(15 * (len(evidence_ids) - 2), 65),
-                 "detail": f"{len(evidence_ids) - 2} items beyond the second"},
+                {"factor": "distinct supporting record patterns", "weight": additional,
+                 "detail": f"{patterns} patterns; duplicates and file partitions do not establish independent sources"},
             ]
             numbers = sorted({m.evidence_number for m in members})
             findings.append(
@@ -187,16 +200,15 @@ class IdentityRecurrenceRule(Rule):
 
 
 class RemovableMediaSessionRule(Rule):
-    """A user, a USB device, and a shared host link the same session context."""
+    """Conservative record-level removable-media observations."""
 
     def __init__(self) -> None:
         super().__init__(
             rule_id="removable-media-session",
             name="Potential removable-media session",
             description=(
-                "A username and a USB device identifier each appear in evidence "
-                "that shares a hostname. The pattern is consistent with a user "
-                "session involving removable media on that host."
+                "Removable-media entities share one structural record. Missing or "
+                "ambiguous fields remain weak observations, not established sessions."
             ),
             severity="medium",
             recommendations=[
@@ -207,83 +219,41 @@ class RemovableMediaSessionRule(Rule):
         )
 
     def evaluate(self, facts: FactView) -> list[ProposedFinding]:
+        grouped = {}
+        for (evidence_id, record), members in sorted(facts.units.items()):
+            devices = sorted({m.normalized_value for m in members if m.artifact_type == "USB_DEVICE"})
+            if not devices:
+                continue
+            users = sorted({m.normalized_value for m in members if m.artifact_type == "USERNAME"})
+            hosts = sorted({m.normalized_value for m in members if m.artifact_type == "HOSTNAME"})
+            # Only a shared source record links these entities. Whole-file
+            # co-occurrence never creates a user/device/host association.
+            key = (tuple(devices), tuple(users), tuple(hosts))
+            grouped.setdefault(key, []).extend(m for m in members if m.artifact_type in
+                                              {"USB_DEVICE", "USERNAME", "HOSTNAME", "TIMESTAMP"})
         findings = []
-        devices = {m.normalized_value for m in facts.artifacts if m.artifact_type == "USB_DEVICE"}
-        for device in sorted(devices):
-            device_evidence = facts.evidence_of("USB_DEVICE", device)
-            hosts = sorted(
-                {
-                    m.normalized_value
-                    for m in facts.artifacts
-                    if m.artifact_type == "HOSTNAME" and m.evidence_id in device_evidence
-                }
-            )
-            for host in hosts:
-                host_evidence = facts.evidence_of("HOSTNAME", host)
-                if not (host_evidence & device_evidence):
-                    continue
-                users = sorted(
-                    {
-                        m.normalized_value
-                        for m in facts.artifacts
-                        if m.artifact_type == "USERNAME"
-                        and m.evidence_id in host_evidence
-                        and m.evidence_id in device_evidence
-                    }
-                )
-                if not users:
-                    continue
-                evidence_ids = set(device_evidence) | set(host_evidence)
-                for user in users:
-                    evidence_ids |= facts.evidence_of("USERNAME", user)
-                factors = [
-                    {"factor": "identity link", "weight": 25,
-                     "detail": f"users: {', '.join(users)}"},
-                    {"factor": "shared host", "weight": 25, "detail": f"host: {host}"},
-                    {"factor": "device present", "weight": 20, "detail": f"device: {device}"},
-                    {"factor": "independent evidence", "weight": 10,
-                     "detail": f"{len(device_evidence)} evidence items hold the device"},
-                ]
-                confidence = 80
-                if facts.all_verified:
-                    factors.append({"factor": "all contributing evidence verified", "weight": 10,
-                                    "detail": "integrity gate passed at generation"})
-                    confidence = 90
-                findings.append(
-                    ProposedFinding(
-                        rule_id=self.rule_id,
-                        rule_version=RULE_VERSION,
-                        title=(
-                            f"Potential removable-media session on {host} involving "
-                            f"{', '.join(users)} (device {device})"
-                        ),
-                        summary=(
-                            f"USB device {device} and {', '.join(users)} both link "
-                            f"to host {host} across {len(evidence_ids)} evidence "
-                            "items. Consistent with a user session involving "
-                            "removable media; not proof of misuse."
-                        ),
-                        severity=self.severity,
-                        confidence=min(confidence, 100),
-                        factors=factors,
-                        evidence_ids=sorted(evidence_ids),
-                        artifact_ids=sorted(
-                            m.id for m in facts.artifacts
-                            if (m.artifact_type, m.normalized_value) in
-                            {("USB_DEVICE", device)}
-                            | {("USERNAME", u) for u in users}
-                            | {("HOSTNAME", host)}
-                        ),
-                        correlation_ids=[
-                            facts.correlations[key]
-                            for key in [("USB_DEVICE", device)]
-                            + [("USERNAME", u) for u in users]
-                            + [("HOSTNAME", host)]
-                            if key in facts.correlations
-                        ],
-                        recommendations=list(self.recommendations),
-                    )
-                )
+        for (devices, users, hosts), members in sorted(grouped.items()):
+            linked = len(devices) == len(users) == len(hosts) == 1
+            factors = [{"factor": "device identifier recorded", "weight": 20,
+                        "detail": "Identifier extracted from an addressable source record"}]
+            if linked:
+                factors += [{"factor": "single user and host co-recorded", "weight": 35,
+                             "detail": "Structural record association; not proof of an actual session or device use"}]
+            if facts.supporting_verified(members):
+                factors.append({"factor": "supporting input verified", "weight": 10,
+                                "detail": "Only the cited supporting evidence passed the integrity gate"})
+            title = (f"Co-recorded removable-media entities: {users[0]} on {hosts[0]} ({devices[0]})"
+                     if linked else "Ambiguous removable-media observation")
+            summary = ("A single source record contains one user, host and device identifier. "
+                       "This is record-level co-occurrence, not an established session or proof of use."
+                       if linked else "A device identifier is recorded, but missing or multiple users, hosts or devices "
+                       "prevent an unambiguous association. No session relationship is established.")
+            findings.append(ProposedFinding(self.rule_id, RULE_VERSION, title, summary,
+                self.severity if linked else "low", sum(f['weight'] for f in factors), factors,
+                sorted({m.evidence_id for m in members}), sorted({m.id for m in members}),
+                sorted({facts.correlations[(m.artifact_type, m.normalized_value)] for m in members
+                        if (m.artifact_type, m.normalized_value) in facts.correlations}),
+                list(self.recommendations)))
         return _cap(findings)
 
 
@@ -293,10 +263,10 @@ class ExternalTransferSequenceRule(Rule):
     def __init__(self) -> None:
         super().__init__(
             rule_id="external-transfer-sequence",
-            name="Potential external transfer sequence",
+            name="Potential upload sequence",
             description=(
                 "A named file appears in file-access context, then an upload to "
-                "an external destination occurs within 24 hours, with a shared "
+                "a recorded destination occurs within 24 hours, with a shared "
                 "user or host linking the two observations."
             ),
             severity="high",
@@ -317,6 +287,9 @@ class ExternalTransferSequenceRule(Rule):
                 (lowered.find(word) for word in UPLOAD_KEYWORDS if word in lowered),
                 default=None,
             )
+            offsets = [offset for m in members for offset in (m.upload_keyword_offsets or ())]
+            if any(m.upload_keyword_offsets is not None for m in members):
+                keyword_at = min(offsets, default=None)
             if keyword_at is None:
                 continue
             # Destinations named after the upload keyword: source addresses
@@ -325,19 +298,28 @@ class ExternalTransferSequenceRule(Rule):
                 m for m in members
                 if m.artifact_type in ("IP_ADDRESS", "DOMAIN")
                 and m.span is not None
-                and m.span[0] > keyword_at
+                and m.span[0] > (min(m.upload_keyword_offsets) if m.upload_keyword_offsets else keyword_at)
+                and (m.upload_keyword_offsets is None or bool(m.upload_keyword_offsets))
             ]
             times = facts.timestamps_on_unit(evidence_id, locator_key)
             if not dests or not times:
                 continue
             uploads.append((evidence_id, locator_key, dests, times))
         grouped: dict[tuple[tuple[str, ...], str], dict] = {}
+        pair_checks = 0
+        truncated = False
         for up_evidence, up_key, dests, up_times in uploads:
             for dest in dests:
                 for up_time in up_times:
                     for (f_evidence, f_key), members in facts.units.items():
+                        pair_checks += 1
+                        if pair_checks > MAX_TRANSFER_PAIRS:
+                            truncated = True
+                            break
                         files = [m for m in members if m.artifact_type == "FILE_NAME"]
-                        if not files:
+                        explicit_access = any(m.file_access for m in members) if any(m.file_access is not None for m in members) else any(
+                            word in members[0].context.casefold() for word in ("read", "open", "access", "copy", "copied"))
+                        if not files or not explicit_access:
                             continue
                         for file_time in facts.timestamps_on_unit(f_evidence, f_key):
                             delta = (up_time - file_time).total_seconds()
@@ -350,28 +332,39 @@ class ExternalTransferSequenceRule(Rule):
                             file_values = sorted({m.normalized_value for m in files})
                             key = (tuple(file_values), dest.normalized_value)
                             slot = grouped.setdefault(key, {
-                                "pairs": [],
+                                "pairs": set(),
                                 "link_kinds": set(),
                                 "evidence_ids": set(),
                                 "artifact_ids": set(),
                             })
-                            slot["pairs"].append((file_time, up_time))
+                            slot["pairs"].add((file_time, up_time))
                             slot["link_kinds"].add(f"{link_kind}:{link_value}")
                             slot["evidence_ids"] |= {up_evidence, f_evidence}
                             slot["artifact_ids"] |= (
                                 {dest.id}
                                 | {m.id for m in files}
+                                | {m.id for m in facts.units[(up_evidence, up_key)] + members
+                                   if m.artifact_type in {"USERNAME", "HOSTNAME"}
+                                   and m.normalized_value == link_value}
                                 | {m.id for m in facts.units[(up_evidence, up_key)]
                                    if m.artifact_type == "TIMESTAMP"}
                                 | {m.id for m in facts.units[(f_evidence, f_key)]
                                    if m.artifact_type == "TIMESTAMP"}
                             )
+                    if truncated:
+                        break
+                if truncated:
+                    break
+            if truncated:
+                break
+        facts.rule_coverage[self.rule_id] = {"candidate_pairs_checked": min(pair_checks, MAX_TRANSFER_PAIRS),
+            "evaluation_complete": not truncated, "pair_limit": MAX_TRANSFER_PAIRS}
         findings = []
         for (file_values, dest_value), slot in sorted(grouped.items()):
             pairs = sorted(slot["pairs"])
             earliest_access, earliest_upload = pairs[0]
             link_detail = ", ".join(sorted(slot["link_kinds"]))
-            confidence = 10 + 25 + 15 + 20
+            confidence = 25 + 15 + 20
             factors = [
                 {"factor": "shared link", "weight": 25, "detail": link_detail},
                 {"factor": "file referenced", "weight": 15,
@@ -382,7 +375,7 @@ class ExternalTransferSequenceRule(Rule):
                      f"{earliest_upload.isoformat()} (within 24h window)"
                  )},
             ]
-            if facts.all_verified:
+            if facts.supporting_verified([m for m in facts.artifacts if m.id in slot["artifact_ids"]]):
                 factors.append(
                     {"factor": "all contributing evidence verified",
                      "weight": 10,
@@ -396,7 +389,7 @@ class ExternalTransferSequenceRule(Rule):
                     rule_id=self.rule_id,
                     rule_version=RULE_VERSION,
                     title=(
-                        "Potential external transfer sequence: "
+                        "Potential upload sequence: "
                         f"{', '.join(file_values)} then {dest_value}"
                     ),
                     summary=(
@@ -405,7 +398,7 @@ class ExternalTransferSequenceRule(Rule):
                         f"upload to {dest_value} at "
                         f"{earliest_upload.isoformat()} sharing {link_detail}."
                         f"{occurrences} The sequence is consistent with "
-                        "data movement off the host; it does not prove it."
+                        "a recorded upload sequence; destination ownership and actual data movement require independent validation."
                     ),
                     severity=self.severity,
                     confidence=min(confidence, 100),
@@ -437,12 +430,12 @@ class ExternalTransferSequenceRule(Rule):
         up_users = {m.normalized_value for m in up_members if m.artifact_type == "USERNAME"}
         f_users = {m.normalized_value for m in f_members if m.artifact_type == "USERNAME"}
         shared_users = up_users & f_users
-        if shared_users:
+        if len(shared_users) == 1:
             return ("user", sorted(shared_users)[0])
         up_hosts = {m.normalized_value for m in up_members if m.artifact_type == "HOSTNAME"}
         f_hosts = {m.normalized_value for m in f_members if m.artifact_type == "HOSTNAME"}
         shared_hosts = up_hosts & f_hosts
-        if shared_hosts:
+        if len(shared_hosts) == 1:
             return ("host", sorted(shared_hosts)[0])
         return None
 
@@ -454,10 +447,23 @@ RULES: list[Rule] = [
 ]
 
 
-def evaluate_all(facts: FactView) -> list[ProposedFinding]:
-    """Run every rule deterministically, sorted by rule then confidence."""
-    findings = []
+class Evaluation(list[ProposedFinding]):
+    def __init__(self):
+        super().__init__()
+        self.coverage: list[dict] = []
+
+
+def evaluate_all(facts: FactView, per_rule_limit: int = MAX_FINDINGS_PER_RULE) -> Evaluation:
+    """Explicit deterministic output limits; callers can request up to 200/rule."""
+    findings = Evaluation()
     for rule in RULES:
-        findings.extend(rule.evaluate(facts))
-    findings.sort(key=lambda f: (f.rule_id, -f.confidence, f.title))
+        proposed = rule.evaluate(facts)
+        proposed.sort(key=lambda f: (-f.confidence, f.title, f.inputs_key()))
+        emitted = proposed[:per_rule_limit]
+        findings.extend(emitted)
+        findings.coverage.append({"rule_id": rule.rule_id, "rule_version": RULE_VERSION,
+            "proposed_count": len(proposed), "emitted_count": len(emitted),
+            "omitted_count": max(len(proposed) - len(emitted), 0), "output_limit": per_rule_limit,
+            "evaluation_complete": True, **facts.rule_coverage.get(rule.rule_id, {})})
+    findings.sort(key=lambda f: (f.rule_id, -f.confidence, f.title, f.inputs_key()))
     return findings

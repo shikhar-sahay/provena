@@ -176,7 +176,7 @@ def test_normalize_rejects_invalid():
 
 
 def test_extractor_version_pinned():
-    assert EXTRACTOR_VERSION == "2"
+    assert EXTRACTOR_VERSION == "2.1"
     assert all(e.name for e in extractors.EXTRACTORS)
 
 

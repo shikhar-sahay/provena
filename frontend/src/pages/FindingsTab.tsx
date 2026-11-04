@@ -1,3 +1,4 @@
+import { RuleCoverageView } from "../components/RuleCoverageView";
 import { ParserCoverageView } from "../components/ParserCoverageView";
 // Findings tab: rule proposals with full Why provenance, human validation,
 // and investigator notes. Nothing is auto-validated.
@@ -7,7 +8,7 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { FileSearch, MessageSquarePlus } from "lucide-react";
 import { api } from "../api/client";
-import type { Finding, Investigation, Note } from "../api/client";
+import type { Finding, Investigation, Note, RuleCoverage } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -32,6 +33,7 @@ export default function FindingsTab({
   const { notify } = useToast();
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<RuleCoverage[]>([]);
   const [generating, setGenerating] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
 
@@ -45,6 +47,7 @@ export default function FindingsTab({
   const load = useCallback(async () => {
     try {
       setFindings(await api.listFindings(invId));
+      setCoverage(await api.findingCoverage(invId));
       setError(null);
     } catch (err) {
       setError(actionErrorMessage(err, "Could not load findings."));
@@ -56,10 +59,10 @@ export default function FindingsTab({
     void load();
   }, [load]);
 
-  async function onGenerate() {
+  async function onGenerate(limit = 25) {
     setGenerating(true);
     try {
-      const result = await api.generateFindings(invId);
+      const result = await api.generateFindings(invId, limit);
       notify(
         "success",
         result.new_count === 0
@@ -96,6 +99,8 @@ export default function FindingsTab({
         </Button>
       </div>
 
+      <RuleCoverageView coverage={coverage} />
+      {coverage.some((row) => row.omitted_count > 0 && row.output_limit < 200) && <Button disabled={generating} onClick={() => void onGenerate(200)}>Evaluate up to 200 results per rule</Button>}
       {findings.length === 0 ? (
         <EmptyState
           icon={<FileSearch size={22} />}

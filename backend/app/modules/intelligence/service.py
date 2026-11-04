@@ -264,6 +264,7 @@ def _process_evidence(
             locator["record_key"] = str(locator.get("record_key", unit.locator_key))
             # Store small deterministic positional cues, not unbounded scan content.
             words = list(re.finditer(r"\b(?:upload|uploaded|exfil|sent|transmit)\b", unit.scan_text, re.I))
+            locator["file_access"] = bool(re.search(r"\b(?:read|open|opened|access|accessed|copy|copied)\b", unit.scan_text, re.I))
             locator["upload_keyword_offsets"] = [m.start() for m in words[:100]]
             locator["coverage_status"] = units.coverage["status"]
             if extraction.span is not None:

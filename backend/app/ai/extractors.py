@@ -267,7 +267,7 @@ EXTRACTORS: list[Extractor] = [
     Extractor("keyvalue-pattern", "structured", _keyvalue_run),
 ]
 
-EXTRACTOR_VERSION = "2"
+EXTRACTOR_VERSION = "2.1"
 
 
 def extract_all(unit: SourceUnit) -> list[tuple[Extractor, Extraction]]:

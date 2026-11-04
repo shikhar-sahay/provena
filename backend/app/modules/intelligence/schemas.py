@@ -150,6 +150,7 @@ class FindingRead(BaseModel):
 class FindingGenerateResult(BaseModel):
     findings: list[FindingRead]
     new_count: int
+    rule_coverage: list[dict] = []
 
 
 class FindingReview(BaseModel):

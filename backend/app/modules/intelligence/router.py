@@ -260,14 +260,16 @@ def _to_finding_read(db: Session, finding) -> FindingRead:
 @router.post("/findings/generate", response_model=FindingGenerateResult)
 def generate_findings(
     investigation_id: int,
+    per_rule_limit: int = Query(default=25, ge=1, le=200),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     inv = inv_service.get_investigation(db, investigation_id)
     inv = reasoning.ensure_finding_produce(db, inv, user)
-    findings, created = reasoning.generate_findings(db, inv, user)
+    findings, created = reasoning.generate_findings(db, inv, user, per_rule_limit=per_rule_limit)
     return FindingGenerateResult(
-        findings=[_to_finding_read(db, item) for item in findings], new_count=created
+        findings=[_to_finding_read(db, item) for item in findings], new_count=created,
+        rule_coverage=db.info.pop("finding_coverage", []),
     )
 
 
@@ -283,6 +285,11 @@ def list_findings(
     inv = _investigation(db, investigation_id, user)
     status_filter = FindingStatus(status) if status else None
     return [_to_finding_read(db, item) for item in reasoning.list_findings(db, inv, status_filter)]
+
+
+@router.get("/findings/coverage", response_model=list[dict])
+def finding_coverage(investigation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return reasoning.latest_rule_coverage(db, _investigation(db, investigation_id, user))
 
 
 @router.get("/findings/{finding_id}", response_model=FindingRead)

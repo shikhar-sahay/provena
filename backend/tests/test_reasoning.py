@@ -74,7 +74,7 @@ def test_findings_generate_with_why_data(client, investigator, storage_dir):
         f"/api/investigations/{inv['id']}/analysis/findings/{media['id']}",
         headers=auth_headers(token),
     ).json()
-    assert detail["rule_version"] == "1"
+    assert detail["rule_version"] == "2"
     assert detail["reviewer_username"] is None
 
 
