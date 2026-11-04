@@ -1,3 +1,4 @@
+import { ParserCoverageView } from "../components/ParserCoverageView";
 // Findings tab: rule proposals with full Why provenance, human validation,
 // and investigator notes. Nothing is auto-validated.
 
@@ -244,6 +245,9 @@ function FindingDetail({
       </div>
 
       <p className="text-sm">{finding.summary}</p>
+      {finding.support_snapshot && Object.entries(finding.support_snapshot.coverage).map(([id, coverage]) => (
+        <ParserCoverageView key={id} coverage={coverage} label={`Evidence #${id}`} />
+      ))}
 
       <section>
         <h3 className="text-xs font-semibold tracking-wide text-ink2 uppercase">Why this was proposed</h3>

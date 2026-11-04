@@ -137,7 +137,8 @@ export default function CorrelationsTab({ invId }: { invId: number }) {
                 )}
                 <p className="mt-2 text-xs text-ink3">
                   Shared value across {correlation.evidence_count} evidence items. This is an
-                  observed recurrence, not a conclusion.
+                  observed recurrence, not a conclusion. {correlation.is_current === false ? "Historical support snapshot." : "Current immutable support snapshot."}
+                  {correlation.semantic_key && <span className="block break-all font-mono">Support: {correlation.semantic_key}</span>}
                 </p>
               </div>
             )}

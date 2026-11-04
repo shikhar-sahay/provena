@@ -293,3 +293,28 @@ total pages, processed pages, skipped-page reasons and unprocessed page count.
 Invalid UTF-8 replacements are explicit. Image content is not OCR-processed.
 PDF decoding still uses an in-process library, not a hostile-document sandbox.
 Historical outcomes without coverage remain unknown, not retroactively complete.
+
+
+## M2 stable support and review history
+
+Each run records its exact artifact memberships. Current reasoning uses only
+artifacts emitted by the latest completed attempt for each item, under the
+current parser/extractor version and M1 integrity gate. Historical artifacts,
+findings and reports remain addressable. Failed or rejected newer attempts do
+not silently substitute older extraction results.
+
+Correlations are immutable support snapshots: a semantic SHA-256 identifies the
+algorithm version, entity type/value and sorted supporting artifact identities.
+An artifact identity includes its evidence ID, input digest, source occurrence,
+extractor name and parser/extractor version. Database sequence allocation is not
+part of the semantic hash. Changed support creates a new correlation snapshot;
+old memberships are never deleted or rewritten. A current flag selects the
+latest view without destroying historical references.
+
+Finding keys cover rule/version, semantic supporting artifacts, explicit claim,
+score/factors and parser coverage. Identical proposals reuse accepted/rejected
+rows. Changed support or versions require a new pending decision. Legacy rows
+are retained, never retroactively assigned new provenance or approval. Reports
+snapshot support and coverage alongside the original finding. PostgreSQL
+investigation row locks serialize analysis, correlation rebuilds, proposals and
+report numbering. These are transaction controls, not a distributed job queue.

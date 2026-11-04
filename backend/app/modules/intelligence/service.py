@@ -31,6 +31,7 @@ from app.modules.evidence.service import ensure_mutable
 from app.modules.intelligence.models import (
     AnalysisRun,
     AnalysisRunEvidence,
+    AnalysisRunArtifact,
     Artifact,
     ArtifactType,
     Correlation,
@@ -267,7 +268,7 @@ def _process_evidence(
             locator["coverage_status"] = units.coverage["status"]
             if extraction.span is not None:
                 locator["span"] = [extraction.span[0], extraction.span[1]]
-            _get_or_create_artifact(
+            artifact = _get_or_create_artifact(
                 db,
                 inv_id=inv.id,
                 evidence_id=evidence.id,
@@ -281,6 +282,9 @@ def _process_evidence(
                 locator_override=locator,
                 extractor=extractor,
             )
+            if db.get(AnalysisRunArtifact, (run.id, artifact.id)) is None:
+                db.add(AnalysisRunArtifact(run_id=run.id, artifact_id=artifact.id))
+                db.flush()
             count += 1
     if units.coverage["status"] == "partial":
         return RunEvidenceStatus.PARTIAL.value, "Parser or extraction coverage is partial; inspect coverage warnings.", count
@@ -296,41 +300,35 @@ def _rebuild_correlations(db: Session, inv: Investigation) -> int:
     """
     from app.modules.intelligence.models import ArtifactType
 
-    existing = {(c.artifact_type, c.normalized_value): c for c in db.execute(
+    from app.modules.intelligence.provenance import active_artifacts, artifact_identity, semantic_hash
+    db.flush()
+    existing = {c.semantic_key: c for c in db.execute(
         select(Correlation).where(Correlation.investigation_id == inv.id)
-    ).scalars()}
-    for correlation in existing.values():
-        correlation.evidence_count = 0
-    rows = db.execute(
-        select(Artifact.id, Artifact.evidence_id, Artifact.artifact_type, Artifact.normalized_value)
-        .join(Evidence, Artifact.evidence_id == Evidence.id)
-        .where(
-            Evidence.registration_status == "ready", Evidence.integrity_status == "verified",
-            Artifact.input_sha256 == Evidence.sha256,
-            Artifact.investigation_id == inv.id,
-            Artifact.artifact_type != ArtifactType.TIMESTAMP.value,
-        )
-        .order_by(Artifact.id)
-    ).all()
-    built = correlate_engine.build_correlations(
-        [(r[0], r[1], r[2], r[3]) for r in rows]
-    )
+    ).scalars() if c.semantic_key is not None}
+    for correlation in db.execute(select(Correlation).where(Correlation.investigation_id == inv.id)).scalars():
+        correlation.is_current = False
+    artifacts = active_artifacts(db, inv.id)
+    identities = {a.id: artifact_identity(a) for a in artifacts}
+    built = correlate_engine.build_correlations([
+        (a.id, a.evidence_id, a.artifact_type, a.normalized_value) for a in artifacts
+        if a.artifact_type != ArtifactType.TIMESTAMP.value])
     for entry in built:
-        correlation = existing.get((entry["artifact_type"], entry["normalized_value"]))
+        key = semantic_hash({'version': 'shared-value-2', 'type': entry['artifact_type'],
+            'value': entry['normalized_value'],
+            'support': sorted(identities[aid] for aid in entry['artifact_ids'])})
+        correlation = existing.get(key)
         if correlation is None:
             correlation = Correlation(investigation_id=inv.id, correlation_type="shared_value",
+                semantic_key=key, is_current=True,
                 artifact_type=entry["artifact_type"], normalized_value=entry["normalized_value"],
-                evidence_count=0, artifact_count=0)
+                evidence_count=len(entry['evidence_ids']), artifact_count=len(entry['artifact_ids']))
             db.add(correlation)
             db.flush()
+            for artifact_id in entry['artifact_ids']:
+                db.add(CorrelationArtifact(correlation_id=correlation.id, artifact_id=artifact_id))
         else:
-            db.execute(CorrelationArtifact.__table__.delete().where(CorrelationArtifact.correlation_id == correlation.id))
-        correlation.evidence_count = len(entry["evidence_ids"])
-        correlation.artifact_count = len(entry["artifact_ids"])
-        for artifact_id in entry["artifact_ids"]:
-            db.add(
-                CorrelationArtifact(correlation_id=correlation.id, artifact_id=artifact_id)
-            )
+            correlation.is_current = True
+
     return len(built)
 
 
@@ -538,7 +536,7 @@ def get_artifact(db: Session, inv: Investigation, artifact_id: int) -> Artifact 
 def list_correlations(db: Session, inv: Investigation) -> list[Correlation]:
     stmt = (
         select(Correlation)
-        .where(Correlation.investigation_id == inv.id, Correlation.evidence_count >= 2)
+        .where(Correlation.investigation_id == inv.id, Correlation.is_current.is_(True), Correlation.evidence_count >= 2)
         .order_by(Correlation.artifact_type, Correlation.normalized_value)
     )
     return list(db.execute(stmt).scalars().all())

@@ -356,6 +356,8 @@ export interface CorrelationEvidenceItem {
 }
 
 export interface Correlation {
+  semantic_key?: string | null;
+  is_current?: boolean;
   id: number;
   investigation_id: number;
   correlation_type: string;
@@ -389,6 +391,7 @@ export interface CorrelationDetail extends Correlation {
 export type FindingStatus = "pending_review" | "accepted" | "rejected";
 
 export interface Finding {
+  support_snapshot?: { identity_version: string; coverage: Record<string, ParserCoverage> } | null;
   support_current?: boolean;
   id: number;
   investigation_id: number;

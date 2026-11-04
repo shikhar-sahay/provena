@@ -85,6 +85,8 @@ class CorrelationEvidence(BaseModel):
 
 
 class CorrelationRead(BaseModel):
+    semantic_key: str | None = None
+    is_current: bool = False
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -118,6 +120,7 @@ class CorrelationDetailRead(CorrelationRead):
 
 
 class FindingRead(BaseModel):
+    support_snapshot: dict | None = None
     support_current: bool = False
     model_config = ConfigDict(from_attributes=True)
 

@@ -59,5 +59,37 @@ def test_postgres_parallel_registration_retry(tmp_path, monkeypatch):
             assert db.scalar(select(func.count()).select_from(Evidence).where(Evidence.investigation_id == inv_id)) == 1
             assert db.scalar(select(func.count()).select_from(CustodyEvent).where(
                 CustodyEvent.evidence_id == ids[0], CustodyEvent.action == "registered")) == 1
+        # Concurrent analytical passes must serialize identities and proposals,
+        # not merely succeed on SQLite's different locking model.
+        from app.modules.evidence.service import verify_evidence
+        from app.modules.intelligence.service import start_run
+        from app.modules.intelligence.reasoning import generate_findings
+        from app.modules.intelligence.models import Correlation, Finding
+        with Session(engine) as db:
+            actor, investigation = db.get(User, uid), db.get(Investigation, inv_id)
+            evidence_ids = [ids[0]]
+            for filename in ["second.log", "third.log"]:
+                evidence_ids.append(register_evidence(db, investigation, title="Synthetic", description="",
+                    evidence_type=EvidenceType.LOG, source="Synthetic CI", acquired_at=None,
+                    filename=filename, content_type="text/plain", stream=io.BytesIO(b"user=synthetic\n"),
+                    actor=actor).id)
+            for eid in evidence_ids:
+                verify_evidence(db, investigation, db.get(Evidence, eid), actor)
+        barrier = Barrier(2)
+        def analyse():
+            with Session(engine) as db:
+                actor, investigation = db.get(User, uid), db.get(Investigation, inv_id)
+                barrier.wait(timeout=15)
+                run = start_run(db, investigation, evidence_ids, actor)
+                assert run.status == "completed"
+                findings, _ = generate_findings(db, investigation, actor)
+                return [f.id for f in findings]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(analyse) for _ in range(2)]
+            findings = [future.result(timeout=60) for future in futures]
+        assert findings[0] == findings[1] and findings[0]
+        with Session(engine) as db:
+            assert db.scalar(select(func.count()).select_from(Finding).where(Finding.investigation_id == inv_id)) == 1
+            assert db.scalar(select(func.count()).select_from(Correlation).where(Correlation.investigation_id == inv_id)) == 1
     finally:
         engine.dispose()

@@ -32,6 +32,9 @@ class ArtifactFact:
     locator_key: str
     context: str
     span: tuple[int, int] | None = None
+    support_key: str | None = None
+    input_sha256: str | None = None
+    upload_keyword_offsets: tuple[int, ...] | None = None
 
 
 @dataclass
@@ -48,14 +51,17 @@ class ProposedFinding:
     correlation_ids: list[int]
     recommendations: list[str]
 
+    support_keys: list[str] = field(default_factory=list)
+    coverage: dict = field(default_factory=dict)
+
     def inputs_key(self) -> str:
         canonical = json.dumps(
             {
                 "rule_id": self.rule_id,
                 "rule_version": self.rule_version,
-                "evidence_ids": sorted(self.evidence_ids),
-                "artifact_ids": sorted(self.artifact_ids),
-                "correlation_ids": sorted(self.correlation_ids),
+                "support": sorted(self.support_keys) if self.support_keys else sorted(self.artifact_ids),
+                "claim": [self.title, self.summary, self.severity, self.confidence, self.factors],
+                "coverage": self.coverage,
             },
             sort_keys=True,
         )

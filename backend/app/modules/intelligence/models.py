@@ -20,7 +20,7 @@ import enum
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -120,6 +120,12 @@ class AnalysisRunEvidence(Base):
     run: Mapped[AnalysisRun] = relationship(back_populates="evidence_outcomes")
 
 
+class AnalysisRunArtifact(Base):
+    __tablename__ = "analysis_run_artifacts"
+    run_id: Mapped[int] = mapped_column(ForeignKey("analysis_runs.id", ondelete="CASCADE"), primary_key=True)
+    artifact_id: Mapped[int] = mapped_column(ForeignKey("artifacts.id", ondelete="RESTRICT"), primary_key=True)
+
+
 class Artifact(Base):
     __tablename__ = "artifacts"
     __table_args__ = (
@@ -166,8 +172,8 @@ class Correlation(Base):
     __tablename__ = "correlations"
     __table_args__ = (
         UniqueConstraint(
-            "investigation_id", "artifact_type", "normalized_value",
-            name="uq_correlation_value",
+            "investigation_id", "semantic_key",
+            name="uq_correlation_semantic",
         ),
     )
 
@@ -175,6 +181,8 @@ class Correlation(Base):
     investigation_id: Mapped[int] = mapped_column(
         ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    semantic_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     correlation_type: Mapped[str] = mapped_column(String(32), nullable=False, default="shared_value")
     artifact_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     normalized_value: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
@@ -235,7 +243,8 @@ class Finding(Base):
     evidence_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
     artifact_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
     correlation_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
-    # Stable dedup identity over rule version plus sorted inputs.
+    support_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Stable semantic identity, independent of database sequence allocation.
     inputs_key: Mapped[str] = mapped_column(String(64), nullable=False)
     recommendations: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(

@@ -62,12 +62,8 @@ def ensure_finding_review(db: Session, inv: Investigation | None, user: User) ->
 
 
 def build_facts(db: Session, inv: Investigation) -> FactView:
-    artifacts = db.execute(
-        select(Artifact).join(Evidence, Evidence.id == Artifact.evidence_id).where(
-            Artifact.investigation_id == inv.id, Evidence.registration_status == "ready",
-            Evidence.integrity_status == "verified", Artifact.input_sha256 == Evidence.sha256,
-        ).order_by(Artifact.id)
-    ).scalars().all()
+    from app.modules.intelligence.provenance import active_artifacts, artifact_identity
+    artifacts = active_artifacts(db, inv.id)
     evidence_numbers = {
         row.id: row.evidence_number
         for row in db.execute(
@@ -91,7 +87,10 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
                 evidence_number=evidence_numbers.get(a.evidence_id, f"#{a.evidence_id}"),
                 artifact_type=a.artifact_type,
                 normalized_value=a.normalized_value,
-                locator_key=a.source_key,
+                locator_key=(a.locator or {}).get("record_key", a.source_key),
+                support_key=artifact_identity(a),
+                input_sha256=a.input_sha256,
+                upload_keyword_offsets=tuple((a.locator or {}).get("upload_keyword_offsets", [])),
                 context=a.context,
                 span=span,
             )
@@ -99,18 +98,10 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
     correlations = {
         (c.artifact_type, c.normalized_value): c.id
         for c in db.execute(
-            select(Correlation).where(Correlation.investigation_id == inv.id)
+            select(Correlation).where(Correlation.investigation_id == inv.id, Correlation.is_current.is_(True))
         ).scalars().all()
     }
-    verified = db.execute(
-        select(func.count())
-        .select_from(Evidence)
-        .where(
-            Evidence.investigation_id == inv.id,
-            Evidence.integrity_status != "verified",
-        )
-    ).scalar_one() == 0
-    return FactView(artifacts=facts, correlations=correlations, all_verified=verified)
+    return FactView(artifacts=facts, correlations=correlations, all_verified=True)
 
 
 def recheck_support(db: Session, inv: Investigation, user: User, purpose: str) -> None:
@@ -132,6 +123,18 @@ def recheck_support(db: Session, inv: Investigation, user: User, purpose: str) -
 def support_current(db: Session, finding: Finding) -> bool:
     if not finding.artifact_ids or not finding.evidence_ids:
         return False
+    from app.modules.intelligence.provenance import active_artifacts, artifact_identity, coverage_for_artifacts
+    if finding.rule_version != rules.RULE_VERSION or not finding.support_snapshot:
+        return False
+    active = {a.id: a for a in active_artifacts(db, finding.investigation_id)}
+    if any(aid not in active for aid in finding.artifact_ids):
+        return False
+    coverage = coverage_for_artifacts(db, [active[aid] for aid in finding.artifact_ids])
+    if json.dumps(coverage, sort_keys=True) != json.dumps(finding.support_snapshot.get("coverage", {}), sort_keys=True):
+        return False
+    for item in finding.support_snapshot.get("artifacts", []):
+        if item["id"] not in active or artifact_identity(active[item["id"]]) != item["semantic_key"]:
+            return False
     artifacts = db.execute(select(Artifact).join(Evidence, Evidence.id == Artifact.evidence_id).where(
         Artifact.id.in_(finding.artifact_ids), Artifact.investigation_id == finding.investigation_id,
         Artifact.input_sha256 == Evidence.sha256, Evidence.integrity_status == "verified",
@@ -149,10 +152,29 @@ def generate_findings(
     Returns (all findings sorted by confidence, new count). Human decisions
     (accepted/rejected) are never overwritten.
     """
+    db.execute(select(Investigation.id).where(Investigation.id == inv.id).with_for_update()).scalar_one()
     recheck_support(db, inv, user, "finding_generation")
+    from app.modules.intelligence.provenance import active_artifacts, artifact_identity, coverage_for_artifacts
+    from app.modules.intelligence.service import _rebuild_correlations
+    _rebuild_correlations(db, inv)
+    db.flush()
     proposed = rules.evaluate_all(build_facts(db, inv))
+    source = {a.id: a for a in active_artifacts(db, inv.id)}
     created = 0
     for item in proposed:
+        item.artifact_ids = sorted(set(item.artifact_ids))
+        item.evidence_ids = sorted(set(item.evidence_ids))
+        item.correlation_ids = sorted(set(item.correlation_ids))
+        item.support_keys = sorted({artifact_identity(source[aid]) for aid in item.artifact_ids})
+        coverage = coverage_for_artifacts(db, [source[aid] for aid in item.artifact_ids])
+        item.coverage = coverage
+        snapshot = {"identity_version": "2", "artifacts": [
+            {"id": aid, "semantic_key": artifact_identity(source[aid]),
+             "evidence_id": source[aid].evidence_id, "input_sha256": source[aid].input_sha256,
+             "extractor_version": source[aid].extractor_version, "locator": source[aid].locator}
+            for aid in sorted(set(item.artifact_ids))], "coverage": coverage,
+            "correlations": [{"id": cid, "semantic_key": db.get(Correlation, cid).semantic_key}
+                             for cid in item.correlation_ids]}
         existing = db.execute(
             select(Finding).where(
                 Finding.investigation_id == inv.id,
@@ -186,6 +208,7 @@ def generate_findings(
                 artifact_ids=list(item.artifact_ids),
                 correlation_ids=list(item.correlation_ids),
                 inputs_key=item.inputs_key(),
+                support_snapshot=snapshot,
                 recommendations=list(item.recommendations),
                 status=FindingStatus.PENDING_REVIEW.value,
                 generated_by_run_id=run_id,
@@ -349,6 +372,7 @@ def generate_report(
 
     full = inv_service.get_investigation(db, inv.id)
     assert full is not None
+    db.execute(select(Investigation.id).where(Investigation.id == full.id).with_for_update()).scalar_one()
     recheck_support(db, full, user, "report")
     evidence_items = ev_service.list_evidence(db, full)
     excluded = [f.id for f in list_findings(db, full) if f.status == FindingStatus.ACCEPTED.value and not support_current(db, f)]
@@ -388,6 +412,7 @@ def generate_report(
                 "id": finding.id,
                 "rule_id": finding.rule_id,
                 "rule_version": finding.rule_version,
+                "support_snapshot": finding.support_snapshot,
                 "title": finding.title,
                 "summary": finding.summary,
                 "severity": finding.severity,
