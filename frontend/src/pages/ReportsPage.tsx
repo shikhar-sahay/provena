@@ -1,3 +1,4 @@
+import { RuleCoverageView } from "../components/RuleCoverageView";
 // Reports preserve historical snapshots. New M2 prose is deterministic.
 
 import { useCallback, useEffect, useState } from "react";
@@ -180,6 +181,7 @@ function ReportView({ report }: { report: Report }) {
         <p className="text-xs text-ink3">{content.support_policy ?? "Historical report: exact-input provenance policy was not recorded. This snapshot is preserved as originally generated."}</p>
 
         {presentation.mode === "ai_enhanced" && <p role="alert" className="text-sm text-warning-ink">Historical model prose has not been revalidated under M2. Consult the structured accepted findings and their original support.</p>}
+        <ReportSection title="Rule evaluation coverage at report generation"><RuleCoverageView coverage={content.rule_coverage ?? []} /></ReportSection>
         <ReportSection title="Executive summary">
           <p className="whitespace-pre-wrap text-ink2">{presentation.executiveSummary}</p>
           <p className="mt-1 text-xs text-ink3">

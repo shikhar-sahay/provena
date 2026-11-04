@@ -43,8 +43,8 @@ def active_artifacts(db, investigation_id: int) -> list[Artifact]:
         .order_by(Artifact.id)).scalars().unique())
 
 
-def coverage_for_artifacts(db, artifacts) -> dict[int, dict]:
+def coverage_for_artifacts(db, artifacts) -> dict[str, dict]:
     evidence_ids = {a.evidence_id for a in artifacts}
-    return {row.evidence_id: row.coverage or {'status': 'unknown'} for row in db.execute(
+    return {str(row.evidence_id): row.coverage or {'status': 'unknown'} for row in db.execute(
         select(AnalysisRunEvidence).where(AnalysisRunEvidence.evidence_id.in_(evidence_ids))
         .order_by(AnalysisRunEvidence.id)).scalars()}

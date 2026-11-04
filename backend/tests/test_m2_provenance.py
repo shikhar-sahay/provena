@@ -63,3 +63,20 @@ def test_semantic_finding_key_ignores_database_sequences():
     assert first.inputs_key() == second.inputs_key()
     second.support_keys = ['changed-support']
     assert first.inputs_key() != second.inputs_key()
+
+def test_support_coverage_keys_survive_json_with_two_digit_evidence_ids(client, investigator, storage_dir):
+    token = login(client, 'investigator')
+    inv = make_investigation(client, token)
+    base = f"/api/investigations/{inv['id']}"
+    headers = auth_headers(token)
+    ids = []
+    for i in range(10):
+        item = upload(client, token, inv['id'], content=b'user=synthetic\n', filename=f'{i}.log').json()
+        client.post(f"{base}/evidence/{item['id']}/verify", headers=headers)
+        ids.append(item['id'])
+    client.post(f'{base}/analysis/runs', headers=headers, json={'evidence_ids': ids})
+    first = client.post(f'{base}/analysis/findings/generate', headers=headers).json()
+    assert first['findings'] and all(f['support_current'] for f in first['findings'])
+    second = client.post(f'{base}/analysis/findings/generate', headers=headers).json()
+    assert second['new_count'] == 0
+    assert all(f['support_current'] for f in second['findings'])

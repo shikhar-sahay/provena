@@ -130,7 +130,7 @@ no result claims to describe unexamined content.
 
 ## M2 timestamp fidelity
 
-Extractor 2.2/parser 2.1 preserve timestamp originals, explicit source offsets,
+Extractor 2.3/parser 2.2 preserve timestamp originals, explicit source offsets,
 normalization version and precision in artifact locators and report support.
 Known offsets normalize to UTC. Naive wall times, DST folds/gaps without an
 explicit offset, and RFC 3339 negative-zero offsets remain timezone-unknown;
@@ -154,3 +154,17 @@ failure coverage when all pages fail. Path length is limited to 1,000 codepoints
 omitted deeper JSON paths are reported. CSV cells use column ordinals for
 identity, including duplicate headers. The CSV reader's field-size limit also
 applies; exceeding it rejects the parse explicitly.
+
+
+Extracted values are limited to 500 codepoints. Overlong structured tokens are
+not shortened into fabricated identifiers. Quoted whitespace is reflected in
+source span adjustments; a structured field represents its whole decoded value.
+These semantic corrections are versioned by extractor 2.3.
+
+
+Parser 2.2 uses pypdf's public context-local resource configuration (minimum
+6.21.4): 2 MiB decoded streams, 10 MiB total page content, bounded object/page
+structures and form invocations. Decoder/structure failures become explicit
+rejected or skipped-page outcomes. The configuration is restored after each
+parse, including exceptions. These bounds reduce resource exhaustion risk;
+they are not an operating-system memory or time sandbox for hostile PDFs.

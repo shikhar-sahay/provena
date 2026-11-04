@@ -127,3 +127,32 @@ def test_all_failed_pdf_pages_keep_failure_coverage(monkeypatch):
         parsers.parse_pdf(b'synthetic')
     assert failure.value.coverage['total_pages'] == 2
     assert len(failure.value.coverage['skipped_pages']) == 2
+
+def test_keyvalue_spans_and_overlong_tokens_are_not_fabricated():
+    from app.ai.normalize import normalize
+    unit = parsers.parse_log(b'user="  alice  " ip=192.0.2.1')[0]
+    users = [x for _, x in extractors.extract_all(unit) if x.artifact_type == 'USERNAME']
+    assert users and all(unit.scan_text[x.span[0]:x.span[1]] == x.raw_value for x in users)
+    unit = parsers.parse_log(('path=/' + 'x' * 600).encode())[0]
+    assert not [x for _, x in extractors.extract_all(unit) if x.artifact_type == 'FILE_PATH']
+    unit = parsers.parse_csv(b'username\nalice extra\n')[0]
+    assert not [x for _, x in extractors.extract_all(unit) if x.artifact_type == 'USERNAME' and normalize('USERNAME', x.raw_value)]
+
+def test_pdf_decoder_limits_are_context_local_and_enforced(monkeypatch):
+    import io, zlib
+    from pypdf import PdfWriter, get_configuration
+    from pypdf.generic import EncodedStreamObject, NameObject
+    before = get_configuration()
+    monkeypatch.setattr(parsers, 'MAX_PDF_STREAM_BYTES', 128)
+    stream = EncodedStreamObject()
+    stream[NameObject('/Filter')] = NameObject('/FlateDecode')
+    stream._data = zlib.compress(b'BT ' + b' ' * 1024 + b' ET')
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=100, height=100)
+    page[NameObject('/Contents')] = stream
+    data = io.BytesIO()
+    writer.write(data)
+    with pytest.raises(parsers.NoTextError) as failed:
+        parsers.parse_pdf(data.getvalue())
+    assert failed.value.coverage['skipped_pages'][0]['page'] == 1
+    assert get_configuration() == before

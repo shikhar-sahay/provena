@@ -52,7 +52,7 @@ WORKSTATION_RE = re.compile(r"(?<![\w.-])[A-Za-z]{1,12}-\d{1,4}\b")
 USB_TOKEN_RE = re.compile(r"\b[A-Z0-9-]*USB[A-Z0-9-]*\b", re.IGNORECASE)
 PORT_RE = re.compile(r"([\w.\]-]+):(\d{2,5})\b")
 KEYVALUE_RE = re.compile(
-    r"(?:^|[\s,;])([$A-Za-z_][\w.$\[\]-]*)\s*[:=]\s*(?:\"([^\"]{1,100})\"|'([^']{1,100})'|([^\s,;\"']{1,100}))"
+    r"(?:^|[\s,;])([$A-Za-z_][\w.$\[\]-]*)\s*[:=]\s*(?:\"([^\"]{1,500})\"|'([^']{1,500})'|([^\s,;\"']{1,500}))(?![^\s,;\"'])"
 )
 
 # Structured field names mapped to artifact types. Only these keys classify
@@ -135,7 +135,9 @@ def _key_aware_extractions(text: str) -> list[tuple[str, str, tuple[int, int] | 
         key = match.group(1)
         group_index = next(i for i, g in enumerate(match.groups()[1:], start=2) if g is not None)
         value = match.group(group_index).strip()
-        span = match.span(group_index)
+        start, end = match.span(group_index)
+        raw = match.group(group_index)
+        span = (start + len(raw) - len(raw.lstrip()), end - (len(raw) - len(raw.rstrip())))
         if not value:
             continue
         artifact_type = KEY_MAP.get(_field_name(key))
@@ -241,13 +243,18 @@ def _email_username_run(unit: SourceUnit):
 
 
 def _keyvalue_run(unit: SourceUnit):
-    if unit.field_name is None:
-        yield from _key_aware_extractions(unit.scan_text)
-    else:
-        prefix = f"{unit.field_name}="
-        for typ, value, span in _key_aware_extractions(prefix + unit.scan_text):
-            if span and span[0] >= len(prefix):
-                yield typ, value, (span[0] - len(prefix), span[1] - len(prefix))
+    yield from _key_aware_extractions(unit.scan_text)
+    if unit.field_name is not None and _field_name(unit.field_name) in KEY_MAP:
+        # A structured field denotes its whole decoded scalar, not the first
+        # whitespace-delimited token or a silently shortened prefix.
+        prefix = f'{unit.field_name}="'
+        text = unit.scan_text
+        for typ, value, span in _key_aware_extractions(prefix + text + '"'):
+            if span and len(prefix) <= span[0] and span[1] <= len(prefix) + len(text):
+                start, end = span[0] - len(prefix), span[1] - len(prefix)
+                if text[:start].strip() or text[end:].strip():
+                    continue
+                yield typ, value, (start, end)
 
 
 EXTRACTORS: list[Extractor] = [
@@ -267,7 +274,7 @@ EXTRACTORS: list[Extractor] = [
     Extractor("keyvalue-pattern", "structured", _keyvalue_run),
 ]
 
-EXTRACTOR_VERSION = "2.2"
+EXTRACTOR_VERSION = "2.3"
 
 
 def extract_all(unit: SourceUnit) -> list[tuple[Extractor, Extraction]]:

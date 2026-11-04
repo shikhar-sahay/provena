@@ -6,7 +6,7 @@ import io
 import json
 from dataclasses import dataclass
 
-PARSER_VERSION = "2.1"
+PARSER_VERSION = "2.2"
 MAX_LINE_CHARS = 10_000
 MAX_TEXT_BYTES = MAX_JSON_BYTES = 10 * 1024 * 1024
 MAX_JSON_DEPTH = 20
@@ -14,6 +14,8 @@ MAX_JSON_LEAVES = MAX_SOURCE_UNITS = 50_000
 MAX_SCAN_CHARS = 2_000_000
 MAX_PDF_BYTES = 25 * 1024 * 1024
 MAX_PDF_PAGES = 50
+MAX_PDF_STREAM_BYTES = 2 * 1024 * 1024
+MAX_PDF_TOTAL_STREAM_BYTES = 10 * 1024 * 1024
 MIN_MEANINGFUL_TEXT_CHARS = 20
 MAX_CONTEXT_CHARS = 280
 
@@ -195,6 +197,23 @@ def parse_json(data: bytes) -> ParsedSource:
 
 
 def parse_pdf(data: bytes) -> ParsedSource:
+    from pypdf import apply_configuration
+    # Public context-local limits, never process-global monkeypatches.
+    with apply_configuration(maximum_declared_stream_length=MAX_PDF_BYTES,
+            array_based_stream_maximum_output_length=MAX_PDF_STREAM_BYTES,
+            zlib_maximum_output_length=MAX_PDF_STREAM_BYTES, lzw_maximum_output_length=MAX_PDF_STREAM_BYTES,
+            run_length_maximum_output_length=MAX_PDF_STREAM_BYTES, brotli_maximum_output_length=MAX_PDF_STREAM_BYTES,
+            jbig2_maximum_output_length=MAX_PDF_STREAM_BYTES, image_maximum_buffer_size=MAX_PDF_STREAM_BYTES,
+            stream_decoding_work_maximum_length=MAX_PDF_TOTAL_STREAM_BYTES,
+            stream_parsing_work_maximum_count=100_000, stream_filters_maximum_length=8,
+            page_tree_maximum_entries=1_000, page_tree_maximum_depth=30,
+            page_tree_maximum_page_entries=20_000, dictionary_maximum_element_count=10_000,
+            array_maximum_element_count=50_000, xform_maximum_invocations_per_extraction=10,
+            jbig2dec_binary=None, disable_legacy_handling=True):
+        return _parse_pdf(data)
+
+
+def _parse_pdf(data: bytes) -> ParsedSource:
     if len(data) > MAX_PDF_BYTES:
         raise ParserError("PDF exceeds the size limit for analysis.")
     from pypdf import PdfReader
@@ -208,15 +227,25 @@ def parse_pdf(data: bytes) -> ParsedSource:
                         skipped_pages=[], unprocessed_page_count=max(total - MAX_PDF_PAGES, 0))
     if total > MAX_PDF_PAGES:
         out.warn("PDF page budget reached; pages after the declared limit were not examined.")
+    decoded_total = 0
+    out.coverage["limits"].update(pdf_stream_bytes=MAX_PDF_STREAM_BYTES, pdf_total_page_stream_bytes=MAX_PDF_TOTAL_STREAM_BYTES)
     for number in range(1, min(total, MAX_PDF_PAGES) + 1):
         try:
             page = reader.pages[number - 1]
-            # Bound the decoded content stream before text extraction. This does not
-            # sandbox pypdf's object parsing; hostile PDFs still need operational limits.
             contents = page.get_contents()
-            if contents is not None and len(contents.get_data()) > MAX_TEXT_BYTES:
+            content_size = len(contents.get_data()) if contents is not None else 0
+            if content_size > MAX_PDF_STREAM_BYTES:
                 raise ValueError("Page content budget exceeded")
+            decoded_total += content_size
+            if decoded_total > MAX_PDF_TOTAL_STREAM_BYTES:
+                out.warn("Total PDF page content budget reached; remaining pages were not examined.")
+                out.coverage["unprocessed_page_count"] += min(total, MAX_PDF_PAGES) - number + 1
+                if not out:
+                    raise NoTextError(NO_TEXT_MESSAGE, coverage=out.coverage)
+                return out
             text = page.extract_text() or ""
+        except NoTextError:
+            raise
         except Exception:
             out.warn("One or more PDF pages could not be extracted within supported limits.")
             out.coverage["skipped_pages"].append({"page": number, "reason": "Page extraction failed or content budget exceeded."})

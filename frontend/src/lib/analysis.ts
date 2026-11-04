@@ -78,6 +78,6 @@ function baseLocatorLabel(locator: Record<string, unknown>): string {
 export function locatorLabel(locator: Record<string, unknown>): string {
   const span = locator["span"];
   const range = Array.isArray(span) && span.length === 2 && span.every(Number.isInteger)
-    ? ` · characters [${span[0]}, ${span[1]})` : "";
+    ? ` Â· characters [${span[0]}, ${span[1]})` : "";
   return baseLocatorLabel(locator) + range;
 }

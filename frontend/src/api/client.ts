@@ -476,6 +476,7 @@ export interface Report {
 }
 
 export interface ReportContent {
+  rule_coverage?: RuleCoverage[];
   excluded_stale_finding_ids?: number[];
   support_policy?: string;
   investigation: {

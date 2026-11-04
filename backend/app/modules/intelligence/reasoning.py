@@ -160,7 +160,12 @@ def generate_findings(
     from app.modules.intelligence.service import _rebuild_correlations
     _rebuild_correlations(db, inv)
     db.flush()
-    proposed = rules.evaluate_all(build_facts(db, inv), per_rule_limit)
+    facts = build_facts(db, inv)
+    proposed = rules.evaluate_all(facts, per_rule_limit)
+    from app.modules.intelligence.provenance import semantic_hash
+    input_set_sha256 = semantic_hash(sorted(f.support_key for f in facts.artifacts if f.support_key))
+    for row in proposed.coverage:
+        row["input_set_sha256"] = input_set_sha256
     db.info["finding_coverage"] = proposed.coverage
     source = {a.id: a for a in active_artifacts(db, inv.id)}
     created = 0
