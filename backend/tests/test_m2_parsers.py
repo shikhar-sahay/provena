@@ -156,3 +156,24 @@ def test_pdf_decoder_limits_are_context_local_and_enforced(monkeypatch):
         parsers.parse_pdf(data.getvalue())
     assert failed.value.coverage['skipped_pages'][0]['page'] == 1
     assert get_configuration() == before
+
+def test_real_pdf_page_limit_reports_exact_omissions():
+    from tests.test_ai_pipeline import _pdf_builder
+    data = _pdf_builder()([[f'Synthetic page {i} with machine-readable user=synthetic'] for i in range(1,52)])
+    result = parsers.parse_pdf(data)
+    assert result.coverage['total_pages'] == 51
+    assert result.coverage['processed_pages'] == list(range(1,51))
+    assert result.coverage['unprocessed_page_count'] == 1
+    assert result.coverage['status'] == 'partial'
+
+
+@pytest.mark.parametrize('format_name,data,limit_name', [
+    ('txt', b'ip=192.0.2.1\n', 'MAX_TEXT_BYTES'),
+    ('csv', b'ip\n192.0.2.1\n', 'MAX_TEXT_BYTES'),
+    ('json', b'{"ip":"192.0.2.1"}', 'MAX_JSON_BYTES'),
+])
+def test_exact_byte_limits_accept_boundary_and_reject_next_byte(monkeypatch, format_name, data, limit_name):
+    monkeypatch.setattr(parsers, limit_name, len(data))
+    assert parsers.PARSERS[format_name](data).coverage['status'] == 'complete'
+    with pytest.raises(parsers.ParserError):
+        parsers.PARSERS[format_name](data+b' ')
