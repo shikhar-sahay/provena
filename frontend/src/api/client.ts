@@ -254,6 +254,8 @@ export type RunEvidenceStatus =
   | "failed";
 
 export interface RunEvidenceOutcome {
+  input_sha256?: string | null;
+  verification_id?: number | null;
   id: number;
   evidence_id: number;
   evidence_number: string | null;

@@ -111,8 +111,9 @@ export default function FindingsTab({
                   className="min-w-0 flex-1 cursor-pointer text-left"
                 >
                   <span className="block truncate text-sm font-semibold hover:underline">
-                    {finding.title}{finding.support_current === false && <span className="ml-2 text-xs text-danger-ink">Historical support: reanalyse verified evidence before reporting</span>}
+                    {finding.title}
                   </span>
+                  {finding.support_current === false && <span className="mt-1 block text-xs text-danger-ink">Historical support: reanalyse verified evidence before reporting</span>}
                 </button>
                 <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
                 <Badge
