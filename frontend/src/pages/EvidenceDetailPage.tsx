@@ -1,3 +1,4 @@
+import { EvidenceStatus } from "../components/EvidenceStatus";
 // Evidence detail: a forensic record with integrity, custody, and timeline.
 // Baseline facts stay prominent; verification and custody are explicit actions.
 
@@ -194,8 +195,15 @@ export default function EvidenceDetailPage() {
         </p>
       )}
 
+      <EvidenceStatus registration={item.registration_status} integrity={item.integrity_status} busy={verifying}
+        onRecover={canManage && !archivedLocked ? () => {
+          setVerifying(true);
+          void api.recoverEvidence(invId, evidenceId).then(() => load())
+            .catch((err) => notify("error", actionErrorMessage(err, "Registration recovery failed.")))
+            .finally(() => setVerifying(false));
+        } : undefined} />
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="primary" size="sm" icon={<Repeat size={14} />} loading={verifying} onClick={() => void onVerify()}>
+        <Button variant="primary" size="sm" icon={<Repeat size={14} />} disabled={item.registration_status !== undefined && item.registration_status !== "ready"} loading={verifying} onClick={() => void onVerify()}>
           Verify integrity
         </Button>
         <Button variant="secondary" size="sm" icon={<Download size={14} />} loading={downloading} onClick={() => void onDownload()}>

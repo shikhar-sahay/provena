@@ -9,9 +9,9 @@ Built with React, FastAPI, and PostgreSQL, Provena combines structured investiga
 ## Key capabilities
 
 - Manage workspaces, case teams, priorities, statuses, investigator notes, and scoped search.
-- Register evidence under opaque storage keys with immutable SHA-256 baselines.
+- Register evidence through recoverable pending/failed/ready states under opaque storage keys with immutable SHA-256 baselines.
 - Record verification outcomes and append-only chain-of-custody events.
-- Process only verified evidence, with explicit outcomes for blocked or unsupported items.
+- Process only verified evidence using a bounded private copy whose digest is checked before parsing; record exact input provenance and explicit blocked outcomes.
 - Extract provenance-bearing artifacts and correlate shared values across evidence.
 - Propose findings through versioned rules with visible confidence factors and recommendations.
 - Require human acceptance or rejection before findings enter immutable, content-hashed reports.

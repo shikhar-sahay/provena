@@ -150,6 +150,7 @@ export type EvidenceType =
   | "other";
 export type IntegrityStatus = "not_verified" | "verified" | "mismatch" | "unavailable";
 export type CustodyAction =
+  | "verified" | "integrity_mismatch" | "unavailable" | "recovered"
   | "registered"
   | "transferred"
   | "released_for_analysis"
@@ -172,6 +173,7 @@ export interface Evidence {
   current_holder: User | null;
   file_size: number;
   sha256: string;
+  registration_status?: "pending" | "failed" | "ready";
   integrity_status: IntegrityStatus;
   last_verified_at: string | null;
   created_at: string;
@@ -305,6 +307,7 @@ export type ArtifactType =
   | "PROCESS_NAME";
 
 export interface Artifact {
+  input_sha256?: string | null;
   id: number;
   investigation_id: number;
   evidence_id: number;
@@ -370,6 +373,7 @@ export interface CorrelationDetail extends Correlation {
 export type FindingStatus = "pending_review" | "accepted" | "rejected";
 
 export interface Finding {
+  support_current?: boolean;
   id: number;
   investigation_id: number;
   rule_id: string;
@@ -442,6 +446,8 @@ export interface Report {
 }
 
 export interface ReportContent {
+  excluded_stale_finding_ids?: number[];
+  support_policy?: string;
   investigation: {
     case_number: string;
     title: string;
@@ -672,6 +678,9 @@ export const api = {
       method: "POST",
       body: form,
     });
+  },
+  recoverEvidence(invId: number, evidenceId: number) {
+    return apiFetch<Evidence>(`/api/investigations/${invId}/evidence/${evidenceId}/recover`, { method: "POST" });
   },
   getEvidence(invId: number, evidenceId: number) {
     return apiFetch<Evidence>(`/api/investigations/${invId}/evidence/${evidenceId}`);

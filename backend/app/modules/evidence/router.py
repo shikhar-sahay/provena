@@ -1,9 +1,10 @@
 """Evidence endpoints: registration, metadata, verification, custody, timelines, download."""
 
 from datetime import datetime
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -19,7 +20,7 @@ from app.modules.evidence.schemas import (
     TimelineEntry,
     VerificationRead,
 )
-from app.modules.evidence.storage import open_stored
+from app.modules.evidence import storage
 from app.modules.investigations import service as inv_service
 from app.modules.users.models import User
 from app.modules.users.schemas import UserRead
@@ -61,6 +62,7 @@ def register_evidence(
     evidence_type: EvidenceType = Form(default=EvidenceType.OTHER),
     source: str = Form(default=""),
     acquired_at: datetime | None = Form(default=None),
+    request_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=128),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -79,6 +81,7 @@ def register_evidence(
         content_type=file.content_type,
         stream=file.file,
         actor=user,
+        request_key=request_key,
     )
     return _to_read(db, evidence)
 
@@ -181,9 +184,9 @@ def download_evidence(
 ):
     inv = _investigation(db, investigation_id, user)
     evidence = service.ensure_evidence_access(db, inv, evidence_id, user)
+    source = storage.open_stored(evidence.storage_key)
     try:
-        handle = open_stored(evidence.storage_key)
-        handle.close()
+        handle = source.__enter__()
     except (OSError, ValueError):
         from fastapi import HTTPException, status as http_status
 
@@ -191,24 +194,35 @@ def download_evidence(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Stored file is unavailable.",
         )
-    from app.modules.evidence.storage import resolve
+    try:
+        record(
+            db,
+            action=Actions.EVIDENCE_DOWNLOADED,
+            resource_type=ResourceTypes.INVESTIGATION,
+            resource_id=inv.id,
+            actor_id=user.id,
+            metadata={
+                "evidence_id": evidence.id,
+                "evidence_number": evidence.evidence_number,
+            },
+        )
+        db.commit()
+    except Exception:
+        source.__exit__(None, None, None)
+        raise
 
-    record(
-        db,
-        action=Actions.EVIDENCE_DOWNLOADED,
-        resource_type=ResourceTypes.INVESTIGATION,
-        resource_id=inv.id,
-        actor_id=user.id,
-        metadata={
-            "evidence_id": evidence.id,
-            "evidence_number": evidence.evidence_number,
-        },
-    )
-    db.commit()
-    return FileResponse(
-        path=resolve(evidence.storage_key),
-        filename=evidence.original_filename,
+    def content():
+        try:
+            while chunk := handle.read(storage.CHUNK_SIZE):
+                yield chunk
+        finally:
+            source.__exit__(None, None, None)
+
+    safe_filename = quote(evidence.original_filename, safe="")
+    return StreamingResponse(
+        content(),
         media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}"},
     )
 
 
@@ -233,3 +247,11 @@ def investigation_custody(
 ):
     inv = _investigation(db, investigation_id, user)
     return service.investigation_custody(db, inv)
+
+
+@router.post("/{evidence_id}/recover", response_model=EvidenceRead)
+def recover_registration(investigation_id: int, evidence_id: int,
+                         user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    inv = _investigation(db, investigation_id, user)
+    item = service.ensure_evidence_manage(db, inv, evidence_id, user)
+    return _to_read(db, service.recover_registration(db, inv, item, user))

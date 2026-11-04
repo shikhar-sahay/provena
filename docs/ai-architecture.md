@@ -255,3 +255,18 @@ scoring, an investigation knowledge graph, automated timeline reconstruction,
 cross-case pattern analysis, evidence similarity detection, and integrations
 with digital forensic tools. None of these are implemented; none require new
 infrastructure beyond the modular monolith until proven otherwise.
+
+
+## M1 input provenance and historical support
+
+Analysis now hashes a bounded private temporary copy and parses that same copy.
+Recorded verification status is necessary but not sufficient. Each processed run
+outcome records its exact digest and verification ID, and artifacts retain the
+input digest. Legacy artifacts remain visible but do not enter new reasoning
+until reanalysis binds them to a freshly checked input. New findings/reports
+recheck supporting storage; degraded or unbound accepted findings are excluded
+from new reports with explicit IDs, without rewriting historical reports.
+Correlation row identities remain stable across identical rebuilds. See
+[evidence integrity and recovery](evidence-integrity.md) for lifecycle, limits,
+recovery procedures and the distinction between historical results and current
+recorded eligibility. No new extraction rules or event schema are introduced.

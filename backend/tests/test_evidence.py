@@ -431,7 +431,7 @@ def test_investigation_timeline_and_custody_views(client, investigator, custodia
     custody = client.get(
         f"/api/investigations/{inv['id']}/custody", headers=auth_headers(token)
     ).json()
-    assert len(custody) == 1
+    assert {event["action"] for event in custody} == {"registered", "verified"}
     assert custody[0]["evidence_number"] == "E-001"
 
 

@@ -280,7 +280,7 @@ export function ArtifactDetail({
         <div>
           <dt className="text-xs text-ink3">Context</dt>
           <dd className="mt-0.5 rounded-md border border-line bg-canvas px-2.5 py-2 font-mono text-xs break-words">
-            {artifact.context}
+            {artifact.context}<p className="mt-2 text-xs text-ink3">{artifact.input_sha256 ? `Analysed input SHA-256: ${artifact.input_sha256}` : "Historical artifact: exact-input verification was not recorded. Reanalyse before relying on it."}</p>
           </dd>
         </div>
         <div>

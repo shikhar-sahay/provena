@@ -63,7 +63,10 @@ def ensure_finding_review(db: Session, inv: Investigation | None, user: User) ->
 
 def build_facts(db: Session, inv: Investigation) -> FactView:
     artifacts = db.execute(
-        select(Artifact).where(Artifact.investigation_id == inv.id).order_by(Artifact.id)
+        select(Artifact).join(Evidence, Evidence.id == Artifact.evidence_id).where(
+            Artifact.investigation_id == inv.id, Evidence.registration_status == "ready",
+            Evidence.integrity_status == "verified", Artifact.input_sha256 == Evidence.sha256,
+        ).order_by(Artifact.id)
     ).scalars().all()
     evidence_numbers = {
         row.id: row.evidence_number
@@ -110,6 +113,34 @@ def build_facts(db: Session, inv: Investigation) -> FactView:
     return FactView(artifacts=facts, correlations=correlations, all_verified=verified)
 
 
+def recheck_support(db: Session, inv: Investigation, user: User, purpose: str) -> None:
+    from app.modules.evidence import storage
+    for evidence in ev_service.list_evidence(db, inv):
+        if evidence.registration_status != "ready" or evidence.integrity_status != "verified":
+            continue
+        try:
+            with storage.snapshot(evidence.storage_key, evidence.file_size) as copied:
+                observed = copied.sha256
+        except storage.SizeMismatch:
+            ev_service.record_verification(db, inv, evidence, None, user.id, purpose, size_mismatch=True)
+            continue
+        except (OSError, ValueError):
+            observed = None
+        ev_service.record_verification(db, inv, evidence, observed, user.id, purpose)
+
+
+def support_current(db: Session, finding: Finding) -> bool:
+    if not finding.artifact_ids or not finding.evidence_ids:
+        return False
+    artifacts = db.execute(select(Artifact).join(Evidence, Evidence.id == Artifact.evidence_id).where(
+        Artifact.id.in_(finding.artifact_ids), Artifact.investigation_id == finding.investigation_id,
+        Artifact.input_sha256 == Evidence.sha256, Evidence.integrity_status == "verified",
+        Evidence.registration_status == "ready",
+    )).scalars().all()
+    return (len(artifacts) == len(set(finding.artifact_ids))
+            and set(finding.evidence_ids) == {a.evidence_id for a in artifacts})
+
+
 def generate_findings(
     db: Session, inv: Investigation, user: User, run_id: int | None = None
 ) -> tuple[list[Finding], int]:
@@ -118,6 +149,7 @@ def generate_findings(
     Returns (all findings sorted by confidence, new count). Human decisions
     (accepted/rejected) are never overwritten.
     """
+    recheck_support(db, inv, user, "finding_generation")
     proposed = rules.evaluate_all(build_facts(db, inv))
     created = 0
     for item in proposed:
@@ -317,10 +349,12 @@ def generate_report(
 
     full = inv_service.get_investigation(db, inv.id)
     assert full is not None
+    recheck_support(db, full, user, "report")
     evidence_items = ev_service.list_evidence(db, full)
+    excluded = [f.id for f in list_findings(db, full) if f.status == FindingStatus.ACCEPTED.value and not support_current(db, f)]
     accepted = [
         f for f in list_findings(db, full)
-        if f.status == FindingStatus.ACCEPTED.value
+        if f.status == FindingStatus.ACCEPTED.value and support_current(db, f)
     ]
     notes = list_notes(db, full)
     evidence_summary = []
@@ -335,6 +369,7 @@ def generate_report(
                 "file_size": item.file_size,
                 "sha256": item.sha256,
                 "integrity_status": item.integrity_status,
+                "registration_status": item.registration_status,
                 "last_verified_at": (
                     item.last_verified_at.isoformat() if item.last_verified_at else None
                 ),
@@ -360,6 +395,10 @@ def generate_report(
                 "factors": finding.factors,
                 "evidence_ids": finding.evidence_ids,
                 "artifact_ids": finding.artifact_ids,
+                "source_artifacts": [{"id": a.id, "evidence_id": a.evidence_id,
+                    "input_sha256": a.input_sha256, "locator": a.locator, "raw_value": a.raw_value,
+                    "extractor": a.extractor_name, "extractor_version": a.extractor_version}
+                    for a in db.execute(select(Artifact).where(Artifact.id.in_(finding.artifact_ids))).scalars()],
                 "correlation_ids": finding.correlation_ids,
                 "recommendations": finding.recommendations,
                 "reviewer": reviewer.username if reviewer else None,
@@ -441,7 +480,9 @@ def generate_report(
         ],
         "generated_by": user.username,
         "generated_at": _now().isoformat(),
-        "generator": "grounded-report-v2",
+        "generator": "grounded-report-v3",
+        "excluded_stale_finding_ids": excluded,
+        "support_policy": "Exact-input provenance required; integrity checked at report generation, not a guarantee of future storage state.",
         "narrative": narrative_result.narrative,
         "generation_metadata": narrative_result.metadata,
     }

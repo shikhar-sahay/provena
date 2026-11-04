@@ -10,12 +10,13 @@ Authorization (backend-enforced):
 - Mutations on archived investigations: admins only.
 """
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import BinaryIO
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
@@ -117,7 +118,8 @@ def current_holder(db: Session, evidence: Evidence) -> User | None:
     """Derive the current holder from the latest custody event (history is truth)."""
     stmt = (
         select(CustodyEvent)
-        .where(CustodyEvent.evidence_id == evidence.id)
+        .where(CustodyEvent.evidence_id == evidence.id, CustodyEvent.to_user_id.is_not(None),
+               CustodyEvent.action.in_(["registered", "transferred", "received", "returned_to_custody"]))
         .order_by(CustodyEvent.id.desc())
         .limit(1)
     )
@@ -126,6 +128,14 @@ def current_holder(db: Session, evidence: Evidence) -> User | None:
         return None
     holder_id = latest.to_user_id or latest.performed_by_id
     return get_by_id(db, holder_id) if holder_id else None
+
+
+def _timestamp_key(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
 
 
 def register_evidence(
@@ -141,7 +151,9 @@ def register_evidence(
     content_type: str | None,
     stream: BinaryIO,
     actor: User,
+    request_key: str | None = None,
 ) -> Evidence:
+    acquired_at = datetime.fromisoformat(_timestamp_key(acquired_at)) if acquired_at is not None else None
     title = title.strip()
     if not title:
         raise HTTPException(
@@ -149,9 +161,10 @@ def register_evidence(
         )
     safe_name = filename.split("/")[-1].split("\\")[-1].strip()[:255] or "unnamed"
     try:
-        storage_key, staged, digest, size = storage.save_stream(
+        staged = storage.save_stream(
             stream, inv.id, settings.evidence_max_upload_bytes
         )
+        storage_key, digest, size = staged.storage_key, staged.sha256, staged.size
     except OverflowError:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -162,64 +175,120 @@ def register_evidence(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Uploaded file is empty.",
         )
+    except Exception:
+        raise HTTPException(status_code=503, detail="Evidence upload could not be stored. Retry the same request.") from None
 
-    evidence = Evidence(
-        investigation_id=inv.id,
-        evidence_number="",
-        title=title,
-        description=description.strip(),
-        evidence_type=evidence_type.value,
-        original_filename=safe_name,
-        content_type=(content_type or None),
-        source=source.strip(),
-        acquired_at=acquired_at,
-        registered_by_id=actor.id,
-        file_size=size,
-        storage_key="",
-        sha256=digest,
-        integrity_status=IntegrityStatus.NOT_VERIFIED.value,
-    )
-    try:
-        for _ in range(5):
-            evidence.evidence_number = _generate_evidence_number(db, inv.id)
-            evidence.storage_key = storage_key
-            db.add(evidence)
+    # Default retries deduplicate identical bytes and metadata for this actor.
+    # An explicit request key permits intentionally separate identical items.
+    fingerprint = hashlib.sha256(json.dumps({
+        "actor": actor.id, "sha256": digest, "size": size, "title": title,
+        "description": description.strip(), "type": evidence_type.value,
+        "source": source.strip(), "acquired_at": _timestamp_key(acquired_at), "filename": safe_name,
+        "content_type": content_type,
+    }, sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(f"{actor.id}:{request_key or fingerprint}".encode()).hexdigest()
+    db.execute(select(Investigation).where(Investigation.id == inv.id).with_for_update())
+    existing = db.execute(select(Evidence).where(
+        Evidence.investigation_id == inv.id, Evidence.registration_key == key,
+    )).scalar_one_or_none()
+    if existing is not None:
+        if (existing.sha256, existing.file_size, existing.title, existing.original_filename,
+            existing.description, existing.evidence_type, existing.source, _timestamp_key(existing.acquired_at),
+            existing.content_type) != (digest, size, title, safe_name, description.strip(),
+            evidence_type.value, source.strip(), _timestamp_key(acquired_at), content_type):
             try:
-                db.flush()
-                break
-            except IntegrityError:
-                db.rollback()
-        else:  # pragma: no cover - defensive; effectively unreachable at this scale
-            raise HTTPException(status_code=500, detail="Could not register evidence.")
-        db.add(
-            CustodyEvent(
-                evidence_id=evidence.id,
-                action=CustodyAction.REGISTERED.value,
-                to_user_id=actor.id,
-                performed_by_id=actor.id,
-                notes="Evidence registered.",
-            )
-        )
-        record(
-            db,
-            action=Actions.EVIDENCE_REGISTERED,
-            resource_type=ResourceTypes.INVESTIGATION,
-            resource_id=inv.id,
-            actor_id=actor.id,
-            metadata={
-                "evidence_id": evidence.id,
-                "evidence_number": evidence.evidence_number,
-                "title": evidence.title,
-                "sha256": digest,
-                "file_size": size,
-            },
-        )
+                storage.discard_staged(staged)
+            except Exception:
+                pass
+            raise HTTPException(status_code=409, detail="Registration key was already used for different evidence or metadata.")
+        if existing.registration_status == "ready":
+            try:
+                storage.discard_staged(staged)
+            except Exception:
+                pass
+            return existing
+        replacement = storage.StagedUpload(existing.storage_key, staged.staging_ref, digest, size)
+        return recover_registration(db, inv, existing, actor, staged=replacement)
+    evidence = Evidence(
+        investigation_id=inv.id, evidence_number=_generate_evidence_number(db, inv.id),
+        title=title, description=description.strip(), evidence_type=evidence_type.value,
+        original_filename=safe_name, content_type=content_type, source=source.strip(),
+        acquired_at=acquired_at, registered_by_id=actor.id, file_size=size,
+        storage_key=storage_key, sha256=digest, integrity_status="not_verified",
+        registration_status="pending", registration_key=key,
+    )
+    commit_started = False
+    try:
+        db.add(evidence)
+        db.flush()
+        record(db, action="EVIDENCE_REGISTRATION_PENDING", resource_type=ResourceTypes.INVESTIGATION,
+               resource_id=inv.id, actor_id=actor.id, metadata={"evidence_id": evidence.id})
+        commit_started = True
         db.commit()
     except Exception:
         db.rollback()
-        storage.discard_staged(staged)
-        raise
-    storage.commit_staged(staged)
+        if not commit_started:
+            try:
+                storage.discard_staged(staged)
+            except Exception:
+                pass
+        # Commit acknowledgement may have been lost. Retain identifiable staging
+        # rather than delete the only bytes of a possibly committed registration.
+        raise HTTPException(status_code=503, detail="Registration could not be confirmed. Retry the same request.") from None
+    return recover_registration(db, inv, evidence, actor, staged=staged)
+
+
+def recover_registration(db: Session, inv: Investigation, evidence: Evidence, actor: User, staged=None) -> Evidence:
+    evidence = db.execute(select(Evidence).where(Evidence.id == evidence.id).with_for_update()
+                          .execution_options(populate_existing=True)).scalar_one()
+    if evidence.registration_status == "ready":
+        if staged is not None:
+            try:
+                storage.discard_staged(staged)
+            except Exception:
+                pass
+        return evidence
+    try:
+        # A prior promotion may have succeeded before a lost database commit.
+        try:
+            with storage.snapshot(evidence.storage_key, evidence.file_size) as copied:
+                available = copied.sha256 == evidence.sha256 and copied.size == evidence.file_size
+        except (OSError, ValueError):
+            available = False
+        if not available:
+            if staged is not None:
+                storage.commit_staged(staged)
+            else:
+                storage.recover_staged(evidence.storage_key, evidence.sha256, evidence.file_size)
+            with storage.snapshot(evidence.storage_key, evidence.file_size) as copied:
+                if copied.sha256 != evidence.sha256 or copied.size != evidence.file_size:
+                    raise OSError("Promoted bytes failed validation.")
+        evidence.registration_status = "ready"
+        evidence.integrity_status = "not_verified"
+        prior = db.execute(select(CustodyEvent.id).where(
+            CustodyEvent.evidence_id == evidence.id, CustodyEvent.action == "registered",
+        )).first()
+        if prior is None:
+            db.add(CustodyEvent(evidence_id=evidence.id, action="registered",
+                to_user_id=evidence.registered_by_id, performed_by_id=evidence.registered_by_id,
+                notes="Registration completed; storage matches ingestion baseline."))
+        record(db, action=Actions.EVIDENCE_REGISTERED, resource_type=ResourceTypes.INVESTIGATION,
+               resource_id=inv.id, actor_id=actor.id, metadata={"evidence_id": evidence.id, "sha256": evidence.sha256})
+        if staged is None:
+            db.add(CustodyEvent(evidence_id=evidence.id, action="recovered", performed_by_id=actor.id,
+                               notes="Registration recovered by authorized user."))
+            record(db, action="EVIDENCE_REGISTRATION_RECOVERED", resource_type=ResourceTypes.INVESTIGATION,
+                   resource_id=inv.id, actor_id=actor.id, metadata={"evidence_id": evidence.id})
+        db.commit()
+    except Exception:
+        db.rollback()
+        evidence = db.get(Evidence, evidence.id)
+        evidence.registration_status = "failed"
+        evidence.integrity_status = "unavailable"
+        record(db, action="EVIDENCE_REGISTRATION_FAILED", resource_type=ResourceTypes.INVESTIGATION,
+               resource_id=inv.id, actor_id=actor.id, metadata={"evidence_id": evidence.id})
+        db.commit()
+        raise HTTPException(status_code=503, detail="Registration incomplete. Retry the same request or recover this item from its evidence details.") from None
     db.refresh(evidence)
     return evidence
 
@@ -267,53 +336,45 @@ def update_evidence_metadata(
     return evidence
 
 
+def record_verification(db: Session, inv: Investigation, evidence: Evidence, observed: str | None,
+                        actor_id: int | None, purpose: str = "manual", size_mismatch: bool = False):
+    result = ("mismatch" if size_mismatch else "unavailable" if observed is None else
+              "verified" if observed == evidence.sha256 else "mismatch")
+    reason = {"verified": None, "unavailable": "Stored evidence could not be read within its registered size.",
+              "mismatch": "Observed bytes do not match the ingestion baseline."}[result]
+    verification = EvidenceVerification(evidence_id=evidence.id, performed_by_id=actor_id,
+        expected_sha256=evidence.sha256, observed_sha256=observed, result=result, reason=reason, purpose=purpose)
+    db.add(verification)
+    if purpose == "analysis":
+        db.info.setdefault("verification_journal", []).append((evidence.id, observed, actor_id, size_mismatch))
+    evidence.integrity_status = result
+    evidence.last_verified_at = datetime.now(timezone.utc)
+    action = {"verified": "EVIDENCE_VERIFIED", "mismatch": "EVIDENCE_INTEGRITY_MISMATCH",
+              "unavailable": "EVIDENCE_UNAVAILABLE"}[result]
+    db.add(CustodyEvent(evidence_id=evidence.id,
+        action={"verified": "verified", "mismatch": "integrity_mismatch", "unavailable": "unavailable"}[result],
+        performed_by_id=actor_id, notes=f"{purpose}: {result}."))
+    record(db, action=action, resource_type=ResourceTypes.INVESTIGATION,
+           resource_id=inv.id, actor_id=actor_id, metadata={"evidence_id": evidence.id,
+           "result": result, "purpose": purpose, "automated": purpose != "manual"})
+    db.flush()
+    return verification
+
+
 def verify_evidence(db: Session, inv: Investigation, evidence: Evidence, actor: User):
-    """Recompute SHA-256 and compare against the immutable baseline digest."""
+    if evidence.registration_status != "ready":
+        raise HTTPException(status_code=409, detail="Complete or recover registration before verification.")
     try:
-        path = storage.resolve(evidence.storage_key)
-        observed = storage.sha256_file(path) if path.exists() else None
+        with storage.snapshot(evidence.storage_key, evidence.file_size) as copied:
+            observed = copied.sha256
+    except storage.SizeMismatch:
+        observed = None
+        verification = record_verification(db, inv, evidence, observed, actor.id, size_mismatch=True)
+        db.commit()
+        return verification
     except (OSError, ValueError):
         observed = None
-    if observed is None:
-        result = IntegrityStatus.UNAVAILABLE
-        reason = "Stored object could not be accessed."
-    elif observed == evidence.sha256:
-        result = IntegrityStatus.VERIFIED
-        reason = None
-    else:
-        result = IntegrityStatus.MISMATCH
-        reason = "Observed digest does not match the baseline digest."
-
-    verification = EvidenceVerification(
-        evidence_id=evidence.id,
-        performed_by_id=actor.id,
-        expected_sha256=evidence.sha256,
-        observed_sha256=observed,
-        result=result.value,
-        reason=reason,
-    )
-    db.add(verification)
-    evidence.integrity_status = result.value
-    evidence.last_verified_at = datetime.now(timezone.utc)
-    # Verified and unavailable attempts share the verification event; a digest
-    # mismatch is a forensic event with its own action.
-    audit_action = (
-        Actions.EVIDENCE_INTEGRITY_MISMATCH
-        if result == IntegrityStatus.MISMATCH
-        else Actions.EVIDENCE_VERIFIED
-    )
-    record(
-        db,
-        action=audit_action,
-        resource_type=ResourceTypes.INVESTIGATION,
-        resource_id=inv.id,
-        actor_id=actor.id,
-        metadata={
-            "evidence_id": evidence.id,
-            "evidence_number": evidence.evidence_number,
-            "result": result.value,
-        },
-    )
+    verification = record_verification(db, inv, evidence, observed, actor.id)
     db.commit()
     db.refresh(verification)
     db.refresh(evidence)
@@ -394,6 +455,9 @@ def record_custody(
         if to_user is None or not to_user.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid target user.")
 
+    db.execute(select(Evidence.id).where(Evidence.id == evidence.id).with_for_update())
+    if to_user is not None and not inv_service.is_member(db, inv.id, to_user.id):
+        raise HTTPException(status_code=400, detail="Target user is not a member of this investigation.")
     holder = current_holder(db, evidence)
     event = CustodyEvent(
         evidence_id=evidence.id,

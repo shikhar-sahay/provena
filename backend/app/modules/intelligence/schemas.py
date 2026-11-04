@@ -21,6 +21,8 @@ class RunEvidenceRead(BaseModel):
     status: RunEvidenceStatus
     error: str | None = None
     artifact_count: int
+    input_sha256: str | None = None
+    verification_id: int | None = None
 
 
 class AnalysisRunRead(BaseModel):
@@ -54,6 +56,7 @@ class EligibilityEntry(BaseModel):
 
 
 class ArtifactRead(BaseModel):
+    input_sha256: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -114,6 +117,7 @@ class CorrelationDetailRead(CorrelationRead):
 
 
 class FindingRead(BaseModel):
+    support_current: bool = False
     model_config = ConfigDict(from_attributes=True)
 
     id: int

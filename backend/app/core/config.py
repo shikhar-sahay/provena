@@ -5,6 +5,7 @@ No secrets are hardcoded here; see ``.env.example`` at the repo root.
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,6 +31,9 @@ class Settings(BaseSettings):
     # Root directory for stored evidence files. Runtime uploads only;
     # never inside the Git repository working tree that gets committed.
     evidence_storage_root: str = "./evidence-storage"
+    evidence_storage_backend: Literal["local", "s3"] = "local"
+    s3_evidence_bucket: str = ""
+    aws_region: str = ""
     # Maximum accepted upload size in bytes (default 100 MiB).
     evidence_max_upload_bytes: int = 100 * 1024 * 1024
     # Optional local narrative generation. Core analysis never depends on it.

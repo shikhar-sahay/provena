@@ -88,6 +88,8 @@ def _to_run_read(db: Session, run) -> AnalysisRunRead:
             status=outcome.status,
             error=outcome.error,
             artifact_count=outcome.artifact_count,
+            input_sha256=outcome.input_sha256,
+            verification_id=outcome.verification_id,
         )
         for outcome in run.evidence_outcomes
     ]
@@ -246,6 +248,7 @@ def get_correlation(
 
 def _to_finding_read(db: Session, finding) -> FindingRead:
     data = FindingRead.model_validate(finding)
+    data.support_current = reasoning.support_current(db, finding)
     data.reviewer_username = finding.reviewer.username if finding.reviewer else None
     if finding.investigation:
         data.investigation_title = finding.investigation.title

@@ -35,8 +35,8 @@ No schema migration is needed because membership already stores `is_active`.
 
 `python-multipart>=0.0.27,<0.1` excludes versions affected by
 [GHSA-pp6c-gr5w-3c5g](https://github.com/Kludex/python-multipart/security/advisories/GHSA-pp6c-gr5w-3c5g).
-Fresh resolution was tested with python-multipart 0.0.33, FastAPI 0.116.2 and
-Starlette 0.48.0. Synthetic tests cover ordinary uploads, exact size limits,
+M0 tested python-multipart 0.0.33 with FastAPI 0.116.2 and Starlette 0.48.0;
+M1 replaces those framework versions with the audited resolution below. Synthetic tests cover ordinary uploads, exact size limits,
 oversized and empty files, missing boundaries, malformed headers, incomplete
 parts and excessive part-header values. Rejected requests must not register
 evidence or leave stored files.
@@ -49,15 +49,24 @@ and package-index access are required. Findings fail the job; no blanket ignore
 or automatic production upgrade is configured. Backend requirements remain
 bounded ranges, not an exact deployment lockfile.
 
-The M0 local audit command exited 1, reporting 14 advisory entries across
-pytest 8.4.2 and Starlette 0.48.0 (including duplicate entries). It did not flag
-python-multipart 0.0.33. These are scanner findings, not locally demonstrated
-exploits. CI will remain red for these existing dependency findings until a
-separate reviewed compatibility update resolves them. M0 deliberately does not
-upgrade FastAPI/Starlette or pytest across their current upper bounds, or hide
-the findings with ignores. PostgreSQL concurrency tests were not executed in
-the M0 environment because the local Docker daemon was unavailable; SQLite
-tests verify authorization behavior but not row-lock serialization.
+M1 resolves the M0 dependency findings using a compatible FastAPI/Starlette
+upgrade and pytest >=9.0.3. The tested clean resolution is FastAPI 0.149.0,
+Starlette 1.10.0 and pytest 9.2.0; pip check and pip-audit pass without ignores.
+The M0 scan reported pytest PYSEC-2026-1845 (fixed in 9.0.3), and Starlette
+PYSEC-2026-1942 (0.49.1), PYSEC-2026-161 (1.0.1), PYSEC-2026-2281 and
+PYSEC-2026-2280 (1.1.0), PYSEC-2026-248 (1.3.0), and PYSEC-2026-249 (1.3.1).
+Repeated entries in run 29 were duplicates, not separate application exploits.
+FastAPI's old <0.117 constraint capped Starlette below 0.49, so upgrading only
+Starlette would have produced an incompatible environment. M1 lets the resolver
+select compatible versions instead of forcing an installation. Advisory data
+is available in [run 29](https://github.com/shikhar-sahay/provena/actions/runs/41858064380)
+and the [Starlette security advisories](https://github.com/Kludex/starlette/security/advisories).
+
+CI uses Node 24-compatible official checkout/setup actions, keeps Python 3.13
+and Node 22 application runtimes, and explicitly runs frontend type checking.
+An isolated PostgreSQL 16 service checks fresh migrations and schema drift.
+Local Docker/PostgreSQL was unavailable during implementation; SQLite behavior
+tests and offline PostgreSQL SQL compilation do not prove concurrency safety.
 
 Local migration backups are excluded by `/migration-backup/` in `.gitignore`.
 Ignore rules do not protect already tracked files or deliberate force-adds.

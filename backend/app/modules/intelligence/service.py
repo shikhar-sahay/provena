@@ -114,7 +114,7 @@ def eligibility(db: Session, inv: Investigation) -> list[dict]:
                 }
             )
             continue
-        if evidence.integrity_status != IntegrityStatus.VERIFIED.value:
+        if evidence.registration_status != "ready" or evidence.integrity_status != IntegrityStatus.VERIFIED.value:
             _, reason = BLOCK_REASONS.get(
                 evidence.integrity_status,
                 (RunEvidenceStatus.BLOCKED_NOT_VERIFIED, "Evidence is not verified."),
@@ -177,12 +177,14 @@ def _get_or_create_artifact(
     )
     existing = db.execute(stmt).scalar_one_or_none()
     if existing is not None:
+        existing.input_sha256 = db.get(Evidence, evidence_id).sha256
         return existing
     artifact = Artifact(
         investigation_id=inv_id,
         evidence_id=evidence_id,
         run_id=run_id,
         artifact_type=artifact_type,
+        input_sha256=db.get(Evidence, evidence_id).sha256,
         raw_value=raw_value,
         normalized_value=normalized_value,
         locator=locator_override if locator_override is not None else dict(unit.locator),
@@ -201,6 +203,8 @@ def _process_evidence(
     db: Session, inv: Investigation, evidence: Evidence, run: AnalysisRun
 ) -> tuple[str, str | None, int]:
     """Process one evidence item. Returns (outcome_status, error, artifact_count)."""
+    if evidence.registration_status != "ready":
+        return RunEvidenceStatus.BLOCKED_UNAVAILABLE.value, "Registration is incomplete; recover it first.", 0
     if evidence.integrity_status != IntegrityStatus.VERIFIED.value:
         outcome, reason = BLOCK_REASONS.get(
             evidence.integrity_status,
@@ -214,17 +218,25 @@ def _process_evidence(
             "File format is not supported for automated processing.",
             0,
         )
+    from app.modules.evidence.service import record_verification
     try:
-        with storage.open_stored(evidence.storage_key) as handle:
-            data = handle.read()
+        with storage.snapshot(evidence.storage_key, evidence.file_size) as copied:
+            verification = record_verification(db, inv, evidence, copied.sha256, run.initiated_by_id, "analysis")
+            if verification.result != "verified":
+                return RunEvidenceStatus.BLOCKED_MISMATCH.value, "Evidence changed since verification.", 0
+            data = copied.handle.read(parsers.PARSER_BYTE_LIMITS[ext] + 1)
+    except storage.SizeMismatch:
+        record_verification(db, inv, evidence, None, run.initiated_by_id, "analysis", size_mismatch=True)
+        return RunEvidenceStatus.BLOCKED_MISMATCH.value, "Stored evidence size changed after verification.", 0
     except (OSError, ValueError):
-        return RunEvidenceStatus.FAILED.value, "Stored bytes could not be read.", 0
+        record_verification(db, inv, evidence, None, run.initiated_by_id, "analysis")
+        return RunEvidenceStatus.BLOCKED_UNAVAILABLE.value, "Stored bytes could not be read within their registered size.", 0
     try:
         units = parsers.PARSERS[ext](data)
     except parsers.NoTextError as exc:
         return RunEvidenceStatus.FAILED.value, str(exc), 0
-    except ParserError as exc:
-        return RunEvidenceStatus.FAILED.value, str(exc), 0
+    except ParserError:
+        return RunEvidenceStatus.FAILED.value, "Evidence could not be parsed within supported format limits.", 0
     count = 0
     for unit in units:
         for extractor, extraction in extractors.extract_all(unit):
@@ -259,12 +271,17 @@ def _rebuild_correlations(db: Session, inv: Investigation) -> int:
     """
     from app.modules.intelligence.models import ArtifactType
 
-    db.execute(
-        Correlation.__table__.delete().where(Correlation.investigation_id == inv.id)
-    )
+    existing = {(c.artifact_type, c.normalized_value): c for c in db.execute(
+        select(Correlation).where(Correlation.investigation_id == inv.id)
+    ).scalars()}
+    for correlation in existing.values():
+        correlation.evidence_count = 0
     rows = db.execute(
         select(Artifact.id, Artifact.evidence_id, Artifact.artifact_type, Artifact.normalized_value)
+        .join(Evidence, Artifact.evidence_id == Evidence.id)
         .where(
+            Evidence.registration_status == "ready", Evidence.integrity_status == "verified",
+            Artifact.input_sha256 == Evidence.sha256,
             Artifact.investigation_id == inv.id,
             Artifact.artifact_type != ArtifactType.TIMESTAMP.value,
         )
@@ -274,16 +291,17 @@ def _rebuild_correlations(db: Session, inv: Investigation) -> int:
         [(r[0], r[1], r[2], r[3]) for r in rows]
     )
     for entry in built:
-        correlation = Correlation(
-            investigation_id=inv.id,
-            correlation_type="shared_value",
-            artifact_type=entry["artifact_type"],
-            normalized_value=entry["normalized_value"],
-            evidence_count=len(entry["evidence_ids"]),
-            artifact_count=len(entry["artifact_ids"]),
-        )
-        db.add(correlation)
-        db.flush()
+        correlation = existing.get((entry["artifact_type"], entry["normalized_value"]))
+        if correlation is None:
+            correlation = Correlation(investigation_id=inv.id, correlation_type="shared_value",
+                artifact_type=entry["artifact_type"], normalized_value=entry["normalized_value"],
+                evidence_count=0, artifact_count=0)
+            db.add(correlation)
+            db.flush()
+        else:
+            db.execute(CorrelationArtifact.__table__.delete().where(CorrelationArtifact.correlation_id == correlation.id))
+        correlation.evidence_count = len(entry["evidence_ids"])
+        correlation.artifact_count = len(entry["artifact_ids"])
         for artifact_id in entry["artifact_ids"]:
             db.add(
                 CorrelationArtifact(correlation_id=correlation.id, artifact_id=artifact_id)
@@ -338,12 +356,21 @@ def start_run(
             "pipeline_version": PIPELINE_VERSION,
         },
     )
+    db.info["verification_journal"] = []
+    assigned_run_number = run.run_number
     try:
         total_artifacts = 0
         for evidence_id in wanted:
             evidence = evidence_map[evidence_id]
             with db.begin_nested():
+                from app.modules.evidence.models import EvidenceVerification
+                prior_check = db.execute(select(func.max(EvidenceVerification.id))).scalar() or 0
                 outcome, error, count = _process_evidence(db, inv, evidence, run)
+                checked = db.execute(select(EvidenceVerification).where(
+                    EvidenceVerification.id > prior_check,
+                    EvidenceVerification.evidence_id == evidence.id,
+                    EvidenceVerification.purpose == "analysis",
+                ).order_by(EvidenceVerification.id.desc())).scalars().first()
                 db.add(
                     AnalysisRunEvidence(
                         run_id=run.id,
@@ -351,6 +378,8 @@ def start_run(
                         status=outcome,
                         error=error,
                         artifact_count=count,
+                        input_sha256=checked.observed_sha256 if checked and checked.result == "verified" and outcome == "processed" else None,
+                        verification_id=checked.id if checked and outcome in {"processed", "blocked_mismatch", "blocked_unavailable", "failed"} else None,
                     )
                 )
                 total_artifacts += count
@@ -375,11 +404,16 @@ def start_run(
             },
         )
         db.commit()
-    except Exception as exc:
-        failure = str(exc)[:1000]
-        run_number = run.run_number
-        evidence_count = run.evidence_count
+    except Exception:
+        failure = "Analysis failed unexpectedly. No partial analytical results were retained."
+        run_number = assigned_run_number
+        evidence_count = len(wanted)
+        checks = list(db.info.pop("verification_journal", []))
         db.rollback()
+        from app.modules.evidence.service import record_verification
+        for evidence_id, observed, actor_id, size_changed in checks:
+            record_verification(db, inv, db.get(Evidence, evidence_id), observed, actor_id,
+                                "analysis_failure", size_mismatch=size_changed)
         # The rollback removes a newly flushed run from the session. Persist a
         # fresh failure record so an unexpected pipeline error never erases
         # the explicit run history or triggers a refresh of a transient row.
@@ -408,6 +442,7 @@ def start_run(
             },
         )
         db.commit()
+    db.info.pop("verification_journal", None)
     db.refresh(run)
     return run
 
@@ -474,7 +509,7 @@ def get_artifact(db: Session, inv: Investigation, artifact_id: int) -> Artifact 
 def list_correlations(db: Session, inv: Investigation) -> list[Correlation]:
     stmt = (
         select(Correlation)
-        .where(Correlation.investigation_id == inv.id)
+        .where(Correlation.investigation_id == inv.id, Correlation.evidence_count >= 2)
         .order_by(Correlation.artifact_type, Correlation.normalized_value)
     )
     return list(db.execute(stmt).scalars().all())

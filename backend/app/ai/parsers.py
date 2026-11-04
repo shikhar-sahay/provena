@@ -242,6 +242,14 @@ PARSERS = {
     "pdf": parse_pdf,
 }
 
+PARSER_BYTE_LIMITS = {
+    "txt": MAX_TEXT_BYTES,
+    "log": MAX_TEXT_BYTES,
+    "csv": MAX_TEXT_BYTES,
+    "json": MAX_JSON_BYTES,
+    "pdf": MAX_PDF_BYTES,
+}
+
 NO_TEXT_MESSAGE = (
     "No machine-readable text was detected in this PDF. "
     "OCR processing is not currently supported."

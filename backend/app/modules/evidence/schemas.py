@@ -6,7 +6,8 @@ investigation id plus evidence id, and the server resolves files internally.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
 
 from app.modules.evidence.models import CustodyAction, EvidenceType, IntegrityStatus
 from app.modules.users.schemas import UserRead
@@ -30,6 +31,7 @@ class EvidenceRead(BaseModel):
     file_size: int
     sha256: str
     integrity_status: IntegrityStatus
+    registration_status: Literal["pending", "failed", "ready"] = "ready"
     last_verified_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -53,6 +55,7 @@ class VerificationRead(BaseModel):
     observed_sha256: str | None
     result: IntegrityStatus
     reason: str | None
+    purpose: str = "manual"
     created_at: datetime
 
 
@@ -73,6 +76,13 @@ class CustodyCreate(BaseModel):
     action: CustodyAction = CustodyAction.TRANSFERRED
     to_user_id: int | None = None
     notes: str = Field(default="", max_length=1000)
+
+    @field_validator("action")
+    @classmethod
+    def user_actions_only(cls, value):
+        if value in {CustodyAction.REGISTERED, CustodyAction.VERIFIED, CustodyAction.INTEGRITY_MISMATCH, CustodyAction.UNAVAILABLE, CustodyAction.RECOVERED}:
+            raise ValueError("This custody action is recorded by the system only.")
+        return value
 
 
 class TimelineEntry(BaseModel):

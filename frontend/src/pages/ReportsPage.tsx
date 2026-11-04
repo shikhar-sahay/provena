@@ -175,6 +175,11 @@ function ReportView({ report }: { report: Report }) {
           </p>
         </header>
 
+        {!!content.excluded_stale_finding_ids?.length && <p role="alert" className="rounded-md border border-danger-line bg-danger-bg p-3 text-danger-ink">
+          Accepted findings excluded because current verified support is unavailable: {content.excluded_stale_finding_ids.join(", ")}. Review integrity and reanalyse before relying on them.
+        </p>}
+        <p className="text-xs text-ink3">{content.support_policy ?? "Historical report: exact-input provenance policy was not recorded. This snapshot is preserved as originally generated."}</p>
+
         <ReportSection title="Executive summary">
           <p className="whitespace-pre-wrap text-ink2">{presentation.executiveSummary}</p>
           <p className="mt-1 text-xs text-ink3">

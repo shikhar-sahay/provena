@@ -193,7 +193,7 @@ export default function EvidenceTab({ registerOpen = false }: { registerOpen?: b
                     {EVIDENCE_TYPE_LABELS[item.evidence_type]}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <IntegrityBadge status={item.integrity_status} />
+                    <IntegrityBadge status={item.integrity_status} />{item.registration_status && item.registration_status !== "ready" && <p className="mt-1 text-xs text-danger-ink">Registration {item.registration_status}</p>}
                   </td>
                   <td className="max-w-36 truncate px-3 py-2.5 whitespace-nowrap text-ink2">
                     {item.current_holder ? displayName(item.current_holder) : "Unknown"}

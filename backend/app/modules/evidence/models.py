@@ -45,12 +45,17 @@ class CustodyAction(str, enum.Enum):
     RETURNED_TO_CUSTODY = "returned_to_custody"
     RECEIVED = "received"
     OTHER = "other"
+    VERIFIED = "verified"
+    INTEGRITY_MISMATCH = "integrity_mismatch"
+    UNAVAILABLE = "unavailable"
+    RECOVERED = "recovered"
 
 
 class Evidence(Base):
     __tablename__ = "evidence"
     __table_args__ = (
         UniqueConstraint("investigation_id", "evidence_number", name="uq_evidence_number"),
+        UniqueConstraint("investigation_id", "registration_key", name="uq_evidence_registration_key"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -78,6 +83,8 @@ class Evidence(Base):
     storage_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     # Baseline SHA-256 digest of the bytes accepted at ingestion. Immutable.
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    registration_status: Mapped[str] = mapped_column(String(16), nullable=False, default="ready", server_default="ready")
+    registration_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     integrity_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=IntegrityStatus.NOT_VERIFIED.value, index=True
     )
@@ -109,6 +116,7 @@ class EvidenceVerification(Base):
     result: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     # Short, safe failure reason. No paths, no system internals.
     reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="manual", server_default="manual")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
     )

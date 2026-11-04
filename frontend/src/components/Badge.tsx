@@ -104,6 +104,10 @@ export const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
 
 export const CUSTODY_ACTION_LABELS: Record<CustodyAction, string> = {
   registered: "Registered",
+  verified: "Integrity verified",
+  integrity_mismatch: "Integrity mismatch",
+  unavailable: "Storage unavailable",
+  recovered: "Registration recovered",
   transferred: "Transferred",
   released_for_analysis: "Released for analysis",
   returned_to_custody: "Returned to custody",

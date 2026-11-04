@@ -111,6 +111,8 @@ class AnalysisRunEvidence(Base):
     # Short safe reason. No paths, no file content.
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     artifact_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    input_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verification_id: Mapped[int | None] = mapped_column(ForeignKey("evidence_verifications.id", ondelete="RESTRICT"), nullable=True)
 
     run: Mapped[AnalysisRun] = relationship(back_populates="evidence_outcomes")
 
@@ -141,6 +143,7 @@ class Artifact(Base):
     )
     artifact_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     raw_value: Mapped[str] = mapped_column(String(500), nullable=False)
+    input_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     normalized_value: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
     # Structured provenance, e.g. {"kind": "line", "line": 37}.
     locator: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
