@@ -100,4 +100,4 @@ The deployed domain uses a Let's Encrypt certificate with Nginx TLS termination.
 
 ## Reporting and AI trust
 
-The deterministic rule engine proposes findings with cited evidence, locators, factors, and recommendations. Human acceptance is required for reports. Optional Ollama text generation uses structured context and grounding validation; the deployed configuration disables it. Neither a generated narrative nor a confidence score proves an allegation. Reports are immutable content-hashed snapshots, not cryptographic signatures.
+The deterministic rule engine proposes findings with cited evidence, locators, factors, and recommendations. Human acceptance is required for reports. M2 excludes free-form model narration from authoritative reports even if legacy Ollama settings are enabled; deterministic assembly preserves accepted finding meaning. Neither a generated narrative nor a confidence score proves an allegation. Reports are immutable content-hashed snapshots, not cryptographic signatures.

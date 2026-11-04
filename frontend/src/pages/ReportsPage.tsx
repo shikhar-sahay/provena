@@ -1,5 +1,4 @@
-// Reports freeze deterministic records plus a grounded narrative. Local AI is
-// optional and every provider failure uses transparent deterministic prose.
+// Reports preserve historical snapshots. New M2 prose is deterministic.
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -180,12 +179,13 @@ function ReportView({ report }: { report: Report }) {
         </p>}
         <p className="text-xs text-ink3">{content.support_policy ?? "Historical report: exact-input provenance policy was not recorded. This snapshot is preserved as originally generated."}</p>
 
+        {presentation.mode === "ai_enhanced" && <p role="alert" className="text-sm text-warning-ink">Historical model prose has not been revalidated under M2. Consult the structured accepted findings and their original support.</p>}
         <ReportSection title="Executive summary">
           <p className="whitespace-pre-wrap text-ink2">{presentation.executiveSummary}</p>
           <p className="mt-1 text-xs text-ink3">
             {presentation.mode === "ai_enhanced"
               ? `AI-enhanced narrative · Provider: ${presentation.provider ?? "local provider"} · Model: ${presentation.model ?? "not recorded"}`
-              : "Deterministic fallback narrative"}
+              : "Deterministic report narrative"}
           </p>
           {presentation.fallbackReason && <p className="mt-1 text-xs text-ink3">{presentation.fallbackReason}</p>}
         </ReportSection>

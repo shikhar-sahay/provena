@@ -16,6 +16,7 @@ export interface ReportPresentation {
 function cleanFallbackReason(value: string | null | undefined) {
   if (!value) return null;
   const lower = value.toLowerCase();
+  if (lower.includes("free-form model narration is disabled")) return "M2 uses deterministic narration to preserve accepted finding meaning.";
   if (lower.includes("timeout") || lower.includes("timed out")) {
     return "The local narrative provider did not respond in time.";
   }

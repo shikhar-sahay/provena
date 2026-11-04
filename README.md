@@ -74,13 +74,13 @@ flowchart LR
     S --> REC[Rule recommendations]
     REC --> H[Human review]
     H -->|Accepted findings| D[Deterministic report]
-    H -. "optional Ollama prose, disabled on EC2" .-> L[Validated narrative]
+    H --> L[Deterministic accepted-finding narrative]
     L -. "if enabled and grounded" .-> D
 ```
 
 The implemented pipeline uses regular expressions, key-aware structured rules, conservative normalization, and `pypdf` for machine-readable PDFs. It supports text, log, CSV, JSON, and machine-readable PDF evidence, extracts 14 controlled artifact types, and applies three versioned rules: `identity-recurrence`, `removable-media-session`, and `external-transfer-sequence`. Confidence is a deterministic weighted ranking score from 0 to 100, **not a calibrated probability or Bayesian estimate**.
 
-Optional Ollama integration can turn accepted, structured findings into report prose. Provena checks its JSON structure, referenced finding IDs, and concrete facts against the supplied context; invalid or unavailable model output falls back to deterministic prose. The model does not determine integrity, extract artifacts, run rules, score findings, or approve them. The AWS deployment has `LLM_ENABLED=false`. spaCy is not installed or used by the current pipeline. See [AI architecture](docs/ai-architecture.md) and [future enhancements](docs/future-enhancements.md).
+Authoritative reports use deterministic templates and exact accepted findings. M2 excludes free-form model prose because references and literal checks cannot establish semantic fidelity. Legacy Ollama configuration and availability probes remain compatible, but model output cannot introduce report conclusions. Historical reports remain unchanged. See [AI architecture](docs/ai-architecture.md).
 
 ## Cloud infrastructure
 
@@ -127,7 +127,7 @@ DuckDNS updates the hostname when the EC2 public IP changes. Nginx terminates HT
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Vitest |
 | API and services | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Uvicorn |
 | Data | PostgreSQL 16; local evidence storage in the AWS deployment; optional private S3 backend in code |
-| Analysis | Python parsers and rules, `pypdf`, deterministic correlation and confidence; optional Ollama HTTP narrative provider |
+| Analysis | Python parsers and rules, `pypdf`, deterministic correlation and confidence; deterministic authoritative narrative |
 | AWS operations | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM instance role, S3 buckets, Systems Manager; Nginx and systemd run on EC2 |
 | Security controls | bcrypt password hashes, JWT bearer tokens, workspace and case RBAC, SHA-256 integrity baselines, append-only custody and audit records |
 
@@ -144,7 +144,7 @@ Local prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and Pow
 ./scripts/dev.ps1 web      # Vite on localhost:5173, separate terminal
 ```
 
-The Vite development proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. The [development guide](docs/development.md) covers manual setup, configuration, migrations, tests, and optional local Ollama setup.
+The Vite development proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. The [development guide](docs/development.md) covers manual setup, configuration, migrations, tests, and report narration safety.
 
 To use the deployed application instead, open the [live HTTPS login](https://provena-app.duckdns.org/login). Do not use local demo credentials as production credentials.
 

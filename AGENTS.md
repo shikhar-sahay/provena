@@ -20,9 +20,9 @@ reporting) while preserving evidence integrity, traceability, and human oversigh
   unless explicitly requested with justification.
 - Do not add LLM SDKs, model dependencies, embeddings, vector DBs, knowledge
   graphs, RAG/MCP infrastructure, or cloud-specific services unless explicitly
-  requested with justification. The optional Ollama HTTP narrative integration
-  already exists with strict grounding validation and deterministic fallback;
-  do not expand it without explicit justification.
+  requested with justification. Legacy Ollama configuration and an availability probe remain; M2 authoritative
+  reports use deterministic assembly because free-form semantic fidelity cannot
+  be guaranteed. Do not reintroduce model prose without explicit justification.
 
 ## 3. Core AI principle
 
@@ -34,10 +34,9 @@ The investigative pipeline is deterministic parsers, regex, key-aware structured
 rules, pypdf text extraction for machine-readable PDFs, custom correlation logic,
 custom rule-based reasoning, transparent weighted confidence scoring, and
 deterministic recommendations, with human investigator validation before anything
-reaches a report. An optional local Ollama model may render validated structured
-findings into report prose under strict grounding validation; deterministic
-fallback prose is always available, and the system must degrade gracefully when
-the model is unavailable.
+reaches a report. M2 report prose uses deterministic templates and exact accepted findings. Legacy
+Ollama settings do not enable free-form authoritative narration. Notes, descriptions
+and uploaded content are untrusted data, never instructions to a narrator.
 
 - Never call ordinary conditional logic "machine learning".
 - Never claim probabilistic/Bayesian confidence scoring is implemented.

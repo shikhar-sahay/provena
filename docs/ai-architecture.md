@@ -1,261 +1,44 @@
-# AI Architecture
+# AI and analysis architecture
 
-> Status: hybrid implementation. **Extraction, correlation, rule-based findings,
-> human validation, grounded optional Ollama narrative, and deterministic
-> fallback reporting are implemented.**
-
-The deployed EC2 configuration has `LLM_ENABLED=false`. Deterministic
-extraction, correlation, rules, confidence, recommendations, and reports
-still operate. **spaCy is not a dependency and has no role in the current
-pipeline**; a possible future integration is listed in
-[future enhancements](future-enhancements.md). AWS hosts this same AI pipeline
-rather than replacing it. See [current AWS deployment](aws-deployment.md).
-
-## Implemented local narrative provider
-
-Report narrative generation uses a small provider boundary in the modular
-monolith. The default provider is deterministic and requires no model. When
-`LLM_ENABLED=true`, `LLM_PROVIDER=ollama`, and `OLLAMA_MODEL` is configured,
-Provena sends only a controlled JSON context to Ollama. That context contains
-investigation metadata, accepted findings, confidence factors,
-recommendations, and investigator notes. Raw evidence bytes are never sent.
-
-The prompt requires JSON with an executive summary, investigation narrative,
-per-finding narratives, a conclusion, and referenced finding IDs. Provena
-validates the structure, length limits, and finding IDs. Any HTTP error,
-timeout, malformed JSON, missing field, or unsupported finding reference is
-rejected and replaced with deterministic prose. Provider, model, generation
-time, context SHA-256, template version, fallback flag, and bounded error are
-stored in the immutable report snapshot. Hidden chain-of-thought is neither
-requested nor stored.
-
-The validator also rejects concrete IP addresses, email addresses, URLs,
-filenames, host identifiers, and quantities that do not occur in the supplied
-context. This deliberately prefers fallback over fluent but unsupported prose.
+The implemented pipeline is deterministic parsing, extraction, shared-value
+correlation and three explainable rules. It uses FastAPI's modular monolith and
+PostgreSQL for persistence. It performs no machine learning, Bayesian inference,
+OCR, authentication-event normalization or autonomous incident reconstruction.
+Scores rank rule support; they are not calibrated probabilities.
 
 ```mermaid
 flowchart LR
-    A[Accepted findings and structured case state] --> B[Grounded context]
-    B --> C{Ollama enabled and healthy?}
-    C -->|Yes| D[Structured local generation]
-    D --> E{Schema and references valid?}
-    E -->|Yes| F[AI-enhanced narrative]
-    E -->|No| G[Deterministic fallback]
-    C -->|No| G
-    F --> H[Immutable hashed report]
-    G --> H
+    E[Ready independently verified evidence] --> S[Fresh hashed private snapshot]
+    S --> P[Bounded parsing and explicit coverage]
+    P --> A[Versioned artifacts and source spans]
+    A --> C[Immutable semantic correlation snapshots]
+    C --> F[Versioned rule proposals and factors]
+    F --> H[Human accept or reject]
+    H --> V[Recheck integrity and current support]
+    V --> R[Deterministic authoritative report]
 ```
 
-The provider does not parse evidence, correlate entities, run rules, set
-confidence, change finding status, determine integrity, or update custody.
+## Authoritative narrative safety
 
-## The deterministic analytical pipeline
+M2 removes free-form model output from authoritative reports. ID and literal
+validation cannot reliably reject invented causation, allegations, certainty or
+negation reversal. Stronger prompts do not solve that semantic trust problem.
+Narratives assemble fixed templates and the exact accepted deterministic finding
+titles/summaries, with explicit scores and source references. They do not
+paraphrase or reinterpret conclusions. User descriptions, titles and investigator
+notes remain labeled report metadata, never narration instructions.
 
-```mermaid
-flowchart TB
-    Ingest[Evidence Ingestion] --> Proc[Processing / Normalization]
-    Proc --> Extract[Artifact & Entity Extraction]
-    Extract --> Corr[Evidence Correlation]
-    Corr --> Rules[Rule-Based Reasoning]
-    Rules --> Score[Confidence Scoring]
-    Score --> Rec[Investigation Recommendations]
-    Rec --> Human[Human Investigator Validation]
-    Human --> Validated[Validated structured findings]
-    Validated --> Template[Structured report template]
-    Validated --> LLMGen{Ollama / local LLM: prose generation only}
-    LLMGen --> Report[Investigation report]
-    Template --> Report
+Legacy Ollama settings and the optional availability probe remain compatible,
+but even an explicitly enabled provider cannot contribute report prose. No model
+generation request is made, so prompt injection, malformed responses, timeouts
+and unavailable models cannot control report conclusions. The metadata records
+`provider=deterministic`, template version and context hash. The existing
+`deterministic_fallback` mode is retained for API compatibility. Existing model
+reports remain unchanged historical snapshots, with a visible M2 warning.
 
-    subgraph Explainable["Explainable analytical AI (deterministic, traceable)"]
-        Ingest
-        Proc
-        Extract
-        Corr
-        Rules
-        Score
-        Rec
-    end
-    subgraph Generative["Generative AI (language only)"]
-        LLMGen
-    end
-    style Explainable fill:#0c2a3f,stroke:#0ea5e9
-    style Generative fill:#3b2f0c,stroke:#eab308
-```
-
-The boundary is deliberate: everything that determines investigative truth
-lives in the explainable block; the generative block only turns
-already-validated findings into readable prose. Human validation happens
-**before** any generative step.
-
-## Evidence foundation (implemented) feeds the pipeline (implemented through validation)
-
-The evidence layer provides the inputs consumed by the intelligence pipeline:
-
-- stable evidence identifiers (`E-001`) that findings can cite,
-- metadata, timestamps, source provenance, and original filenames,
-- evidence types (`log`, `network`, ...) for routing to the right parsers,
-- integrity state per item, plus controlled content access through the
-  storage service (`app/modules/evidence/storage.py`),
-- custody history showing how each item was handled.
-
-The implemented order is therefore:
-
-```mermaid
-flowchart LR
-    V[Verified evidence] --> P[Processing / Normalization]
-    P --> X[Artifact Extraction]
-    X --> C[Correlation]
-    C --> R[Rule-Based Reasoning]
-    R --> S[Confidence]
-    S --> Rec[Recommendations]
-    Rec --> H[Human Validation]
-    H --> D[Grounded Report Context]
-    D --> L[Optional Ollama Narrative]
-    D --> F[Deterministic Fallback]
-```
-
-Implemented: verified-only processing, parsers (txt, log, csv, json, pdf),
-14 artifact types, provenance locators, deduplicated artifacts, shared-value
-correlation, three rules, weighted confidence, recommendations from rules,
-pending/accepted/rejected validation, investigator notes, deterministic
-reports, optional Ollama narrative enhancement, and deterministic fallback.
-
-One principle governs this handoff: **analysis runs only on VERIFIED
-evidence.** A `mismatch`, `unavailable`, or never-verified item is blocked
-server-side with an explicit reason, never silently consumed. Verification
-status travels with the evidence into processing, and the synthetic logs plus
-generated PDF in `sample-data/` exist so extraction work has realistic,
-committable input.
-
-## A. Why Provena uses a hybrid AI architecture
-
-Provena combines deterministic symbolic AI with an optional language-generation
-component because they solve different problems:
-
-1. **Deterministic evidence processing and symbolic reasoning** (parsers,
-   extraction, correlation, rule engine, weighted scoring, recommendation
-   logic) establish *what the evidence supports*. This part must be
-   inspectable, reproducible, and auditable.
-2. **Generative AI for natural-language reporting** (a local LLM) turns
-   validated structured findings into professional report prose. It handles
-   *how findings read*, never *what they claim*.
-
-The deterministic pipeline preserves evidence integrity and recorded derivation
-steps. When enabled, the model only improves wording; grounding validation and
-deterministic fallback address unsupported output. The deployed EC2 instance
-currently uses the deterministic path.
-
-## B. Why rule-based reasoning counts as AI
-
-Rule-based reasoning is **symbolic AI** in the expert-systems tradition: the
-system encodes investigator domain knowledge as explicit rules and applies it
-to structured facts to derive hypotheses and next-step recommendations. For
-example, the implemented external-transfer rule proposes a finding when file
-access precedes an external upload within 24 hours and the observations share
-a user or host. This is reasoning over recorded facts, not form validation.
-The current three-rule set is intentionally small and transparent.
-
-## C. Explainability
-
-Every generated finding must be traceable to:
-
-- the supporting evidence items (by id),
-- the extracted artifacts and entities,
-- the correlations that linked them,
-- the triggered rules (by rule id),
-- the confidence contributions of each factor,
-- the resulting recommendation.
-
-If an investigator asks "why does the system believe this", the answer is a
-chain of recorded references, not a generated paragraph. This trace is what
-makes the audit log meaningful for analysis events
-(`AI_ANALYSIS_STARTED`, `AI_ANALYSIS_COMPLETED`, `AI_ANALYSIS_FAILED`,
-`AI_FINDING_GENERATED`, `AI_FINDING_ACCEPTED`, `AI_FINDING_REJECTED`, and
-`REPORT_GENERATED`).
-
-## D. Confidence scoring
-
-- **Implemented: transparent weighted confidence scoring.**
-  Each contributing factor has a recorded weight, and the final score is a
-  documented combination of its inputs. These scores rank and prioritize
-  findings; they are **not** mathematically calibrated probabilities and must
-  never be presented as such.
-- **Future enhancement: Bayesian confidence scoring**, where prior beliefs
-  update with observed evidence. This is explicitly not the starting design.
-
-## E. Generative AI / Ollama
-
-- A local LLM is optional; **Ollama is the implemented inference mechanism**
-  when explicitly enabled. It is disabled on the current EC2 deployment.
-- Model choice must remain hardware-conscious: small instruction-tuned models
-  (a few billion parameters) are sufficient for rephrasing structured input.
-- The model receives **validated structured findings**, not massive raw
-  evidence dumps. Input size stays small and reviewable.
-- The LLM is used for **language generation** and is **not the source of
-  investigative truth**.
-- Provena **degrades gracefully** when the LLM is unavailable: analysis,
-  validation, and structured reports keep working; only the polished prose
-  rendering falls back to a simple template.
-
-## F. Human oversight
-
-Investigators remain responsible for validating findings and making
-investigative decisions. AI provides decision support: it surfaces patterns,
-scores hypotheses, and suggests next steps, but no AI output reaches a report
-without recorded human acceptance. Rejected findings are excluded downstream
-and remain visible in the audit trail as rejected.
-
-## G. Technical capability mapping
-
-Provena implements these capabilities as deterministic platform behavior:
-
-- **Decision support:** the analysis pipeline extracts evidence facts and
-  recommends investigative steps, with the investigator in the loop. It is
-  not an autonomous agent.
-- **Knowledge representation:** structured evidence, entities, rules, and
-  finding records with explicit references.
-- **Search and correlation:** deterministic shared-artifact correlation is
-  implemented; a future investigation knowledge graph may extend it.
-- **Symbolic AI / expert systems:** the rule engine encoding investigator
-  domain knowledge.
-- **Rule-based reasoning:** deriving hypotheses and recommendations from
-  structured facts.
-- **Reasoning under uncertainty:** transparent weighted confidence now,
-  Bayesian scoring later.
-- **Information extraction:** deterministic regex and key-aware structured
-  extraction with exact source locators.
-- **Planning:** recommendation of next investigative steps given current state.
-- **Natural language generation:** optional grounded rendering of accepted
-  findings into report prose, with deterministic fallback.
-
-## H. Implemented capabilities and future scope
-
-Implemented: information extraction
-(regex plus key-aware structured rules over txt, log, csv, json, and
-machine-readable PDF via pypdf), knowledge representation (artifacts with
-locators, correlations with contributors, findings with factors), information
-retrieval (filtered artifact and correlation APIs), deterministic
-shared-value correlation, symbolic rule-based reasoning (three versioned
-rules), transparent weighted confidence, rule-derived recommendations, human
-validation (pending/accepted/rejected with reviewer and note), and
-deterministic reporting from accepted findings.
-
-Explicitly not implemented: Bayesian confidence scoring, knowledge graphs,
-automated timeline reconstruction, cross-case pattern analysis, evidence
-similarity detection, embeddings, vector search, RAG, and MCP integrations.
-Optional Ollama narrative enhancement is implemented with grounding
-validation and deterministic fallback; the model never originates findings,
-scores, integrity results, or custody facts. The rule set is intentionally
-small; sophistication grows by adding inspectable rules, not opacity.
-
-## I. Future AI enhancements
-
-Legitimate possibilities once the foundation holds: Bayesian confidence
-scoring, an investigation knowledge graph, automated timeline reconstruction,
-cross-case pattern analysis, evidence similarity detection, and integrations
-with digital forensic tools. None of these are implemented; none require new
-infrastructure beyond the modular monolith until proven otherwise.
-
+This deliberately narrows the old optional narration feature. Reintroducing
+free-form authoritative paraphrases requires a separately justified design;
+a literal blacklist is insufficient. No new model dependencies were added.
 
 ## M1 input provenance and historical support
 

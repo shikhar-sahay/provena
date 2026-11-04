@@ -87,3 +87,12 @@ describe("report snapshot compatibility", () => {
     expect(presentation.fallbackReason).not.toContain("stack trace");
   });
 });
+
+
+it("explains deliberate M2 narration without implying a provider failure", () => {
+  const presentation = presentReport(reportWith({ generation_metadata: {
+    mode: "deterministic_fallback", provider: "deterministic", fallback: true,
+    error: "Free-form model narration is disabled in authoritative reports; deterministic assembly preserves validated finding meaning."
+  }}));
+  expect(presentation.fallbackReason).toBe("M2 uses deterministic narration to preserve accepted finding meaning.");
+});

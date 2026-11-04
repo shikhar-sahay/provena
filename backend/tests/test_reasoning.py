@@ -224,7 +224,7 @@ def test_reports_only_include_accepted(client, investigator, storage_dir, db_ses
     assert content["custody_summary"] or content["custody_summary"] == []
     assert content["timeline"]
     assert content["recommendations"]
-    assert content["generator"] == "grounded-report-v3"
+    assert content["generator"] == "grounded-report-v4"
     assert content["generation_metadata"]["mode"] == "deterministic_fallback"
     assert content["narrative"]["used_finding_ids"]
 

@@ -11,25 +11,13 @@ the full code is returned only when created.
 The development seed remains idempotent and creates or repairs the `Provena
 Demo Workspace` membership for all four local accounts.
 
-## Optional Ollama narrative
+## Report narrative safety
 
-Core Provena operation and report generation do not require Ollama. To enable
-local narrative enhancement:
-
-```powershell
-ollama pull qwen3:4b
-$env:LLM_ENABLED="true"
-$env:LLM_PROVIDER="ollama"
-$env:OLLAMA_BASE_URL="http://127.0.0.1:11434"
-$env:OLLAMA_MODEL="qwen3:4b"
-./scripts/dev.ps1 api
-```
-
-`qwen3:4b` is an example for modest local hardware, not a hard-coded
-requirement. Choose another installed Ollama model through `OLLAMA_MODEL` when
-resource constraints require it. The Workspace page reports availability. A
-missing model, stopped server, timeout, or invalid response automatically uses
-deterministic fallback prose.
+M2 authoritative reports use deterministic assembly regardless of legacy Ollama
+settings. No model is needed or contacted for report generation. The Workspace
+page may still probe an explicitly configured local provider for compatibility,
+but availability does not enable authoritative model prose. Descriptions and
+notes are report metadata, not instructions. See [analysis architecture](ai-architecture.md).
 
 ## Fresh demo walkthrough
 
@@ -41,9 +29,9 @@ deterministic fallback prose.
 6. Run analysis as an assigned analyst. Inspect artifacts, locators,
    correlations, rule conditions, and weighted confidence.
 7. Accept or reject findings as an investigator and add review context.
-8. Generate a report. Inspect narrative mode, context hash, accepted findings,
+8. Generate a report. Inspect deterministic narrative mode, context hash, accepted findings,
    and final report content hash.
-9. Stop Ollama and generate a new report to demonstrate deterministic fallback.
+9. Confirm reports remain usable without any local model.
 
 ## Prerequisites
 

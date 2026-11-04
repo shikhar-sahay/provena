@@ -74,8 +74,7 @@ flowchart TB
     Intel --> Find["Rule findings + Validation (implemented)"]
     Intel --> Rep["Grounded immutable reports (implemented)"]
     API --> AI["AI investigation engine, in-process (implemented)"]
-    AI --> LLM["Optional local Ollama narrative (implemented)"]
-    LLM --> Fall["Deterministic fallback"]
+    AI --> Fall["Deterministic authoritative narrative (M2)"]
     API --> PG[("PostgreSQL")]
 ```
 
@@ -268,9 +267,9 @@ flowchart LR
     I --> J[Archive Investigation]
 ```
 
-All stages in this diagram are implemented. Ollama report prose is an optional
-provider in code, currently disabled in the AWS deployment. Deterministic
-fallback remains available without a model.
+All stages in this diagram are implemented. M2 authoritative report prose uses
+deterministic assembly regardless of legacy Ollama settings. Historical reports
+retain their original generation metadata. See [analysis architecture](ai-architecture.md).
 
 ## Request / data flow (implemented paths)
 

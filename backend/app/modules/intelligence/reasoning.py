@@ -513,7 +513,7 @@ def generate_report(
         ],
         "generated_by": user.username,
         "generated_at": _now().isoformat(),
-        "generator": "grounded-report-v3",
+        "generator": "grounded-report-v4",
         "excluded_stale_finding_ids": excluded,
         "support_policy": "Exact-input provenance required; integrity checked at report generation, not a guarantee of future storage state.",
         "narrative": narrative_result.narrative,
