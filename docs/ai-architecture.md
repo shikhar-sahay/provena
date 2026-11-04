@@ -270,3 +270,26 @@ Correlation row identities remain stable across identical rebuilds. See
 [evidence integrity and recovery](evidence-integrity.md) for lifecycle, limits,
 recovery procedures and the distinction between historical results and current
 recorded eligibility. No new extraction rules or event schema are introduced.
+
+
+## M2 parser coverage and coordinates
+
+Pipeline 2 scans decoded source text separately from the 280-character display
+excerpt. Extractor 2 plus parser 2 version the changed artifact semantics; earlier
+artifacts retain their original version. Repeated occurrences retain distinct
+spans. Spans are zero-based, half-open Unicode codepoint positions within a
+source line, decoded CSV cell, decoded JSON scalar or PDF extracted line. They
+are never advertised as original byte offsets. CSV column ordinals and JSON
+Pointers supplement human-readable locations. Structured decoding and PDF text
+extraction cannot provide exact original file character offsets.
+
+Each new run/evidence outcome preserves parser coverage. Complete, partial and
+rejected inputs are distinct. Limits are 10 MiB text/CSV/JSON, 25 MiB PDF,
+10,000 characters per value/line, 50,000 source units, 2,000,000 scanned characters,
+10,000 persisted artifacts per evidence, JSON depth 20 and 50 PDF pages.
+Exceeding a byte limit rejects the parse. Record, character and PDF page budgets
+produce explicit partial outcomes, not complete coverage. PDF coverage records
+total pages, processed pages, skipped-page reasons and unprocessed page count.
+Invalid UTF-8 replacements are explicit. Image content is not OCR-processed.
+PDF decoding still uses an in-process library, not a hostile-document sandbox.
+Historical outcomes without coverage remain unknown, not retroactively complete.

@@ -23,6 +23,7 @@ class RunEvidenceRead(BaseModel):
     artifact_count: int
     input_sha256: str | None = None
     verification_id: int | None = None
+    coverage: dict | None = None
 
 
 class AnalysisRunRead(BaseModel):

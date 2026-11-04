@@ -14,6 +14,8 @@ VERIFIED is processed. Everything else becomes an explicit blocked outcome.
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+import hashlib
+import re
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
 
@@ -41,7 +43,8 @@ from app.modules.investigations.models import Investigation
 from app.modules.users.models import Role, User
 from app.modules.workspaces import service as workspace_service
 
-PIPELINE_VERSION = "1"
+PIPELINE_VERSION = "2"
+MAX_ARTIFACTS_PER_EVIDENCE = 10_000
 
 SUPPORTED_EXTENSIONS = {"txt": "txt", "log": "log", "csv": "csv", "json": "json", "pdf": "pdf"}
 
@@ -167,13 +170,19 @@ def _get_or_create_artifact(
     locator_override: dict | None = None,
     extractor,
 ) -> Artifact:
+    source_key = unit.locator_key
+    if locator_override is not None:
+        source_key += ":" + str(locator_override.get("column_index", "")) + ":" + str(locator_override.get("span", ""))
+    if len(source_key) > 255:
+        source_key = "sha256:" + hashlib.sha256(source_key.encode()).hexdigest()
+    version = f"{extractors.EXTRACTOR_VERSION}.p{parsers.PARSER_VERSION}"
     stmt = select(Artifact).where(
         Artifact.evidence_id == evidence_id,
         Artifact.artifact_type == artifact_type,
         Artifact.normalized_value == normalized_value,
-        Artifact.source_key == unit.locator_key,
+        Artifact.source_key == source_key,
         Artifact.extractor_name == extractor.name,
-        Artifact.extractor_version == extractors.EXTRACTOR_VERSION,
+        Artifact.extractor_version == version,
     )
     existing = db.execute(stmt).scalar_one_or_none()
     if existing is not None:
@@ -188,11 +197,11 @@ def _get_or_create_artifact(
         raw_value=raw_value,
         normalized_value=normalized_value,
         locator=locator_override if locator_override is not None else dict(unit.locator),
-        source_key=unit.locator_key,
+        source_key=source_key,
         context=unit.context,
         method=extractor.method,
         extractor_name=extractor.name,
-        extractor_version=extractors.EXTRACTOR_VERSION,
+        extractor_version=version,
     )
     db.add(artifact)
     db.flush()
@@ -234,16 +243,28 @@ def _process_evidence(
     try:
         units = parsers.PARSERS[ext](data)
     except parsers.NoTextError as exc:
+        db.info["parser_coverage"] = {"status": "rejected", "parser_version": parsers.PARSER_VERSION, "warnings": [str(exc)]}
         return RunEvidenceStatus.FAILED.value, str(exc), 0
     except ParserError:
+        db.info["parser_coverage"] = {"status": "rejected", "parser_version": parsers.PARSER_VERSION, "warnings": ["Input malformed or exceeds supported format limits."]}
         return RunEvidenceStatus.FAILED.value, "Evidence could not be parsed within supported format limits.", 0
+    db.info["parser_coverage"] = units.coverage
     count = 0
     for unit in units:
         for extractor, extraction in extractors.extract_all(unit):
             normalized = normalize(extraction.artifact_type, extraction.raw_value)
             if normalized is None:
                 continue
+            if count >= MAX_ARTIFACTS_PER_EVIDENCE:
+                units.warn("Artifact budget reached; remaining matches were not persisted.")
+                units.coverage["artifact_limit"] = MAX_ARTIFACTS_PER_EVIDENCE
+                return RunEvidenceStatus.PARTIAL.value, "Parser or extraction coverage is partial; inspect coverage warnings.", count
             locator = dict(unit.locator)
+            locator["record_key"] = str(locator.get("record_key", unit.locator_key))
+            # Store small deterministic positional cues, not unbounded scan content.
+            words = list(re.finditer(r"\b(?:upload|uploaded|exfil|sent|transmit)\b", unit.scan_text, re.I))
+            locator["upload_keyword_offsets"] = [m.start() for m in words[:100]]
+            locator["coverage_status"] = units.coverage["status"]
             if extraction.span is not None:
                 locator["span"] = [extraction.span[0], extraction.span[1]]
             _get_or_create_artifact(
@@ -254,11 +275,15 @@ def _process_evidence(
                 artifact_type=extraction.artifact_type,
                 raw_value=extraction.raw_value,
                 normalized_value=normalized,
-                unit=unit,
+                unit=SourceUnit(unit.locator, unit.locator_key,
+                    parsers._bound_context(unit.scan_text[max(0, (extraction.span or (0, 0))[0] - 80):]),
+                    unit.text, unit.field_name),
                 locator_override=locator,
                 extractor=extractor,
             )
             count += 1
+    if units.coverage["status"] == "partial":
+        return RunEvidenceStatus.PARTIAL.value, "Parser or extraction coverage is partial; inspect coverage warnings.", count
     return RunEvidenceStatus.PROCESSED.value, None, count
 
 
@@ -318,6 +343,8 @@ def start_run(
     silent skips. Unexpected failures mark the run FAILED without leaving
     half-persisted intelligence state.
     """
+    # Serialize run numbers, artifact insertion and correlation rebuilds per case.
+    db.execute(select(Investigation.id).where(Investigation.id == inv.id).with_for_update()).scalar_one()
     wanted = list(dict.fromkeys(evidence_ids))
     evidence_map = {
         e.id: e
@@ -365,6 +392,7 @@ def start_run(
             with db.begin_nested():
                 from app.modules.evidence.models import EvidenceVerification
                 prior_check = db.execute(select(func.max(EvidenceVerification.id))).scalar() or 0
+                db.info.pop("parser_coverage", None)
                 outcome, error, count = _process_evidence(db, inv, evidence, run)
                 checked = db.execute(select(EvidenceVerification).where(
                     EvidenceVerification.id > prior_check,
@@ -378,8 +406,9 @@ def start_run(
                         status=outcome,
                         error=error,
                         artifact_count=count,
-                        input_sha256=checked.observed_sha256 if checked and checked.result == "verified" and outcome == "processed" else None,
-                        verification_id=checked.id if checked and outcome in {"processed", "blocked_mismatch", "blocked_unavailable", "failed"} else None,
+                        coverage=db.info.pop("parser_coverage", None),
+                        input_sha256=checked.observed_sha256 if checked and checked.result == "verified" and outcome in {"processed", "partial"} else None,
+                        verification_id=checked.id if checked and outcome in {"processed", "partial", "blocked_mismatch", "blocked_unavailable", "failed"} else None,
                     )
                 )
                 total_artifacts += count

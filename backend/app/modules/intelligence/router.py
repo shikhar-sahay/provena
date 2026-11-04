@@ -90,6 +90,7 @@ def _to_run_read(db: Session, run) -> AnalysisRunRead:
             artifact_count=outcome.artifact_count,
             input_sha256=outcome.input_sha256,
             verification_id=outcome.verification_id,
+            coverage=outcome.coverage,
         )
         for outcome in run.evidence_outcomes
     ]

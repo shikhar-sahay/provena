@@ -1,3 +1,4 @@
+import { ParserCoverageView } from "../components/ParserCoverageView";
 // AI Analysis workspace: deterministic extraction and shared-value
 // correlation over verified evidence. Overview, Artifacts, Correlations, and
 // Findings are functional. Nothing here infers guilt or intent.
@@ -253,6 +254,9 @@ function AnalysisOverview({
                     {run.initiated_by_username ?? "unknown"} ·{" "}
                     {run.completed_at ? timeAgo(run.completed_at) : formatDate(run.started_at)}
                   </p>
+                  {run.evidence_outcomes.map((outcome) => (
+                    <ParserCoverageView key={outcome.id} coverage={outcome.coverage} label={outcome.evidence_number ?? "Evidence"} />
+                  ))}
                   {run.status === "failed" && run.error && (
                     <p className="mt-0.5 text-xs text-danger-ink">{run.error}</p>
                   )}

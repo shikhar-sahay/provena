@@ -4,6 +4,7 @@ import type { FindingStatus, RunEvidenceStatus, RunStatus } from "../api/client"
 
 export const RUN_EVIDENCE_LABELS: Record<RunEvidenceStatus, string> = {
   processed: "Processed",
+  partial: "Partial coverage",
   blocked_not_verified: "Needs verification",
   blocked_mismatch: "Blocked: mismatch",
   blocked_unavailable: "Blocked: unavailable",

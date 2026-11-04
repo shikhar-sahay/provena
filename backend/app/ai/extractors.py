@@ -161,7 +161,7 @@ def _key_aware_extractions(text: str) -> list[tuple[str, str, tuple[int, int] | 
 class Extraction:
     artifact_type: str
     raw_value: str
-    # Character offsets of the raw value within the unit context, where
+    # Character offsets of the raw value within the decoded scan text, never the display excerpt, where
     # available. Used for positional checks (e.g. upload destinations); the
     # locator_key remains the stable dedup identity.
     span: tuple[int, int] | None = None
@@ -174,7 +174,7 @@ class Extractor:
     run: object = field(repr=False)
 
     def extract(self, unit: SourceUnit) -> list[Extraction]:
-        seen: set[tuple[str, str]] = set()
+        seen: set[tuple[str, str, tuple[int, int] | None]] = set()
         out = []
         for item in self.run(unit):  # type: ignore[operator]
             if len(item) == 3:
@@ -185,7 +185,7 @@ class Extractor:
             raw = raw.strip()
             if not raw or len(raw) > MAX_RAW_CHARS:
                 continue
-            key = (artifact_type, raw)
+            key = (artifact_type, raw, span)
             if key in seen:
                 continue
             seen.add(key)
@@ -197,14 +197,14 @@ def _regex_extractor(pattern: re.Pattern[str], artifact_type: str):
     def run(unit: SourceUnit):
         return [
             (artifact_type, m.group(0), (m.start(), m.end()))
-            for m in pattern.finditer(unit.context)
+            for m in pattern.finditer(unit.scan_text)
         ]
 
     return run
 
 
 def _domain_run(unit: SourceUnit):
-    for match in DOMAIN_RE.finditer(unit.context):
+    for match in DOMAIN_RE.finditer(unit.scan_text):
         value = match.group(0)
         labels = value.split(".")
         tld = labels[-1].casefold()
@@ -216,7 +216,7 @@ def _domain_run(unit: SourceUnit):
 
 
 def _usb_token_run(unit: SourceUnit):
-    for match in USB_TOKEN_RE.finditer(unit.context):
+    for match in USB_TOKEN_RE.finditer(unit.scan_text):
         value = match.group(0)
         if len(value) < 5:
             continue
@@ -224,7 +224,7 @@ def _usb_token_run(unit: SourceUnit):
 
 
 def _port_run(unit: SourceUnit):
-    for match in PORT_RE.finditer(unit.context):
+    for match in PORT_RE.finditer(unit.scan_text):
         host, port = match.group(1), match.group(2)
         if not any(c.isalpha() or c in ".-" for c in host):
             continue
@@ -233,7 +233,7 @@ def _port_run(unit: SourceUnit):
 
 
 def _email_username_run(unit: SourceUnit):
-    for match in EMAIL_RE.finditer(unit.context):
+    for match in EMAIL_RE.finditer(unit.scan_text):
         local = match.group(0).split("@", 1)[0]
         if USERNAME_VALUE_RE.match(local):
             end = match.start() + len(local)
@@ -241,7 +241,13 @@ def _email_username_run(unit: SourceUnit):
 
 
 def _keyvalue_run(unit: SourceUnit):
-    yield from _key_aware_extractions(unit.context)
+    if unit.field_name is None:
+        yield from _key_aware_extractions(unit.scan_text)
+    else:
+        prefix = f"{unit.field_name}="
+        for typ, value, span in _key_aware_extractions(prefix + unit.scan_text):
+            if span and span[0] >= len(prefix):
+                yield typ, value, (span[0] - len(prefix), span[1] - len(prefix))
 
 
 EXTRACTORS: list[Extractor] = [
@@ -261,7 +267,7 @@ EXTRACTORS: list[Extractor] = [
     Extractor("keyvalue-pattern", "structured", _keyvalue_run),
 ]
 
-EXTRACTOR_VERSION = "1"
+EXTRACTOR_VERSION = "2"
 
 
 def extract_all(unit: SourceUnit) -> list[tuple[Extractor, Extraction]]:

@@ -37,6 +37,7 @@ class RunStatus(str, enum.Enum):
 
 class RunEvidenceStatus(str, enum.Enum):
     PROCESSED = "processed"
+    PARTIAL = "partial"
     BLOCKED_NOT_VERIFIED = "blocked_not_verified"
     BLOCKED_MISMATCH = "blocked_mismatch"
     BLOCKED_UNAVAILABLE = "blocked_unavailable"
@@ -113,6 +114,8 @@ class AnalysisRunEvidence(Base):
     artifact_count: Mapped[int] = mapped_column(nullable=False, default=0)
     input_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     verification_id: Mapped[int | None] = mapped_column(ForeignKey("evidence_verifications.id", ondelete="RESTRICT"), nullable=True)
+
+    coverage: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     run: Mapped[AnalysisRun] = relationship(back_populates="evidence_outcomes")
 

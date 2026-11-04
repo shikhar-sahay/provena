@@ -247,13 +247,27 @@ export interface DashboardSummary {
 export type RunStatus = "pending" | "running" | "completed" | "failed";
 export type RunEvidenceStatus =
   | "processed"
+  | "partial"
   | "blocked_not_verified"
   | "blocked_mismatch"
   | "blocked_unavailable"
   | "unsupported"
   | "failed";
 
+export interface ParserCoverage {
+  status: "complete" | "partial" | "rejected";
+  parser_version?: string;
+  units_processed?: number;
+  characters_scanned?: number;
+  warnings?: string[];
+  total_pages?: number;
+  processed_pages?: number[];
+  skipped_pages?: { page: number; reason: string }[];
+  unprocessed_page_count?: number;
+}
+
 export interface RunEvidenceOutcome {
+  coverage?: ParserCoverage | null;
   input_sha256?: string | null;
   verification_id?: number | null;
   id: number;
