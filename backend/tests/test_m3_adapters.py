@@ -100,3 +100,16 @@ def test_record_accounting_coordinates_and_limits(monkeypatch):
     with pytest.raises(RecordError): parse_records(b'{"EventID":1,"EventID":2}',config('sysmon','json'))
     with pytest.raises(RecordError): parse_records(b'\xff',cfg)
     with pytest.raises(RecordError): parse_records(b'x'* (10*1024*1024+1),config())
+
+def test_utf8_crlf_csv_and_long_records(monkeypatch):
+    cfg=config('windows_security','csv')
+    batch=parse_records('EventID,TargetUserName,IpAddress\r\n4625,mira,2001:db8::1\r\n4624,orion,-\r\n'.encode(),cfg)
+    assert [r.locator['row'] for r in batch.records]==[1,2]
+    assert adapt(batch.records[0].value,cfg)['source_ip']=='2001:db8::1'
+    cfg=config()
+    batch=parse_records(('sshd: '+'x'*33000).encode(),cfg)
+    assert batch.records[0].error and batch.records[0].value is None
+    with pytest.raises(RecordError):
+        parse_records(b'[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]',config('windows_security','json'))
+    unknown=event_time('Nov  5 12:00:00',config(timestamp_convention='iso8601',year=2026,timezone='+00:00'))
+    assert unknown['utc'] is None and unknown['warnings']

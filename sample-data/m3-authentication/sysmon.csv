@@ -1,0 +1,4 @@
+ProviderName,EventID,Channel,Computer,EventRecordID,UtcTime,User,ProcessId,ProcessGuid,Image,CommandLine,SourceIp,DestinationIp,SourcePort,DestinationPort,Protocol
+Microsoft-Windows-Sysmon,1,Microsoft-Windows-Sysmon/Operational,LAB-WIN-1,201,2026-11-05 12:20:00.000,SYNTHETIC\mira,456,{11111111-2222-3333-4444-555555555555},C:\Synthetic\demo.exe,demo.exe --synthetic-only,192.0.2.50,2001:db8::50,42000,443,tcp
+Microsoft-Windows-Sysmon,3,Microsoft-Windows-Sysmon/Operational,LAB-WIN-1,203,2026-11-05 12:20:00.000,SYNTHETIC\mira,456,{11111111-2222-3333-4444-555555555555},C:\Synthetic\demo.exe,demo.exe --synthetic-only,192.0.2.50,2001:db8::50,42000,443,tcp
+Microsoft-Windows-Sysmon,99,Microsoft-Windows-Sysmon/Operational,LAB-WIN-1,299,2026-11-05 12:20:00.000,SYNTHETIC\mira,456,{11111111-2222-3333-4444-555555555555},C:\Synthetic\demo.exe,demo.exe --synthetic-only,192.0.2.50,2001:db8::50,42000,443,tcp

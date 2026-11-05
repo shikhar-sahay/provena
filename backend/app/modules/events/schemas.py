@@ -26,7 +26,7 @@ class ProfileConfig(BaseModel):
                 raise ValueError('Negative zero is unknown, not a configured timezone.')
             return value
         try:
-            if '..' in value.split('/') or value.startswith('/'):
+            if not re.fullmatch(r'[A-Za-z0-9_+-]+(?:/[A-Za-z0-9_+-]+)*', value):
                 raise ValueError('Invalid timezone name.')
             from importlib.resources import files
             with files('tzdata.zoneinfo').joinpath(*value.split('/')).open('rb') as zonefile:

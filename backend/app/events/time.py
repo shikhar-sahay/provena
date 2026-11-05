@@ -1,16 +1,27 @@
 """Source-declared timestamps and explicitly configured interpretation assumptions."""
 import re
 from importlib.metadata import version
+from functools import lru_cache
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from app.ai.normalize import timestamp_details
+
+TZDATA_VERSION = version("tzdata")
+
+
+@lru_cache(maxsize=128)
+def packaged_zone(zone):
+    from importlib.resources import files
+    with files("tzdata.zoneinfo").joinpath(*zone.split("/")).open("rb") as zonefile:
+        return ZoneInfo.from_file(zonefile, key=zone)
+
 
 MONTHS = {name: i for i, name in enumerate('Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(), 1)}
 
 
 def event_time(raw, config):
     result = {'original': raw, 'utc': None, 'certainty': 'missing' if not raw else 'unknown',
-              'precision': None, 'assumptions': [], 'warnings': [], 'timezone_database_version': version('tzdata')}
+              'precision': None, 'assumptions': [], 'warnings': [], 'timezone_database_version': TZDATA_VERSION}
     if not raw:
         return result
     convention = config.get('timestamp_convention', 'source')
@@ -61,9 +72,7 @@ def event_time(raw, config):
         return result
     # Use the packaged database explicitly, so host OS tzdata cannot silently
     # change interpretations under the recorded normalization version.
-    from importlib.resources import files
-    with files('tzdata.zoneinfo').joinpath(*zone.split('/')).open('rb') as zonefile:
-        tz = ZoneInfo.from_file(zonefile, key=zone)
+    tz = packaged_zone(zone)
     possibilities = set()
     for fold in (0, 1):
         candidate = naive.replace(tzinfo=tz, fold=fold).astimezone(timezone.utc)

@@ -175,7 +175,7 @@ def structured(record, config):
         for key, source in {'process_id':'ProcessId','process_guid':'ProcessGuid','image':'Image',
             'command_line':'CommandLine','parent_process_guid':'ParentProcessGuid','protocol':'Protocol',
             'initiated':'Initiated'}.items():
-            attrs[key] = scalar(data.get(source),2048 if key=='command_line' else 512)
+            attrs[key] = data.get(source) if key=='initiated' and isinstance(data.get(source),bool) else scalar(data.get(source),2048 if key=='command_line' else 512)
     return event
 
 

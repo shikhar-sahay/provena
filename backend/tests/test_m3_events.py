@@ -195,3 +195,41 @@ def test_registration_commit_error_safe_and_lost_completion_ack_idempotent(clien
     result=ingest(client,base,headers,item,profile)
     assert result['status']=='partial'
     assert db_session.scalar(select(func.count()).select_from(SecurityEvent))==2
+
+def test_cross_workspace_admin_cannot_read_or_ingest_events(client,admin,investigator,db_session,storage_dir):
+    from tests.test_m0_security import second_workspace
+    base,headers,item,profile,_,_=setup(client,investigator,db_session)
+    other=second_workspace(db_session,admin)
+    admin.active_workspace_id=other.id
+    db_session.commit()
+    foreign=auth_headers(login(client,admin.username))
+    for path in ['/events','/events/profiles','/events/runs']:
+        assert client.get(base+path,headers=foreign).status_code==404
+    assert client.post(base+'/events/runs',headers=foreign,json={'evidence_id':item['id'],'profile_id':profile['id']}).status_code==404
+
+
+def test_bulk_ingestion_resource_accounting_and_version_change(client,investigator,db_session,storage_dir,monkeypatch):
+    from app.events import adapters
+    base,headers,_,profile,token,inv=setup(client,investigator,db_session)
+    raw=DATA*1000
+    item=upload(client,token,inv['id'],content=raw,filename='bulk.log').json()
+    client.post(f"{base}/evidence/{item['id']}/verify",headers=headers)
+    result=ingest(client,base,headers,item,profile)
+    assert result['coverage']['recognized']==1000 and result['status']=='completed'
+    page=client.get(base+'/events?limit=200',headers=headers).json()
+    assert len(page['items'])==200 and page['total']==1000
+    assert ingest(client,base,headers,item,profile)['coverage']['events_created']==0
+    monkeypatch.setattr(adapters,'ADAPTER_VERSION','synthetic-v2')
+    assert ingest(client,base,headers,item,profile)['coverage']['events_created']==1000
+    assert client.get(base+'/events',headers=headers).json()['total']==2000
+
+
+def test_malformed_oversized_and_unsupported_profiles_do_not_escape(client,investigator,db_session,storage_dir,monkeypatch):
+    base,headers,item,profile,_,_=setup(client,investigator,db_session)
+    monkeypatch.setattr('app.modules.events.service.MAX_BYTES',10)
+    result=ingest(client,base,headers,item,profile)
+    assert result['status']=='rejected'
+    assert result['coverage']['recognized']==0
+    for zone in [r'C:\Windows\system.ini', '../UTC', 'Europe/../UTC', '/etc/passwd']:
+        assert client.post(base+'/events/profiles',headers=headers,json={'name':'Invalid zone','configuration':{
+            'adapter':'linux_auth','format':'syslog','timezone':zone}}).status_code==422

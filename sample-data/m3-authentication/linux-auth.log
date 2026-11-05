@@ -1,0 +1,14 @@
+# Entirely synthetic authentication investigation. No real accounts or addresses.
+2026-11-05T12:00:00Z lab-linux-1 sshd[120]: Failed password for mira from 192.0.2.41 port 41200 ssh2
+2026-11-05T12:00:00Z lab-linux-1 sshd[120]: Failed password for mira from 192.0.2.41 port 41200 ssh2
+2026-11-05T12:01:00+00:00 lab-linux-1 sshd[121]: Accepted password for mira from 192.0.2.41 port 41201 ssh2
+2026-11-05T17:32:00+05:30 lab-linux-2 sshd[122]: Accepted publickey for orion from 2001:db8::41 port 41202 ssh2: ED25519 SHA256:synthetic
+2026-11-05T12:03:00Z lab-linux-2 sshd[123]: Invalid user invented from 198.51.100.9 port 41203
+2026-11-05T12:04:00Z lab-linux-1 sshd[124]: pam_unix(sshd:auth): authentication failure; uid=0 rhost=203.0.113.8 user=mira
+2026-11-05T12:05:00Z lab-linux-1 sshd[125]: pam_unix(sshd:session): session opened for user mira(uid=1000) by (uid=0)
+2026-11-05T12:06:00Z lab-linux-1 sshd[125]: pam_unix(sshd:session): session closed for user mira
+2026-11-05T12:07:00Z lab-linux-2 sshd[126]: User orion from 2001:db8::42 not allowed because account is locked
+Nov  5 12:08:00 lab-linux-2 sshd[127]: Failed password for orion from 2001:db8::42 port 41204 ssh2
+sshd[128]: Failed password for mira from 192.0.2.42 port 41205 ssh2
+this malformed line mentions Failed password but is not an event
+2026-11-05T12:09:00Z lab-linux-1 application: Accepted password is just a message

@@ -93,6 +93,8 @@ def ingest(db, inv, evidence_id, profile_id, actor):
             run.verification_id = check.id
             return _finish(db,run,'blocked','Evidence storage is unavailable.')
         try:
+            if len(data) > MAX_BYTES:
+                raise RecordError("Input exceeds the event ingestion byte budget.")
             batch = parse_records(data,config)
         except RecordError as exc:
             run.coverage = {'status':'rejected','warnings':[str(exc)],'records_total':None,
