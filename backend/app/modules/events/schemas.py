@@ -16,6 +16,13 @@ class ProfileConfig(BaseModel):
     year: int | None = Field(default=None, ge=1970, le=2100)
     timestamp_convention: Literal['source', 'iso8601', 'syslog'] = 'source'
 
+    @field_validator('source_host')
+    @classmethod
+    def host_value(cls, value):
+        if value is not None and (not value.strip() or '\x00' in value):
+            raise ValueError('Source host must be nonblank without NUL bytes.')
+        return value.strip() if value is not None else None
+
     @field_validator('timezone')
     @classmethod
     def valid_zone(cls, value):
@@ -54,7 +61,7 @@ class ProfileCreate(BaseModel):
     @field_validator('name')
     @classmethod
     def nonblank(cls, value):
-        if not value.strip():
+        if not value.strip() or '\x00' in value:
             raise ValueError('Profile name is required.')
         return value.strip()
 

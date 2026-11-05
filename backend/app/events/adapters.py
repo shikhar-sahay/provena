@@ -25,7 +25,7 @@ def scalar(value, limit=256):
     if isinstance(value, bool) or not isinstance(value, (str, int)):
         raise AdapterReject('Expected a scalar field.')
     value = str(value).strip()
-    if len(value) > limit:
+    if '\x00' in value or len(value) > limit:
         raise AdapterReject('Normalized field exceeds its supported length.')
     return value or None
 
@@ -61,6 +61,8 @@ def core(provider, category, typ, outcome):
 def linux(record, config):
     if not isinstance(record, str):
         raise AdapterReject('Linux adapter requires a text record.')
+    if '\x00' in record:
+        raise AdapterReject('NUL bytes are not supported in event fields.')
     header = SYSLOG.fullmatch(record)
     if header:
         raw_time, host, process, pid, message = (header[k] for k in ('time','host','process','pid','message'))

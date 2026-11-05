@@ -113,3 +113,13 @@ def test_utf8_crlf_csv_and_long_records(monkeypatch):
         parse_records(b'[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]',config('windows_security','json'))
     unknown=event_time('Nov  5 12:00:00',config(timestamp_convention='iso8601',year=2026,timezone='+00:00'))
     assert unknown['utc'] is None and unknown['warnings']
+
+
+def test_adversarial_nul_fields_rejected_before_database():
+    from app.events.adapters import AdapterReject
+    with pytest.raises(AdapterReject):
+        adapt('sshd: Failed password for mi\x00ra from 192.0.2.1 port 22',config())
+    with pytest.raises(AdapterReject):
+        adapt({'EventID':4625,'TargetUserName':'mi\x00ra'},config('windows_security','json'))
+    with pytest.raises(ValidationError):
+        ProfileConfig(adapter='linux_auth',format='syslog',source_host='\x00')
