@@ -14,14 +14,32 @@ spec=importlib.util.spec_from_file_location('provena_archive',ROOT/'backend/app/
 archive_tools=importlib.util.module_from_spec(spec);spec.loader.exec_module(archive_tools)
 SCHEMA='provena-release-candidate/1'
 LIMIT=100*1024*1024
+import re
+SECRET_PATTERNS=[re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+    re.compile(rb'AKIA[A-Z0-9]{16}'),re.compile(rb'gh[pousr]_[A-Za-z0-9]{36,}')]
+
+
+def secret_fragment(chunk,tail=b''):
+    data=tail+chunk
+    if any(pattern.search(data) for pattern in SECRET_PATTERNS):raise ValueError('High-confidence secret pattern detected in release content.')
+    return data[-256:]
+
+
+def release_path(name):
+    archive_tools.safe_path(name)
+    private={'evidence-storage','export-storage','migration-backup','node_modules','backups','.venv','venv','__pycache__','test-results','playwright-report','models'}
+    if any(part.startswith('.env') or part in private for part in Path(name).parts) or Path(name).suffix.lower() in {'.dump','.db','.sqlite','.sqlite3','.pem','.key','.zip'}:
+        raise ValueError('Private operational material cannot enter release content.')
+
+
 SOURCE=['backend/app','backend/alembic','backend/tests','backend/requirements.txt','backend/alembic.ini','backend/Dockerfile',
     'frontend/src','frontend/public','frontend/package.json','frontend/package-lock.json','frontend/index.html','frontend/vite.config.ts',
-    'frontend/tsconfig.json','frontend/eslint.config.js','frontend/vitest.config.ts','README.md','AGENTS.md','tools','docker-compose.yml','backend/.dockerignore',
+    'frontend/tsconfig.json','frontend/tsconfig.e2e.json','frontend/playwright.config.ts','frontend/e2e','frontend/eslint.config.js','frontend/vitest.config.ts','README.md','AGENTS.md','tools','docker-compose.yml','backend/.dockerignore',
     'sample-data/m3-authentication','sample-data/m4-authentication','sample-data/m5-operations',
     '.github/workflows/ci.yml','.github/workflows/release-validation.yml']
 DOCS=['docs/architecture.md','docs/ai-architecture.md','docs/evidence-integrity.md','docs/development.md',
     'docs/security.md','docs/m2-implementation.md','docs/m3-implementation.md',
-    'docs/m4-implementation.md','docs/m5-implementation.md','docs/operations.md','docs/releases.md',
+    'docs/m4-implementation.md','docs/m5-implementation.md','docs/m6-implementation.md','docs/README.md','docs/investigator-guide.md','docs/operations.md','docs/releases.md',
     'CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','CHANGELOG.md','LICENSE']
 
 
@@ -39,12 +57,13 @@ def build(frontend,output):
     files=[];size=0
     def write(target,name,stream):
         nonlocal size
-        archive_tools.safe_path(name)
-        digest=hashlib.sha256();count=0
+        release_path(name)
+        digest=hashlib.sha256();count=0;tail=b''
         with target.open(name,'w') as destination:
             while chunk:=stream.read(1024*1024):
                 size+=len(chunk);count+=len(chunk)
                 if size>LIMIT or len(files)>=9998: raise ValueError('Release candidate budget exceeded.')
+                tail=secret_fragment(chunk,tail)
                 digest.update(chunk);destination.write(chunk)
         files.append({'path':name,'sha256':digest.hexdigest(),'size':count})
     try:
@@ -56,7 +75,7 @@ def build(frontend,output):
                         if member.isdir(): continue
                         if not member.isfile(): raise ValueError('Source release contains a link or special file.')
                         path=archive_tools.safe_path(member.name)
-                        if any(part.startswith('.env') or part in ('evidence-storage','export-storage','migration-backup','node_modules','backups') for part in Path(path).parts):
+                        if any(part.startswith('.env') or part in ('evidence-storage','export-storage','migration-backup','node_modules','backups','.venv','venv','__pycache__','test-results','playwright-report','models') for part in Path(path).parts):
                             raise ValueError('Private operational material cannot enter a release candidate.')
                         with source.extractfile(member) as handle: write(package,'source/'+path,handle)
                 if process.wait(timeout=60)!=0: raise ValueError('Committed source packaging failed.')

@@ -105,7 +105,7 @@ export function AuthenticationWorkbench({ invId, canProduce, canReview }: { invI
     try {
       const [result, annotations] = await Promise.all([authenticationApi.history(invId, finding.id), api.listNotes(invId, finding.id)]);
       if (request === historyGeneration.current) { setHistory(result); setNotes(annotations); }
-    } catch (err) { setError(actionErrorMessage(err, 'Could not load review history.')); }
+    } catch (err) { if (request === historyGeneration.current) setError(actionErrorMessage(err, 'Could not load review history.')); }
   }
 
   return <div className="space-y-6">
@@ -205,10 +205,10 @@ export function AuthenticationWorkbench({ invId, canProduce, canReview }: { invI
         <ul className="list-disc pl-5">{detail.support_snapshot?.detection?.limitations.map(w => <li key={w}>{w}</li>)}</ul>
         <p>{detail.support_snapshot?.event_keys?.length ?? 0} exact support identities retained.</p>
         <pre className="overflow-auto text-xs">{JSON.stringify({ input: detail.support_snapshot?.event_set_key, entities: detail.support_snapshot?.detection?.entities, start: detail.support_snapshot?.detection?.time_start, end: detail.support_snapshot?.detection?.time_end, parameters: detail.support_snapshot?.detection?.configuration }, null, 2)}</pre>
-        <Button onClick={() => { const next = { ...emptyFilters, finding_id: String(detail.id) }; setFilters(next); setDraft(next); setOffset(0); setDetail(null); }}>Explore supporting events in timeline</Button>
+        <Button onClick={() => { const next = { ...emptyFilters, finding_id: String(detail.id) }; setFilters(next); setDraft(next); setOffset(0); closeFinding(); }}>Explore supporting events in timeline</Button>
         <p className="text-xs text-ink2">Support may include profile-assumed timestamps. Inspect that lane when applicable.</p>
         <Field label="Analyst review note" htmlFor="auth-note"><Textarea id="auth-note" value={note} maxLength={1000} onChange={e => setNote(e.target.value)} /></Field>
-        {canReview && <div className="flex gap-2">{(['accepted', 'rejected'] as const).map(status => <Button key={status} disabled={busy || (status === 'accepted' && !detail.support_current)} onClick={() => void act(async () => { const saved = await api.reviewFinding(invId, detail.id, status, note); await showFinding(saved); setNotice(`Finding ${detail.id} ${status}.`); })}>{status === 'accepted' ? 'Accept finding' : 'Reject finding'}</Button>)}</div>}
+        {canReview && <div className="flex gap-2">{(['accepted', 'rejected'] as const).map(status => <Button key={status} disabled={busy || (status === 'accepted' && !detail.support_current)} onClick={() => { const request = historyGeneration.current; void act(async () => { const saved = await api.reviewFinding(invId, detail.id, status, note); if (request === historyGeneration.current) await showFinding(saved); setNotice(`Finding ${detail.id} ${status}.`); }); }}>{status === 'accepted' ? 'Accept finding' : 'Reject finding'}</Button>)}</div>}
         <Button disabled={!canProduce || busy || !note.trim()} onClick={() => void act(async () => { await api.createNote(invId, note, detail.id); setNotes(await api.listNotes(invId, detail.id)); setNotice('Analyst annotation saved through the shared investigation notes workflow.'); })}>Save annotation</Button>
         <h4 className="font-semibold">Investigator annotations</h4>{notes.map(n => <p key={n.id} className="whitespace-pre-wrap">{n.body}</p>)}
         <h4 className="font-semibold">Supporting event preview (up to 20)</h4>

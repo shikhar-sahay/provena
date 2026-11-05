@@ -203,7 +203,7 @@ export default function EvidenceDetailPage() {
             .finally(() => setVerifying(false));
         } : undefined} />
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="primary" size="sm" icon={<Repeat size={14} />} disabled={item.registration_status !== undefined && item.registration_status !== "ready"} loading={verifying} onClick={() => void onVerify()}>
+        <Button variant="primary" size="sm" icon={<Repeat size={14} />} disabled={!canRecordCustody || (item.registration_status !== undefined && item.registration_status !== "ready")} loading={verifying} onClick={() => void onVerify()}>
           Verify integrity
         </Button>
         <Button variant="secondary" size="sm" icon={<Download size={14} />} loading={downloading} onClick={() => void onDownload()}>
@@ -220,6 +220,7 @@ export default function EvidenceDetailPage() {
           </Button>
         )}
       </div>
+      {!canRecordCustody && <p className="mt-2 text-sm text-ink2">{archivedLocked ? 'This archived investigation is read-only for your role.' : 'Verification requires case-management or evidence-custodian permission.'}</p>}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">

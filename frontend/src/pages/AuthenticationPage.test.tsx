@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthenticationWorkbench } from './AuthenticationPage';
@@ -99,13 +99,27 @@ it('reviews through shared finding API and opens exact support in context', asyn
   const user = userEvent.setup();
   renderWorkbench(); await choose();
   await user.click(screen.getByText(finding.title));
-  await user.type(screen.getByLabelText('Analyst review note'), 'Checked synthetic sources');
+  await user.click(screen.getByLabelText('Analyst review note'));
+  await user.paste('Checked synthetic sources');
   await user.click(screen.getByRole('button', { name: 'Accept finding' }));
   await waitFor(() => expect(api.reviewFinding).toHaveBeenCalledWith(1, 4, 'accepted', 'Checked synthetic sources'));
   expect(screen.queryByText('Confidence 0/100')).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Explore supporting events in timeline' }));
   await waitFor(() => expect(authenticationApi.timeline).toHaveBeenLastCalledWith(1, 1, expect.objectContaining({ finding_id: '4' }), 0));
   expect(await screen.findByText(/Detection context: finding #4/)).toBeInTheDocument();
+});
+
+it('does not reopen a closed drawer when an in-flight review completes', async () => {
+  let finish!: (value: Finding) => void;
+  vi.mocked(api.reviewFinding).mockReturnValue(new Promise<Finding>(resolve => { finish = resolve; }));
+  const user = userEvent.setup(); renderWorkbench(); await choose();
+  await user.click(screen.getByText(finding.title));
+  await user.click(screen.getByRole('button', { name: 'Accept finding' }));
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await act(async () => finish({ ...finding, status: 'accepted' }));
+  await screen.findByText('Finding 4 accepted.');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
 it('shows source locators and safe failure states', async () => {

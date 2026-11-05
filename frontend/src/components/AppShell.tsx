@@ -2,7 +2,7 @@
 // search and creation, user menu, and theme control.
 
 import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Building2, FolderKanban, LayoutDashboard, LogOut, Plus, ShieldAlert, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "./Toast";
@@ -26,6 +26,7 @@ const NAV = [
 
 export default function AppShell() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { notify } = useToast();
   const [creating, setCreating] = useState(false);
   const canCreate = user?.role === "admin" || user?.role === "investigator";
@@ -103,6 +104,7 @@ export default function AppShell() {
                   size="sm"
                   icon={<Plus size={14} />}
                   onClick={() => setCreating(true)}
+                  aria-label="New investigation"
                   className="h-8 shadow-xs"
                 >
                   <span className="hidden sm:inline">New investigation</span>
@@ -130,7 +132,10 @@ export default function AppShell() {
                       </div>
                     </div>
                   }
-                  items={[{ key: "logout", label: "Log out", icon: <LogOut size={14} />, onSelect: () => void onLogout() }]}
+                  items={[
+                    { key: "workspace", label: "Switch workspace", icon: <Building2 size={14} />, onSelect: () => navigate('/onboarding') },
+                    { key: "logout", label: "Log out", icon: <LogOut size={14} />, onSelect: () => void onLogout() },
+                  ]}
                 />
               )}
             </div>

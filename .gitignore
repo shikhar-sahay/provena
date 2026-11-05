@@ -44,3 +44,5 @@ backups/
 *.provena-backup.zip
 *.provena-export.zip
 provena-case-*-export-*.zip
+frontend/test-results/
+frontend/playwright-report/
