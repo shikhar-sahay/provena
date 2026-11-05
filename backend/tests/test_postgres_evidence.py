@@ -234,8 +234,9 @@ def test_postgres_parallel_event_ingestion(tmp_path, monkeypatch):
         engine.dispose()
 
 
-def test_postgres_m3_upgrade_preserves_investigation_history(tmp_path, monkeypatch):
-    """A fresh isolated schema is populated at M3, then upgraded without rewriting history."""
+@pytest.mark.parametrize('baseline',['294d21d0205e','53d6b8a0e88b'])
+def test_postgres_m3_upgrade_preserves_investigation_history(tmp_path, monkeypatch, baseline):
+    """Fresh isolated M3/M4 schemas upgrade without rewriting populated history."""
     import hashlib
     import json
     import subprocess
@@ -262,7 +263,7 @@ def test_postgres_m3_upgrade_preserves_investigation_history(tmp_path, monkeypat
         result=subprocess.run([sys.executable,'-m','alembic',*args],env=environment,
             cwd=Path(__file__).resolve().parents[1],capture_output=True,text=True,timeout=120)
         assert result.returncode==0,result.stdout+result.stderr
-    migrate('upgrade','294d21d0205e')
+    migrate('upgrade',baseline)
     monkeypatch.setattr(settings,'evidence_storage_backend','local')
     monkeypatch.setattr(settings,'evidence_storage_root',str(tmp_path))
     engine=create_engine(isolated)

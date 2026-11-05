@@ -70,8 +70,36 @@ class LocalEvidenceStorage:
     def __init__(self, root: str | Path):
         self.root = Path(root)
 
+    def prepare_restore(self):
+        """Only a fresh target is allowed; an incomplete restore must never look ready."""
+        self.root.mkdir(parents=True,exist_ok=False,mode=0o700)
+        (self.root/'RESTORE_INCOMPLETE').write_text('Do not start investigative operations until restore validation completes.\n')
+
+    def restoration_incomplete(self):
+        return (self.root/'RESTORE_INCOMPLETE').exists()
+
+    def complete_restore(self):
+        (self.root/'RESTORE_INCOMPLETE').unlink()
+
+    def restore_verified(self,key,source,expected_sha256,size):
+        candidate=self.resolve(key)
+        candidate.parent.mkdir(parents=True,exist_ok=True)
+        temporary=candidate.with_name(candidate.name+'.restore-'+uuid.uuid4().hex)
+        digest=hashlib.sha256();observed=0
+        try:
+            with temporary.open('xb') as target:
+                while chunk:=source.read(min(CHUNK_SIZE,size-observed+1)):
+                    observed+=len(chunk)
+                    if observed>size: raise ValueError('Restored evidence exceeds its registered size.')
+                    digest.update(chunk);target.write(chunk)
+                target.flush();os.fsync(target.fileno())
+            if observed!=size or digest.hexdigest()!=expected_sha256: raise ValueError('Restored evidence baseline mismatch.')
+            os.link(temporary,candidate)  # Atomic no-clobber publication; never overwrite an existing object.
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _root(self) -> Path:
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.root.mkdir(parents=True, exist_ok=True,mode=0o700)
         return self.root.resolve()
 
     def resolve(self, storage_key: str) -> Path:
@@ -87,7 +115,7 @@ class LocalEvidenceStorage:
     def stage(self, stream: BinaryIO, investigation_id: int, max_bytes: int) -> StagedUpload:
         storage_key = f"{investigation_id}/{uuid.uuid4().hex}"
         final_path = self.resolve(storage_key)
-        final_path.parent.mkdir(parents=True, exist_ok=True)
+        final_path.parent.mkdir(parents=True, exist_ok=True,mode=0o700)
         staging_path = final_path.with_name(final_path.name + ".part")
         digest, size = hashlib.sha256(), 0
         try:

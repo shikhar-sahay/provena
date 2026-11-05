@@ -37,3 +37,10 @@ Thumbs.db
 
 # Local tool residue
 .playwright-mcp/
+
+# Private generated operational artifacts, never source or release inputs.
+export-storage/
+backups/
+*.provena-backup.zip
+*.provena-export.zip
+provena-case-*-export-*.zip

@@ -345,7 +345,7 @@ def record_verification(db: Session, inv: Investigation, evidence: Evidence, obs
     verification = EvidenceVerification(evidence_id=evidence.id, performed_by_id=actor_id,
         expected_sha256=evidence.sha256, observed_sha256=observed, result=result, reason=reason, purpose=purpose)
     db.add(verification)
-    if purpose in ("analysis", "event_ingestion", "authentication_detection"):
+    if purpose in ("analysis", "event_ingestion", "authentication_detection", "export"):
         db.info.setdefault("verification_journal", []).append((evidence.id, observed, actor_id, size_mismatch))
     evidence.integrity_status = result
     evidence.last_verified_at = datetime.now(timezone.utc)

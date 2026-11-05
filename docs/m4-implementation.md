@@ -252,8 +252,10 @@ test. Those production-readiness changes remain uncommitted. This explains the l
 
 The only observed test warning is the existing Starlette TestClient/httpx deprecation.
 No security gate was disabled or advisory suppressed. Earlier M4 increments passed all
-four GitHub Actions jobs; the final pushed commit's run URL and conclusion are reported
-in the implementation handoff after verification.
+four GitHub Actions jobs. Final commit `2faf335c5dd9355d99e6deb3bab77414aebfdef2`
+passed all four jobs in [CI #53](https://github.com/shikhar-sahay/provena/actions/runs/41997745754):
+backend, frontend, dependencies and PostgreSQL migrations. Local and `origin/main`
+matched that revision at closeout. M4 is complete; no production deployment was performed.
 
 ## Performance measurements
 

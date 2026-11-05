@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.api.endpoints import health as health_module
 
 client = TestClient(app)
 
@@ -25,3 +26,14 @@ def test_health_without_database_configured():
     # must still answer instead of failing.
     response = client.get("/api/health")
     assert response.status_code == 200
+
+
+def test_readiness_reflects_database_state(monkeypatch):
+    monkeypatch.setattr(
+        health_module, "readiness_checks", lambda: {"ready":False}
+    )
+    assert client.get("/api/ready").status_code == 503
+    monkeypatch.setattr(
+        health_module, "readiness_checks", lambda: {"ready":True}
+    )
+    assert client.get("/api/ready").json() == {"status": "ready", "db": "ok"}

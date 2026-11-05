@@ -55,6 +55,10 @@ def record(
     actor_id: int | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> AuditEvent:
+    from app.core.observability import request_context
+    request_id=request_context.get()
+    if request_id:
+        metadata={**(metadata or {}),'request_id':request_id}
     event = AuditEvent(
         action=action,
         resource_type=resource_type,
