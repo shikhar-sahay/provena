@@ -48,7 +48,9 @@ def test_windows_security_fields(event_id,typ,outcome):
     assert event['event_type']==typ and event['outcome']==outcome
     assert event['username']=='mira' and event['attributes']['subject_username']=='operator'
     assert event['source_ip']=='2001:db8::8' and event['attributes']['event_record_id']=='17'
-    assert event_time(event['original_timestamp'],{})['utc'].endswith('.123456+00:00')
+    temporal=event_time(event['original_timestamp'],{})
+    assert temporal['utc'].endswith('.123456+00:00')
+    assert temporal['precision']=='fraction_7' and temporal['utc_projection_precision']=='microsecond'
 
 
 @pytest.mark.parametrize('id,typ', [('1','process_created'),('3','network_connection')])

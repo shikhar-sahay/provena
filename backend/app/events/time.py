@@ -38,7 +38,8 @@ def event_time(raw, config):
         result['source_fraction_digits'] = len(re.search(r'\.(\d+)', raw)[1])
     naive = None
     if details:
-        result['precision'] = details['precision']
+        result['precision'] = f"fraction_{result['source_fraction_digits']}" if 'source_fraction_digits' in result else details['precision']
+        result['utc_projection_precision'] = 'microsecond' if 'source_fraction_digits' in result else details['precision']
         result['source_offset'] = details['source_offset']
         if details['timezone_status'] == 'explicit_offset':
             result.update(utc=details['utc'], certainty='source_offset')
