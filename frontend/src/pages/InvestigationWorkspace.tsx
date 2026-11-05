@@ -30,6 +30,7 @@ const TABS = [
   { to: "timeline", label: "Timeline", end: true },
   { to: "custody", label: "Custody", end: true },
   { to: "reports", label: "Reports", end: true },
+  { to: "exports", label: "Exports", end: true },
   { to: "audit", label: "Audit Log", end: true },
 ];
 

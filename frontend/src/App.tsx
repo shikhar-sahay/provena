@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import AppShell from "./components/AppShell";
 import EventsPage from "./pages/EventsPage";
 import AuthenticationPage from "./pages/AuthenticationPage";
+import ExportsPage from "./pages/ExportsPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import AuditTab from "./pages/AuditTab";
 import CustodyTab from "./pages/CustodyTab";
@@ -80,6 +81,7 @@ export default function App() {
           <Route path="analysis" element={<AnalysisPage />} />
           <Route path="events" element={<EventsPage />} />
           <Route path="authentication" element={<AuthenticationPage />} />
+          <Route path="exports" element={<ExportsPage />} />
           <Route path="timeline" element={<TimelineTab />} />
           <Route path="custody" element={<CustodyTab />} />
           <Route path="reports" element={<ReportsPage />} />

@@ -1,0 +1,25 @@
+name: Synthetic bug reproduction
+description: Report a reproducible implementation defect without private case data.
+body:
+  - type: markdown
+    attributes:
+      value: Use SECURITY.md for sensitive reports. Never attach real evidence, tokens, environment files or backups.
+  - type: input
+    id: revision
+    attributes:
+      label: Commit and environment
+      description: Include Python/Node/PostgreSQL versions and local or container setup.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic reproduction and observed behavior
+      description: Include expected behavior, actual outcome and a minimal invented fixture.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Relevant tests and safe diagnostics
+      description: Include correlation IDs or safe error categories, never credentials or raw evidence.

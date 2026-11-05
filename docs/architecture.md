@@ -76,7 +76,26 @@ flowchart TB
     API --> AI["AI investigation engine, in-process (implemented)"]
     AI --> Fall["Deterministic authoritative narrative (M2)"]
     API --> PG[("PostgreSQL")]
+    API --> Events["Verified event ingestion + immutable event sets"]
+    Events --> Detections["Versioned authentication detections + shared review"]
+    Detections --> Rep
+    API --> Exports["Durable case exports + unsigned manifests"]
+    Exports --> Snapshots["Exact verified original snapshots, explicit selection"]
+    Exports --> Cache["Private expiring archive cache"]
+    Ops["Maintainer CLI"] --> Backup["PostgreSQL exported snapshot + native dump"]
+    Backup --> Portable["Verified private recovery package"]
+    Ops --> Preflight["Read-only preflight + readiness"]
 ```
+
+M5 adds a bounded synchronous export domain and maintainer-only operational CLI,
+not a background service. Metadata exports require case access; original-byte
+exports require case management and fresh exact-byte verification. Export caches
+are separate from original evidence. Backup uses one PostgreSQL exported snapshot
+for the native dump and metadata fingerprints, then verifies every referenced
+evidence object against its immutable baseline. Missing or changed content fails
+the backup. Restore accepts only a trusted archive digest and fresh empty targets;
+an incomplete-restore marker keeps readiness blocked until validation completes.
+See [operations](operations.md) for consistency limits, restore order and retention.
 
 ## Frontend / backend / database relationship
 

@@ -2,7 +2,19 @@
 
 Provena is an explainable AI-assisted digital forensic investigation platform designed to streamline evidence management, investigative analysis, and case reporting. It provides a centralized workspace where investigators can organize cases, preserve evidence integrity, maintain chain-of-custody records, examine correlated findings, and generate traceable investigation reports.
 
-Built with React, FastAPI, and PostgreSQL, Provena combines structured investigative workflows with transparent, rule-based analysis and optional language-model-assisted reporting. Its AWS-hosted architecture supports centralized access, controlled deployment, and secure application operations.
+Built with React, FastAPI, and PostgreSQL, Provena combines structured investigative workflows with transparent, rule-based analysis and deterministic reporting.
+
+The current development target is **0.1.0-beta.0**, an authentication incident investigation workbench. This is a prerelease validation identifier, not a published release or forensic certification. The repository has no approved license grant yet; license selection and maintainer approval remain public-release blockers. The live deployment is managed separately and may lag this source revision.
+
+## Start locally and investigate
+
+With Docker Compose installed, run `docker compose up --build --wait` from the repository root, then open [the local interface](http://localhost:5173). The local stack binds only to loopback, migrates its development database and checks API readiness. It uses separate persistent database, evidence and export-cache volumes. Do not use its demonstration database credentials for an exposed deployment, or remove volumes containing investigations.
+
+Follow the [synthetic authentication demonstration](sample-data/m4-authentication/README.md) to ingest Linux authentication, Windows Security and Sysmon exports, select immutable event sets, run five deterministic detection families and review findings. Unknown timestamps remain uncertain; detections describe observed patterns rather than confirmed compromise.
+
+Open an investigation's **Exports** tab to create a metadata package or explicitly select verified originals. Downloaded packages can be checked offline with `python -m app.ops.archive package.zip` from `backend/`. Hash verification detects internal inconsistency; it does not authenticate the package author. Native PostgreSQL backup/restore, deployment preflight and recovery procedures are in the [operations guide](docs/operations.md).
+
+See [M5 implementation and verification](docs/m5-implementation.md), [release validation](docs/releases.md), [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md). CI builds private candidate artifacts and a disposable local stack. It does not publish a release or deploy to AWS.
 
 **Live application:** [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login). The deployed frontend and API operate over HTTPS; local development remains available below.
 

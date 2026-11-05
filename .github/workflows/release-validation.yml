@@ -1,0 +1,41 @@
+name: release-validation
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: python tools/build_release.py --frontend frontend/dist --output release-artifacts/provena-candidate.zip
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: provena-validated-candidate
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 7
+  local-stack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate local Compose configuration
+        run: docker compose -p provena-ci-${{ github.run_id }} config --quiet
+      - name: Build and start disposable database and API
+        run: docker compose -p provena-ci-${{ github.run_id }} up --build --wait --wait-timeout 180 db api
+      - name: Verify liveness and readiness
+        run: |
+          python -c "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/live'))['status']=='alive'; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/ready'))['status']=='ready'"
+      - name: Remove only this run's disposable stack
+        if: always()
+        run: docker compose -p provena-ci-${{ github.run_id }} down --volumes

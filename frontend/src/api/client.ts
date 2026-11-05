@@ -1036,3 +1036,38 @@ export const authenticationApi = {
     return apiFetch<{ items: SecurityEvent[]; total: number; ordering: string; lane: string; coverage: AuthenticationCoverage }>(`/api/investigations/${id}/authentication/timeline?${params}`);
   },
 };
+
+export interface InvestigationExport {
+  id: number; investigation_id: number; requested_by_id: number | null;
+  mode: 'metadata' | 'originals'; status: string; selection: { event_set_ids: number[]; report_ids: number[]; evidence_ids: number[] };
+  package_sha256: string | null; byte_size: number | null; error: string | null; created_at: string;
+  manifest_summary: { schema?: string; files?: number; originals?: number; warnings?: string[]; cleanup_pending?: boolean };
+}
+export interface ExportSelection { mode: 'metadata' | 'originals'; event_set_ids: number[]; report_ids: number[]; evidence_ids: number[] }
+export const exportApi = {
+  list: (id: number, offset = 0) => apiFetch<InvestigationExport[]>(`/api/investigations/${id}/exports?limit=25&offset=${offset}`),
+  create: (id: number, selection: ExportSelection, key: string) => apiFetch<InvestigationExport>(`/api/investigations/${id}/exports`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: JSON.stringify(selection) }),
+  recover: (id: number, item: number) => apiFetch<InvestigationExport>(`/api/investigations/${id}/exports/${item}/recover`, { method: 'POST' }),
+  download: async (id: number, item: InvestigationExport) => {
+    const response = await fetch(`${API_BASE}/api/investigations/${id}/exports/${item.id}/download`, { headers: { Authorization: `Bearer ${getToken() ?? ''}` } });
+    if (!response.ok) {
+      if (response.status === 401) window.dispatchEvent(new CustomEvent('provena:unauthorized'));
+      throw new ApiError(response.status, 'Package is unavailable, expired or access was denied. Reload history or create a new export.');
+    }
+    const maximum = Math.min(item.byte_size ?? 0, 2 * 1024 * 1024 * 1024);
+    if (!response.body || maximum <= 0) throw new ApiError(409, 'Package size was not established. Reload export history.');
+    const reader = response.body.getReader(); const parts: Uint8Array<ArrayBuffer>[] = []; let size = 0;
+    try {
+      while (true) {
+        const next = await reader.read(); if (next.done) break;
+        size += next.value.byteLength;
+        if (size > maximum) { await reader.cancel(); throw new ApiError(413, 'Download exceeded its recorded size.'); }
+        parts.push(new Uint8Array(next.value));
+      }
+    } finally { reader.releaseLock(); }
+    if (size !== item.byte_size) throw new ApiError(409, 'Download was incomplete. Retry the existing export.');
+    const object = URL.createObjectURL(new Blob(parts, { type: 'application/zip' }));
+    const link = document.createElement('a'); link.href = object; link.download = `provena-case-${id}-export-${item.id}.zip`;
+    link.click(); setTimeout(() => URL.revokeObjectURL(object), 1000);
+  },
+};

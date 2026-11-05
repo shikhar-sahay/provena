@@ -61,14 +61,16 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -r backend/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
       - run: python -m alembic upgrade head
         working-directory: backend
       - run: python -m alembic check
         working-directory: backend
-      - run: python -m pytest tests/test_postgres_evidence.py -q
+      - run: python -m pytest tests/test_postgres_evidence.py tests/test_m5_recovery.py -q
         working-directory: backend
         env:
           M1_POSTGRES_TEST_URL: postgresql+psycopg2://provena_ci:synthetic_ci_only@127.0.0.1:5432/provena_ci
+          M5_PG_BIN: /usr/lib/postgresql/16/bin
 
   frontend:
     runs-on: ubuntu-24.04
@@ -93,3 +95,9 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  release-validation:
+    needs: [dependencies, backend, frontend, migrations]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-validation.yml

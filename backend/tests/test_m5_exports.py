@@ -173,6 +173,20 @@ def test_explicit_selection_and_budgets_fail_closed(client,investigator,db_sessi
     assert client.get(base+f"/exports/{result['id']}/download",headers=h).status_code==409
 
 
+def test_interrupted_builder_cleanup_is_operation_scoped(tmp_path,monkeypatch):
+    from app.modules.exports import artifacts
+    monkeypatch.setattr(settings,'export_storage_root',str(tmp_path/'exports'))
+    root=artifacts.root();root.mkdir()
+    key='a'*32+'.zip'
+    owned=root/('building-'+key+'-synthetic');owned.mkdir();(owned/'package.zip').write_bytes(b'partial')
+    unrelated=root/'building-unrelated';unrelated.mkdir();(unrelated/'private.txt').write_text('preserve')
+    artifacts.remove(key)
+    assert not owned.exists() and (unrelated/'private.txt').read_text()=='preserve'
+    unsafe=root/('building-'+key+'-unexpected');unsafe.mkdir();(unsafe/'other.txt').write_text('preserve')
+    with pytest.raises(OSError): artifacts.remove(key)
+    assert (unsafe/'other.txt').read_text()=='preserve'
+
+
 @pytest.mark.parametrize('change',['unchanged','missing','after_snapshot'])
 def test_original_export_storage_contract(backend,client,investigator,db_session,monkeypatch,change):
     from contextlib import contextmanager
