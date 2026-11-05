@@ -116,6 +116,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16-alpine
@@ -142,6 +143,7 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
         working-directory: frontend
       - name: Run isolated real-browser investigation workflows
         run: python tools/run_e2e.py

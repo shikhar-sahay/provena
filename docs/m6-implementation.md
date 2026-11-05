@@ -166,3 +166,9 @@ checks but exposed the missing direct Node type dependency. It was not reported 
 The fix pins @types/node 22.20.5 and is validated with a fresh npm ci and full frontend
 gates before the final push. Final CI must verify the corrected revision; an earlier
 successful browser job is not substituted for that result.
+
+CI #59 passed dependency, backend, frontend, documentation and PostgreSQL jobs,
+but its browser dependency installation stalled for over ten minutes before test
+execution. It was superseded by a revision bounding browser setup to ten minutes
+and the entire browser job to twenty-five minutes. Timeouts fail the gate; no test
+or dependency validation is skipped to conceal infrastructure failure.
