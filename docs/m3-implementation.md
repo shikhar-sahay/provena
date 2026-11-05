@@ -118,3 +118,80 @@ UI behavior tests cover immutable profile inputs, unknown-year/zone defaults,
 filter and pagination API parameters, event detail provenance, error/empty states,
 verified-evidence gating and duplicate-ingestion feedback. Existing design tokens
 and shared components are retained.
+
+## Synthetic demonstration and verification
+
+See [synthetic authentication dataset](../sample-data/m3-authentication/README.md).
+`python -m pytest tests/test_m3_demo.py -q -s` creates an isolated case, uploads
+and verifies all fixtures, creates three profiles, ingests 18 events, filters 8
+failed authentication events, inspects provenance, reingests and confirms zero
+new identities. Counts: Linux 11 recognized/2 unsupported; Windows 5 recognized/
+2 unsupported/1 rejected; Sysmon 2 recognized/1 unsupported. No real logs are used.
+
+Migration `294d21d0205e` is forward-only. Fresh PostgreSQL 16.15 migration and
+schema-drift checks passed. A populated M2 database was separately upgraded:
+accepted/rejected decisions, report hash, exact evidence/artifact digests and
+correlation memberships remained identical; no events were invented. PostgreSQL
+concurrent retry tests create two completed runs with the same two logical events
+and two memberships per run. Local and fake S3 failure tests cover tampering,
+missing bytes, snapshot mutation, registration gates and transaction rollback.
+
+The optional throughput probe `python -m pytest tests/benchmark_events.py -q -s`
+uses 2,000 synthetic records and isolated SQLite. Measured ingestion was 0.750s
+and identical retry 0.357s after caching timezone metadata (initial version was
+10.886s/7.029s). This is not a PostgreSQL capacity guarantee or production load
+test. Database insertion/query chunks are 250 events and are independent of
+output pagination.
+
+## Known limits and M4 integration constraints
+
+- Supported export schemas are explicit; binary EVTX/XML/positional Properties,
+  other event families, source enrichment and arbitrary JSON shapes are deferred.
+- These observations do not prove compromise, maliciousness or independent
+  corroboration. Repeated source occurrences stay distinct; duplicated/partitioned
+  evidence does not establish independent activity.
+- All profile/version interpretations remain visible as historical event sets.
+  M4 must select an explicit profile/run and avoid double-counting interpretations.
+- Query filters use exact case-sensitive account/host values. Account/domain
+  normalization and entity resolution are deliberately not inferred.
+- UTC range queries include only justified UTC projections, including labeled
+  profile assumptions. They do not certify clock synchronization. Windows
+  fractional precision beyond microseconds remains in original time metadata.
+- Limits are conservative and synchronous processing holds a case lock. Failed or
+  interrupted runs are visible; there is no background queue or auto-resumption.
+- S3 is tested synthetically, not against live AWS. No production environment was
+  contacted. Application append-only provenance is not cryptographic certification.
+- Future M4 work should add versioned authentication detections over explicit
+  event-set/coverage semantics, reviewable explanations and uncertainty-aware time
+  comparisons. A full incident timeline and attack graph remain deferred.
+
+## Quality gate results
+
+Verified code revision `2c7a3305f8f076524e6b50e36ca6cb79003cb1e8` passed
+[GitHub Actions run 49](https://github.com/shikhar-sahay/provena/actions/runs/41986464134):
+all dependency, backend, frontend and PostgreSQL migration jobs succeeded.
+
+| Check | Actual result |
+| --- | --- |
+| CI full committed backend suite, Python 3.13 | 276 passed, 2 skipped |
+| Separate isolated PostgreSQL tests | 2 passed, including concurrent event ingestion |
+| Local targeted M3 plus M0/M1 regression selection | 85 passed |
+| Latest adapter/profile validation suite | 21 passed |
+| Frontend full suite on Node 22 | 48 passed |
+| Frontend lint, typecheck and production build | Passed |
+| Clean Python install, pip check, pip-audit | Passed; no known vulnerabilities |
+| npm ci, npm audit, npm audit --omit=dev | Passed; zero findings |
+| Fresh PostgreSQL migration and alembic check | Passed; no schema drift |
+| Populated M2 upgrade | Passed; history preserved, zero backfilled events |
+| Synthetic demonstration | 18 events, 8 authentication failures, zero retry duplicates |
+
+The two backend-suite skips are opt-in PostgreSQL tests executed separately,
+not omitted functionality. A Starlette TestClient/httpx deprecation warning
+remains; it did not fail tests. The synthetic S3 implementation and frontend
+component tests do not replace live AWS testing or manual browser evaluation.
+No production deployment was performed. Existing unrelated local configuration,
+health/deployment changes and protected migration backups remain preserved.
+
+Event query offsets are bounded to 100,000; page sizes are bounded to 200.
+Source profiles are capped at 200 per investigation. Increasing these limits or
+adopting cursor pagination should follow measured investigative need.

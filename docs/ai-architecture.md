@@ -3,7 +3,8 @@
 The implemented pipeline is deterministic parsing, extraction, shared-value
 correlation and three explainable rules. It uses FastAPI's modular monolith and
 PostgreSQL for persistence. It performs no machine learning, Bayesian inference,
-OCR, authentication-event normalization or autonomous incident reconstruction.
+OCR or autonomous incident reconstruction. M3 adds a separate record-aware
+authentication/context event normalization path; see [M3 implementation](m3-implementation.md).
 Scores rank rule support; they are not calibrated probabilities.
 
 ```mermaid
@@ -188,3 +189,14 @@ probe previously missed every late IP and now emits 2,000 extraction records
 (regex plus structured derivations). Traced peak allocations were about 1.10
 versus 1.53 MB for short input and 2.23 versus 3.12 MB for long input. These are
 Python allocations, not whole-process memory measurements.
+
+
+## M3 event boundary
+
+Normalized events are addressable immutable observations, not new detections or
+rule findings. The event path consumes the same exact verified snapshots but
+parses whole records rather than joining extracted scalar artifacts. M2 findings,
+analyst decisions and report hashes are not rewritten or automatically bound to
+these new events. M4 must explicitly select source-profile interpretations and
+respect unknown times, duplicate occurrences and partial ingestion before adding
+versioned detections.

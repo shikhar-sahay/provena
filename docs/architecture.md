@@ -283,3 +283,23 @@ retain their original generation metadata. See [analysis architecture](ai-archit
    database row, then atomically promote the file.
 4. The SPA refreshes the detail view, including team, evidence, custody,
    and audit history.
+
+
+## M3 normalized event path
+
+```mermaid
+flowchart LR
+    E[Ready independently verified evidence] --> S[Fresh verified private snapshot]
+    P[Immutable case source profile] --> R[Bounded record parser]
+    S --> R
+    R --> A[Linux SSH/PAM or Windows/Sysmon adapter]
+    A --> N[Normalized fields and explicit time uncertainty]
+    N --> T[Atomic immutable event set and run membership]
+    T --> Q[Authorized paginated query API]
+    Q --> U[Security Events explorer and provenance drawer]
+```
+
+This runs inside the existing FastAPI monolith. PostgreSQL serializes case
+ ingestion transactions; no queues or new services are introduced. Existing
+artifact analysis/reports remain separate and compatible. See
+[M3 implementation](m3-implementation.md) for supported formats and limits.

@@ -171,3 +171,16 @@ npm run build
 - [Future enhancements](docs/future-enhancements.md): proposed analysis and availability improvements.
 
 Potential future work includes stronger backup and monitoring practices, S3 evidence migration, managed PostgreSQL, higher availability, and carefully evaluated analysis additions. Bayesian scoring, knowledge graphs, cross-case inference, OCR, and spaCy-based NLP are not implemented.
+
+
+## Normalized security events (M3)
+
+The case-scoped Security Events explorer ingests verified Linux SSH/PAM logs and
+structured Windows Security/Sysmon exports through immutable source profiles.
+It preserves exact-input digests, record locators, timestamp uncertainty and
+processing coverage. Reingestion is idempotent; Sysmon is contextual telemetry,
+not authentication success/failure. Native EVTX decoding, event detections and
+a cross-source incident timeline are not implemented in M3.
+
+See [M3 implementation](docs/m3-implementation.md) and the
+[synthetic authentication demonstration](sample-data/m3-authentication/README.md).

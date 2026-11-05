@@ -170,3 +170,15 @@ validated keys, resolved-path containment and the original path used for I/O
 remain enforced. Parallel staging tests cover the previously intermittent false
 containment failure. This is not permission to follow evidence links outside the
 configured storage root.
+
+
+## M3 event ingestion
+
+Event ingestion uses the same snapshot/verification abstraction for local and S3
+storage. Each attempt records verification, initiating actor and coverage. Durable
+running attempts cannot be mistaken for completed event sets; failed event-set
+transactions roll back before a sanitized failure is recorded. Recovery closes
+interrupted attempts under the case lock; retry creates new run membership without
+duplicating event identities. Event exploration exposes historical snapshots,
+with recorded integrity eligibility, not a continuous file-integrity guarantee.
+See [M3 lifecycle and query policy](m3-implementation.md).

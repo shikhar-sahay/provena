@@ -54,6 +54,7 @@ backend/app/
   db/                # engine, session, Base
   modules/           # domain modules: auth, users, investigations, evidence,
                      # dashboard, intelligence, audit (all implemented)
+  events/            # pure bounded record parsing, source time and event adapters
   ai/                # deterministic pipeline: parsers, extractors, normalize,
                      # correlate, rules (no FastAPI/SQLAlchemy here)
   main.py            # create_app() + app
@@ -94,6 +95,12 @@ sample-data/         # synthetic demo data only (see its README)
   completed run. Rules propose findings with weighted factors; humans accept
   or reject; only accepted findings enter deterministic reports. Never invent
   guilt, scores of suspicion, or LLM output.
+- **Security events:** `app/events/` holds pure record parsers/adapters; persistence,
+  profiles and APIs live in `app/modules/events/`. Profiles and events are immutable
+  interpretations, with semantic identity and run memberships. Ingestion requires
+  M1 verified snapshots. Preserve source time uncertainty, profile assumptions,
+  versioning and coverage. Do not create session links/detections by joining scalar
+  artifacts. See `docs/m3-implementation.md`.
 - **Security/forensics:** Never commit `.env`, uploads, evidence, DB dumps,
   models, venvs, build artifacts. Real investigative evidence must never enter
   the repo. Never describe the project as certified forensic software.
