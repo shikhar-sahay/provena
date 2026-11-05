@@ -36,8 +36,11 @@ def deterministic_narrative(context: dict[str, Any], error: str | None = None) -
     findings = context["accepted_findings"]
     finding_narratives = {
         str(item["id"]): (
-            f"{item['title']}. {item['summary']} This accepted finding has a deterministic "
-            f"support score of {item['confidence']}/100 based on the recorded factors, not a calibrated probability."
+            f"{item['title']}. {item['summary']} " + (
+                'Severity is threshold-based review priority, not a probability of compromise.'
+                if (item.get('support_snapshot') or {}).get('kind') == 'authentication_detection'
+                else f"This accepted finding has a deterministic support score of {item['confidence']}/100 based on the recorded factors, not a calibrated probability."
+            )
         )
         for item in findings
     }

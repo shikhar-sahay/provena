@@ -94,6 +94,72 @@ def test_postgres_parallel_registration_retry(tmp_path, monkeypatch):
     finally:
         engine.dispose()
 
+
+def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monkeypatch):
+    url=os.getenv('M1_POSTGRES_TEST_URL')
+    if not url:
+        pytest.skip('Disposable PostgreSQL CI database not configured.')
+    parsed=make_url(url)
+    assert parsed.database=='provena_ci' and parsed.host in {'127.0.0.1','localhost'}
+    from app.modules.events.service import create_profile, ingest
+    from app.modules.events.schemas import ProfileCreate
+    from app.modules.evidence.service import verify_evidence
+    from app.modules.detections.service import create_set, execute
+    from app.modules.detections.schemas import EventSetCreate, DetectionCreate
+    from app.modules.detections.models import InvestigationEventSet, DetectionRunFinding, AuthenticationDetectionRun
+    from app.modules.intelligence.models import Finding
+    monkeypatch.setattr(settings,'evidence_storage_backend','local')
+    monkeypatch.setattr(settings,'evidence_storage_root',str(tmp_path))
+    engine=create_engine(url)
+    suffix=uuid.uuid4().hex[:12]
+    try:
+        with Session(engine) as db:
+            actor=User(username=f'auth_{suffix}',email=f'{suffix}@example.test',full_name='Synthetic CI',role='admin',password_hash='unused')
+            db.add(actor);db.flush()
+            workspace=Workspace(name='Synthetic Authentication',slug=f'auth-{suffix}',created_by_id=actor.id)
+            db.add(workspace);db.flush()
+            inv=Investigation(title='Synthetic authentication',case_number=f'AUTH-{suffix}',workspace_id=workspace.id,created_by_id=actor.id,lead_investigator_id=actor.id)
+            db.add(inv);db.commit()
+            data=''.join(f'2026-11-05T12:00:{i*3:02d}Z host sshd[123]: Failed password for mira from 192.0.2.1 port {2200+i} ssh2\n' for i in range(5)).encode()
+            evidence=register_evidence(db,inv,title='Synthetic auth',description='',evidence_type=EvidenceType.LOG,source='Synthetic',acquired_at=None,filename='auth.log',content_type='text/plain',stream=io.BytesIO(data),actor=actor)
+            verify_evidence(db,inv,evidence,actor)
+            profile=create_profile(db,inv,ProfileCreate(name='Linux',configuration={'adapter':'linux_auth','format':'syslog'}),actor)
+            ingestion=ingest(db,inv,evidence.id,profile.id,actor)
+            uid,inv_id,ingestion_id=actor.id,inv.id,ingestion.id
+        barrier=Barrier(2)
+        def select_inputs():
+            with Session(engine) as db:
+                actor,inv=db.get(User,uid),db.get(Investigation,inv_id)
+                barrier.wait(timeout=15)
+                return create_set(db,inv,EventSetCreate(name='Concurrent selection',run_ids=[ingestion_id]),actor).id
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(select_inputs) for _ in range(2)]
+            set_ids=[f.result(timeout=60) for f in futures]
+        assert set_ids[0]==set_ids[1]
+        barrier=Barrier(2)
+        def detect():
+            with Session(engine) as db:
+                actor,inv=db.get(User,uid),db.get(Investigation,inv_id)
+                barrier.wait(timeout=15)
+                run=execute(db,inv,DetectionCreate(event_set_id=set_ids[0]),actor)
+                assert run.status=='completed',run.error
+                return run.id
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(detect) for _ in range(2)]
+            run_ids=[f.result(timeout=60) for f in futures]
+        with Session(engine) as db:
+            assert db.scalar(select(func.count()).select_from(InvestigationEventSet).where(InvestigationEventSet.investigation_id==inv_id))==1
+            findings=list(db.scalars(select(Finding).where(Finding.investigation_id==inv_id)))
+            assert len(findings)==1
+            assert db.scalar(select(func.count()).select_from(DetectionRunFinding).where(DetectionRunFinding.run_id.in_(run_ids)))==2
+            findings[0].status='accepted';db.commit()
+            actor,inv=db.get(User,uid),db.get(Investigation,inv_id)
+            assert execute(db,inv,DetectionCreate(event_set_id=set_ids[0]),actor).status=='completed'
+            assert db.get(Finding,findings[0].id).status=='accepted'
+            assert db.scalar(select(func.count()).select_from(AuthenticationDetectionRun).where(AuthenticationDetectionRun.investigation_id==inv_id))==3
+    finally:
+        engine.dispose()
+
 def test_postgres_parallel_event_ingestion(tmp_path, monkeypatch):
     url=os.getenv('M1_POSTGRES_TEST_URL')
     if not url:

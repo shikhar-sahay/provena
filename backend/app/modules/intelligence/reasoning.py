@@ -124,6 +124,9 @@ def recheck_support(db: Session, inv: Investigation, user: User, purpose: str) -
 
 
 def support_current(db: Session, finding: Finding) -> bool:
+    if (finding.support_snapshot or {}).get('kind') == 'authentication_detection':
+        from app.modules.detections.service import support_current as detection_support_current
+        return detection_support_current(db, finding)
     if not finding.artifact_ids or not finding.evidence_ids:
         return False
     from app.modules.intelligence.provenance import active_artifacts, artifact_identity, coverage_for_artifacts
@@ -280,6 +283,9 @@ def review_finding(
     db: Session, inv: Investigation, finding: Finding, status_value: str,
     note: str | None, reviewer: User,
 ) -> Finding:
+    previous_decision = {'status': finding.status, 'reviewer_id': finding.reviewer_id,
+                         'review_note': finding.review_note,
+                         'reviewed_at': finding.reviewed_at.isoformat() if finding.reviewed_at else None}
     finding.status = status_value
     finding.reviewer_id = reviewer.id
     finding.reviewed_at = _now()
@@ -294,7 +300,9 @@ def review_finding(
         resource_type=ResourceTypes.INVESTIGATION,
         resource_id=inv.id,
         actor_id=reviewer.id,
-        metadata={"finding_id": finding.id, "rule_id": finding.rule_id},
+        metadata={"finding_id": finding.id, "rule_id": finding.rule_id,
+                  "previous_decision": previous_decision,
+                  "decision": {'status': status_value, 'note': finding.review_note}},
     )
     db.commit()
     db.refresh(finding)
@@ -513,6 +521,7 @@ def generate_report(
         ],
         "accepted_findings": findings_payload,
         "rule_coverage": latest_rule_coverage(db, full),
+        "authentication_investigation": authentication_report_context(db, full),
         "recommendations": recommendations,
         "investigator_notes": [
             {"author": n.author.username if n.author else None,
@@ -554,6 +563,28 @@ def generate_report(
     db.commit()
     db.refresh(report)
     return report
+
+
+def authentication_report_context(db: Session, inv: Investigation) -> dict:
+    """Execution inventory and decision snapshots, separate from accepted conclusions."""
+    from app.modules.detections.models import AuthenticationDetectionRun, InvestigationEventSet, DetectionRunFinding
+    runs = list(db.scalars(select(AuthenticationDetectionRun).where(
+        AuthenticationDetectionRun.investigation_id == inv.id).order_by(AuthenticationDetectionRun.id.desc()).limit(25)))
+    set_ids = {r.event_set_id for r in runs}
+    sets = list(db.scalars(select(InvestigationEventSet).where(InvestigationEventSet.id.in_(set_ids))))
+    findings = list(db.scalars(select(Finding).where(Finding.investigation_id == inv.id,
+        Finding.id.in_(select(DetectionRunFinding.finding_id).where(DetectionRunFinding.run_id.in_([r.id for r in runs]))))
+        .order_by(Finding.id).limit(1000)))
+    total_runs = db.scalar(select(func.count()).select_from(AuthenticationDetectionRun).where(AuthenticationDetectionRun.investigation_id == inv.id))
+    return {'policy': 'Execution and review inventory only. Only accepted findings with current support enter conclusions. UTC projections do not establish causation.',
+        'run_limit':25,'omitted_runs':max(0,total_runs-len(runs)),
+        'sets':[{'semantic_key':s.semantic_key,'name':s.name,'selected_runs':s.selected_runs,'coverage':s.coverage} for s in sets],
+        'runs':[{'id':r.id,'event_set_id':r.event_set_id,'status':r.status,'engine_version':r.engine_version,
+                 'configuration':r.configuration,'coverage':r.coverage} for r in runs],
+        'decision_snapshot_limit':1000,'decision_snapshots_may_be_truncated':len(findings)==1000,
+        'decision_snapshots':[{'id':f.id,'rule_id':f.rule_id,'rule_version':f.rule_version,'status':f.status,
+            'support_current':support_current(db,f),'reviewer_id':f.reviewer_id,'review_note':f.review_note,
+            'reviewed_at':f.reviewed_at.isoformat() if f.reviewed_at else None} for f in findings]}
 
 
 def list_reports(db: Session, inv: Investigation):
