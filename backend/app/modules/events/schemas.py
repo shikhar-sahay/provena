@@ -26,8 +26,12 @@ class ProfileConfig(BaseModel):
                 raise ValueError('Negative zero is unknown, not a configured timezone.')
             return value
         try:
-            ZoneInfo(value)
-        except (ZoneInfoNotFoundError, ValueError) as exc:
+            if '..' in value.split('/') or value.startswith('/'):
+                raise ValueError('Invalid timezone name.')
+            from importlib.resources import files
+            with files('tzdata.zoneinfo').joinpath(*value.split('/')).open('rb') as zonefile:
+                ZoneInfo.from_file(zonefile, key=value)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
             raise ValueError('Unknown IANA timezone or fixed offset.') from exc
         return value
 

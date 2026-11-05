@@ -93,3 +93,49 @@ def test_postgres_parallel_registration_retry(tmp_path, monkeypatch):
             assert db.scalar(select(func.count()).select_from(Correlation).where(Correlation.investigation_id == inv_id)) == 1
     finally:
         engine.dispose()
+
+def test_postgres_parallel_event_ingestion(tmp_path, monkeypatch):
+    url=os.getenv('M1_POSTGRES_TEST_URL')
+    if not url:
+        pytest.skip('Disposable PostgreSQL CI database not configured.')
+    parsed=make_url(url)
+    assert parsed.database=='provena_ci' and parsed.host in {'127.0.0.1','localhost'}
+    from app.modules.events.service import create_profile, ingest
+    from app.modules.events.schemas import ProfileCreate
+    from app.modules.events.models import SecurityEvent, EventRunMember
+    from app.modules.evidence.service import verify_evidence
+    from app.modules.evidence.models import Evidence
+    monkeypatch.setattr(settings,'evidence_storage_backend','local')
+    monkeypatch.setattr(settings,'evidence_storage_root',str(tmp_path))
+    engine=create_engine(url)
+    suffix=uuid.uuid4().hex[:12]
+    try:
+        with Session(engine) as db:
+            actor=User(username=f'event_{suffix}',email=f'{suffix}@example.test',full_name='Synthetic CI',role='admin',password_hash='unused')
+            db.add(actor);db.flush()
+            workspace=Workspace(name='Synthetic Events',slug=f'event-{suffix}',created_by_id=actor.id)
+            db.add(workspace);db.flush()
+            inv=Investigation(title='Synthetic events',case_number=f'EV-{suffix}',workspace_id=workspace.id,created_by_id=actor.id,lead_investigator_id=actor.id)
+            db.add(inv);db.commit()
+            data=b'2026-11-05T12:00:00Z host sshd[123]: Failed password for mira from 192.0.2.1 port 2222 ssh2\n'
+            evidence=register_evidence(db,inv,title='Synthetic auth',description='',evidence_type=EvidenceType.LOG,source='Synthetic',acquired_at=None,filename='auth.log',content_type='text/plain',stream=io.BytesIO(data+data),actor=actor)
+            verify_evidence(db,inv,evidence,actor)
+            profile=create_profile(db,inv,ProfileCreate(name='Linux',configuration={'adapter':'linux_auth','format':'syslog'}),actor)
+            uid,inv_id,eid,pid=actor.id,inv.id,evidence.id,profile.id
+        barrier=Barrier(2)
+        def attempt():
+            with Session(engine) as db:
+                actor,inv=db.get(User,uid),db.get(Investigation,inv_id)
+                barrier.wait(timeout=15)
+                run=ingest(db,inv,eid,pid,actor)
+                assert run.status=='completed',run.error
+                return run.id
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(attempt) for _ in range(2)]
+            runs=[future.result(timeout=60) for future in futures]
+        with Session(engine) as db:
+            assert db.scalar(select(func.count()).select_from(SecurityEvent).where(SecurityEvent.investigation_id==inv_id))==2
+            for run_id in runs:
+                assert db.scalar(select(func.count()).select_from(EventRunMember).where(EventRunMember.run_id==run_id))==2
+    finally:
+        engine.dispose()

@@ -56,3 +56,48 @@ npm audit fix or advisory suppression was used. Both full `npm audit` and
 `npm audit --omit=dev` report zero findings and are now enforced in CI. Backend
 pip-audit remains enforced. The package manifest preserves the other existing
 major ranges rather than adopting npm's suggested unrelated downgrades.
+
+## Verified ingestion and query API
+
+The synchronous `/api/investigations/{id}/events` API enforces active workspace
+and case membership on every route. Profile creation, ingestion and recovery
+require existing analysis-initiation permissions; archived cases retain the
+existing restrictions. Profiles are immutable, deduplicated by configuration,
+and limited to 200 per case.
+
+- `GET/POST /profiles`: list/create source interpretations.
+- `POST /runs`: `{evidence_id, profile_id}`; durable attempt followed by a locked
+  transaction for all events and run memberships.
+- `GET /runs?limit=25&offset=0`: bounded coverage/verification history.
+- `POST /runs/{id}/recover`: close a stranded running attempt, then retry normally.
+  An active ingestion holds the same PostgreSQL case lock, preventing recovery
+  from interrupting the analytical transaction.
+- `GET /`: exact filters for category, event_type, outcome, username, host,
+  source_ip, destination_ip, provider, event_id, evidence_id, profile_id, run_id,
+  and offset-aware start/end. Maximum page 200; default 50. Unknown UTC values
+  are excluded from time ranges. Stable order: UTC ascending, unknown last,
+  then semantic event key. This is pagination, not an incident timeline.
+- `GET /{semantic_key}`: bounded event provenance and underlying recorded
+  integrity eligibility. No storage keys/paths or unbounded raw records escape.
+
+Event keys hash case/evidence labels, verified input SHA-256, record locator and
+fingerprint, profile semantic hash/version, adapter and normalization versions.
+Repeated identical lines at different locations remain distinct. Retries reuse
+immutable event rows and link them to the new run. Changed interpretation/bytes
+or versions create new identities; historical rows remain inspectable. The
+normalization version includes packaged tzdata version, and IANA interpretation
+uses that package explicitly rather than the host OS database.
+
+Ingestion independently hashes a bounded M1 private snapshot and consumes that
+same snapshot. Ready registration and independent verification are mandatory.
+Failure/tampering checks append existing verification, custody and audit history.
+One transaction persists the entire event set; insertion failure rolls it back.
+A running attempt committed before interruption is visible and recoverable.
+Lost completion acknowledgements are resolved from persisted status. Database
+registration errors return safe 503 messages. Retry never deletes history.
+
+Recognized, unsupported, rejected and omitted counts reconcile to total records.
+A complete parse with unsupported records is a partial normalized event set,
+not complete semantic coverage. Up to 20 issue locators explain failures without
+returning evidence text. Existing events retain their first ingestion provenance;
+subsequent run membership and run coverage remain separately queryable.

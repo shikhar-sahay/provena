@@ -1,9 +1,10 @@
 """Conservative record adapters. No detection rules or inferred session joins."""
 import ipaddress
+from importlib.metadata import version
 import re
 
-ADAPTER_VERSION = '1'
-NORMALIZATION_VERSION = '1'
+ADAPTER_VERSION = '1.1'
+NORMALIZATION_VERSION = '1.tz' + version('tzdata')
 SECURITY_PROVIDER = 'Microsoft-Windows-Security-Auditing'
 SYSMON_PROVIDER = 'Microsoft-Windows-Sysmon'
 SYSLOG = re.compile(r'^(?P<time>(?:[A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2}|\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?))\s+(?P<host>[^\s]{1,256})\s+(?P<process>sshd|login|su|sudo)(?:\[(?P<pid>\d{1,12})\])?:\s*(?P<message>.*)$')
@@ -166,7 +167,7 @@ def structured(record, config):
         event.update(username=scalar(data.get('User')), source_ip=ip(data.get('SourceIp'),warnings),
             destination_ip=ip(data.get('DestinationIp'),warnings), source_port=port(data.get('SourcePort'),warnings),
             destination_port=port(data.get('DestinationPort'),warnings))
-        if not event['original_timestamp']:
+        if not event['original_timestamp'] or (not root.get('TimeCreated') and root.get('UtcTime')):
             event['original_timestamp'] = scalar(data.get('UtcTime'),128)
             if event['original_timestamp']:
                 # Sysmon's documented UtcTime field declares UTC, unlike generic naive times.

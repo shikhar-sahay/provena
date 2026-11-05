@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.endpoints import ai_health, health
+from app.modules.events.router import router as events_router
 from app.modules.auth.router import router as auth_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.evidence.router import router as evidence_router
@@ -29,3 +30,5 @@ router.include_router(intelligence_router)
 router.include_router(global_findings_router)
 router.include_router(search_router)
 router.include_router(timeline_router)
+
+router.include_router(events_router)

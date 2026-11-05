@@ -1,5 +1,6 @@
 """Source-declared timestamps and explicitly configured interpretation assumptions."""
 import re
+from importlib.metadata import version
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from app.ai.normalize import timestamp_details
@@ -9,7 +10,7 @@ MONTHS = {name: i for i, name in enumerate('Jan Feb Mar Apr May Jun Jul Aug Sep 
 
 def event_time(raw, config):
     result = {'original': raw, 'utc': None, 'certainty': 'missing' if not raw else 'unknown',
-              'precision': None, 'assumptions': [], 'warnings': []}
+              'precision': None, 'assumptions': [], 'warnings': [], 'timezone_database_version': version('tzdata')}
     if not raw:
         return result
     convention = config.get('timestamp_convention', 'source')
@@ -58,7 +59,11 @@ def event_time(raw, config):
         minutes = (int(zone[1:3]) * 60 + int(zone[4:])) * (-1 if zone[0] == '-' else 1)
         result.update(utc=naive.replace(tzinfo=timezone(timedelta(minutes=minutes))).astimezone(timezone.utc).isoformat(), certainty='profile_offset')
         return result
-    tz = ZoneInfo(zone)
+    # Use the packaged database explicitly, so host OS tzdata cannot silently
+    # change interpretations under the recorded normalization version.
+    from importlib.resources import files
+    with files('tzdata.zoneinfo').joinpath(*zone.split('/')).open('rb') as zonefile:
+        tz = ZoneInfo.from_file(zonefile, key=zone)
     possibilities = set()
     for fold in (0, 1):
         candidate = naive.replace(tzinfo=tz, fold=fold).astimezone(timezone.utc)
