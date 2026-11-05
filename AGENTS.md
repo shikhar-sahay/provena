@@ -144,3 +144,14 @@ text: docs, code comments, UI copy, commit messages, seed data. Use commas,
 periods, colons, semicolons, parentheses, or hyphens instead. Rewrite the
 sentence if substitution reads awkwardly. This rule does not apply to
 third-party dependency files.
+
+## 10. Browser and release validation
+
+- Real-browser tests are under frontend/e2e, separate from Vitest src tests. Use the
+  guarded tools/run_e2e.py runner with a dedicated localhost PostgreSQL control DB.
+  Never reuse production, real case data or an existing app server.
+- Operational tooling is in app/ops; exports persist under modules/exports. Preserve
+  exact snapshots, unsigned-manifest limitations and trusted fresh-target restore rules.
+- Update current investigator/operator/developer guides and run tools/check_docs.py.
+  Keep milestone/AWS records explicitly historical. No release/tag/license/deployment
+  is approved merely by passing release validation.

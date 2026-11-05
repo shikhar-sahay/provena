@@ -1,344 +1,109 @@
-# Architecture
+# Current architecture
 
-Provena is a **modular monolith**: a React SPA, a FastAPI backend containing all
-domain and analysis logic, and PostgreSQL. No microservices, no message brokers,
-no separate AI service.
-
-The AWS deployment runs this monolith on one public-subnet EC2
-instance in Mumbai. Nginx serves the built SPA and proxies `/api/` to a
-systemd-managed FastAPI process. PostgreSQL 16 and the selected local evidence
-store also run on that instance. S3 storage is implemented as an alternative
-backend, not selected in the live deployment. See [AWS deployment](aws-deployment.md)
-and [security](security.md). DuckDNS, HTTPS termination, DNS updates, and certificate renewal are operational in the deployed environment.
-
-## Workspace authorization boundary
-
-`Workspace` is the product organization boundary. `WorkspaceMembership`
-assigns one of four operational roles to a user, and `User.active_workspace_id`
-selects the workspace for the current session. Every investigation stores a
-non-null `workspace_id`. Investigation access first verifies the active
-workspace, then applies workspace-admin or investigation-team rules. Global
-findings and search query only investigations in the active workspace.
-
-An investigation team remains a separate `InvestigationMember` subset. This
-keeps workspace membership and case assignment conceptually distinct.
-
-```mermaid
-erDiagram
-    USER ||--o{ WORKSPACE_MEMBERSHIP : joins
-    WORKSPACE ||--o{ WORKSPACE_MEMBERSHIP : contains
-    WORKSPACE ||--o{ WORKSPACE_INVITE : issues
-    WORKSPACE ||--o{ INVESTIGATION : owns
-    INVESTIGATION ||--o{ INVESTIGATION_MEMBER : assigns
-    USER ||--o{ INVESTIGATION_MEMBER : participates
-```
-
-Administrators are workspace-scoped product administrators. There is no
-platform-wide super-administrator bypass. An administrator from one workspace
-cannot inspect another workspace's investigations, findings, evidence, or
-search results.
-
-## Workspace RBAC matrix
-
-| Capability | Administrator | Investigator | Forensic analyst | Evidence custodian |
-| --- | --- | --- | --- | --- |
-| Manage workspace members and invites | Yes | No | No | No |
-| Create and manage investigations | Yes | Yes | No | No |
-| Join an assigned investigation team | Yes | Yes | Yes | Yes |
-| Register and verify evidence | Yes | Team lead/creator | Assigned custodian verifies; other members read | Assigned custodian |
-| Record custody transfers | Yes | Team lead/creator | No | Assigned custodian |
-| Run deterministic analysis | Yes | Team lead/creator | Assigned analyst | No |
-| Generate rule findings | Yes | Team lead/creator | Assigned analyst | No |
-| Accept or reject findings | Yes | Team lead/creator | No | No |
-| Generate immutable reports | Yes | Team lead/creator | No | No |
-
-The backend is the security boundary. The frontend hides actions when the
-selected workspace role cannot perform them.
-
-## System overview
+Provena is a single FastAPI modular monolith, React/TypeScript SPA and PostgreSQL 16
+system. No queue, microservice, search cluster or model is required. This describes
+repository behavior, not an attestation of the live AWS host.
 
 ```mermaid
 flowchart TB
-    Users --> SPA["React + TypeScript SPA"]
-    SPA -->|"HTTP /api/*"| API["FastAPI modular monolith"]
-    API --> Auth["Auth / Workspaces / Users (implemented)"]
-    API --> Inv["Investigations + Membership (implemented)"]
-    API --> Ev["Evidence (implemented)"]
-    Ev --> Integ["Integrity Verification (implemented)"]
-    Ev --> Cust["Chain of Custody (implemented)"]
-    Ev --> Store["Local or private S3 evidence storage (implemented)"]
-    API --> Audit["Audit log (implemented)"]
-    API --> Intel["Intelligence (implemented)"]
-    Intel --> Runs["Analysis runs + Artifacts (implemented)"]
-    Intel --> Corr["Shared-value correlation (implemented)"]
-    Intel --> Find["Rule findings + Validation (implemented)"]
-    Intel --> Rep["Grounded immutable reports (implemented)"]
-    API --> AI["AI investigation engine, in-process (implemented)"]
-    AI --> Fall["Deterministic authoritative narrative (M2)"]
-    API --> PG[("PostgreSQL")]
-    API --> Events["Verified event ingestion + immutable event sets"]
-    Events --> Detections["Versioned authentication detections + shared review"]
-    Detections --> Rep
-    API --> Exports["Durable case exports + unsigned manifests"]
-    Exports --> Snapshots["Exact verified original snapshots, explicit selection"]
-    Exports --> Cache["Private expiring archive cache"]
-    Ops["Maintainer CLI"] --> Backup["PostgreSQL exported snapshot + native dump"]
-    Backup --> Portable["Verified private recovery package"]
-    Ops --> Preflight["Read-only preflight + readiness"]
+  Browser[React SPA] --> Auth[Bearer authentication and workspace selection]
+  Auth --> Cases[Case membership and backend authorization]
+  Cases --> Evidence[Recoverable evidence registration]
+  Evidence --> Storage[Local or optional private S3 abstraction]
+  Storage --> Verified[Bounded exact-byte verified snapshot]
+  Verified --> Artifacts[Pure parsers, extraction and stable correlations]
+  Verified --> Events[Pure record adapters and timestamp semantics]
+  Profiles[Immutable source profiles] --> Events
+  Events --> EventDB[Immutable events and ingestion membership]
+  EventDB --> Sets[Explicit semantic event sets]
+  Sets --> Detect[Versioned deterministic authentication rules]
+  Detect --> Review[Shared Finding review and annotations]
+  Sets --> Timeline[Comparable UTC, assumed and uncertain lanes]
+  Artifacts --> Review
+  Review --> Reports[Immutable deterministic reports]
+  Cases --> Exports[Durable export operations and private ZIP cache]
+  Reports --> Exports
+  Storage --> Exports
+  Cases --> DB[(PostgreSQL domain history)]
+  DB --> Backup[Exported snapshot plus native pg_dump]
+  Backup --> Restore[Trusted guarded fresh-target restore]
+  Ops[Operator CLI and readiness] --> DB
+  Ops --> Storage
 ```
 
-M5 adds a bounded synchronous export domain and maintainer-only operational CLI,
-not a background service. Metadata exports require case access; original-byte
-exports require case management and fresh exact-byte verification. Export caches
-are separate from original evidence. Backup uses one PostgreSQL exported snapshot
-for the native dump and metadata fingerprints, then verifies every referenced
-evidence object against its immutable baseline. Missing or changed content fails
-the backup. Restore accepts only a trusted archive digest and fresh empty targets;
-an incomplete-restore marker keeps readiness blocked until validation completes.
-See [operations](operations.md) for consistency limits, restore order and retention.
+## Code boundaries
 
-## Frontend / backend / database relationship
+- `frontend/src/`: functional React pages, shared UI primitives, auth/theme/toast state,
+  typed API client. `frontend/e2e/` is separate real-browser testing.
+- `backend/app/modules/`: auth, workspaces, users, investigations, evidence, events,
+  detections, intelligence, audit, dashboard and exports. Routers validate requests;
+  services own permissions and transaction boundaries; SQLAlchemy models persist state.
+- `backend/app/ai/`: pure bounded artifact parsers, normalization, correlation and rules.
+- `backend/app/events/`: pure record-aware Linux/Windows/Sysmon adapters, source-time
+  interpretation and authentication pattern engine. No database or FastAPI dependency.
+- `backend/app/ops/`: standalone archive verification, guarded native backup/restore,
+  read-only preflight and explicit cache maintenance. Archive verification is standard
+  library only. `tools/` contains maintainer release, documentation and browser runners.
+- `backend/alembic/`: forward-only schema history. Production startup does not silently
+  apply migrations. The local development Compose command explicitly migrates its own DB.
 
-- The SPA is the browser client. It calls `/api/*` on the backend (dev proxy
-  in `frontend/vite.config.ts`; same-origin Nginx proxy on EC2).
-- The backend owns all business rules, integrity checks, and authorization.
-  The frontend never enforces security alone; hidden buttons are convenience,
-  backend 401/403/404 responses are the enforcement.
-- PostgreSQL is the system of record for domain data: users, investigations,
-  memberships, evidence records, verifications, custody events, audit events.
-  It never stores raw evidence blobs; those live in the selected evidence
-  storage backend. The live EC2 deployment selects the local filesystem.
+## Authorization
 
-## Authentication and RBAC (implemented)
+A global account can belong to multiple workspaces. Active workspace membership is the
+first boundary; case membership or workspace administration is the second. Workspace
+administrators cannot globally disable an account. Suspension applies immediately on
+protected backend requests and does not disable unrelated workspaces.
 
-- JWT bearer access tokens (`Authorization: Bearer <token>`). Passwords are
-  hashed with bcrypt; hashes never leave the server. Tokens live 8 hours by
-  default (`ACCESS_TOKEN_EXPIRE_MINUTES`, `SECRET_KEY` in `.env`).
-- The React client stores the token in `localStorage`. That storage is readable
-  by page JavaScript and is a production security trade-off. A future auth
-  change could use HttpOnly cookies. Logout
-  discards the token client-side and records a `USER_LOGOUT` audit event.
-- Roles: `admin`, `investigator`, `forensic_analyst`, `evidence_custodian`.
-  Reusable helpers live in `app/modules/auth/dependencies.py`
-  (`get_current_user`, `require_roles(...)`). Authorization is workspace-first:
-  requests resolve the user's active workspace membership, and investigation
-  access then requires a workspace administrator role or investigation-team
-  membership. There is no cross-workspace administrator bypass.
+Case management belongs to the workspace administrator, creator or lead. Assigned
+forensic analysts can initiate analysis/ingestion and inspect findings but cannot accept
+findings, generate reports or bundle originals. Evidence custodians and case managers
+can verify evidence. Case readers can export metadata. Archived cases restrict ordinary
+mutations; historical read access remains available. UI controls are guidance only.
+See [security](security.md) for the trust boundaries and limitations.
 
-## Investigation domain (implemented)
+## Persistence and reproducibility
 
-- `Investigation`: surrogate integer id plus a unique human-readable case
-  number (`PRV-YYYY-NNNN`, e.g. `PRV-2026-0001`), title, description, status,
-  priority, creator, lead investigator, server-controlled timestamps, and
-  `closed_at` (set on close, cleared on reopen).
-- Statuses: `open`, `in_progress`, `under_review`, `closed`, `archived`.
-  Priorities: `low`, `medium`, `high`, `critical`. Stored as strings, validated
-  against Python enums in Pydantic schemas and services.
-- State rules: closing sets `closed_at`; reopening clears it; `archived` is
-  read-only for ordinary users (only admins can edit or reopen archived work).
-- Creation is limited to admins and investigators. Managing (edit, status,
-  team changes) requires admin, creator, or lead investigator. Other members,
-  including analysts and custodians, get read access to assigned work.
+PostgreSQL stores application history, baseline digests, profiles, event/run memberships,
+semantic event-set keys, reviewed findings, immutable report JSON and export operations.
+Original bytes live behind `app/modules/evidence/storage.py`, under generated keys;
+private archive caches use a separate root. Storage keys never appear in ordinary API
+responses or case export metadata.
 
-## Investigation membership (implemented)
+Fresh analysis, ingestion, detection support checks and originals exports consume exact
+verified private copies. Historical verification flags alone are insufficient. Missing,
+changed or incomplete evidence produces explicit blocked/failure states. Registration,
+ingestion, detections and exports have recoverable operation records; retries do not
+silently delete history. PostgreSQL case locks serialize relevant publication/recovery.
 
-- `InvestigationMember` rows link users to investigations with a team role
-  (`lead` or `member`), guarded by a unique constraint against duplicates.
-- Creator and lead are added as members automatically, so "can this user see
-  this investigation" is one membership check. Removing the lead is rejected
-  until the lead is reassigned.
+Logical analytical identities include input/version/profile semantics, not sequence
+allocation. Explicit event sets prevent duplicate ingestion or alternative interpretations
+from becoming independent activity. Accepted/rejected reviews survive equivalent reruns;
+changed support requires fresh review. Reports preserve their original content hashes.
 
-## Audit logging (implemented)
+## Time, findings and reporting
 
-- Append-only `audit_events` table: action, resource type, resource id, actor,
-  timestamp, concise JSON metadata. No update or delete endpoints exist.
-- Recorded events include account and workspace actions (`USER_LOGIN`,
-  `USER_LOGOUT`, `USER_CREATED`, `WORKSPACE_CREATED`, `WORKSPACE_JOINED`,
-  `WORKSPACE_INVITE_CREATED`, `WORKSPACE_ROLE_CHANGED`), investigation
-  lifecycle and membership actions, evidence registration and metadata
-  updates, verification outcomes (`EVIDENCE_VERIFIED`,
-  `EVIDENCE_INTEGRITY_MISMATCH`), downloads, custody transfers and updates,
-  analysis lifecycle (`AI_ANALYSIS_STARTED`, `AI_ANALYSIS_COMPLETED`,
-  `AI_ANALYSIS_FAILED`), finding generation and review
-  (`AI_FINDING_GENERATED`, `AI_FINDING_ACCEPTED`, `AI_FINDING_REJECTED`),
-  investigator notes, and report generation (`REPORT_GENERATED`). Secrets
-  (passwords, hashes, tokens) and file contents are never written to audit metadata.
-- Evidence and custody actions are recorded against the investigation
-  (`resource_type: investigation`) so per-investigation history and timelines
-  stay complete; the metadata carries `evidence_id` and `evidence_number`.
-- Per-investigation history is served by `GET /api/investigations/{id}/audit`
-  and shown on the investigation detail screen.
+Original timestamps and uncertainty are preserved. UTC comparisons require justified
+projections; profile assumptions are explicit and opt-in for detections. Unknown year,
+unknown timezone and ambiguous DST times do not establish success-after-failure claims.
+Timeline lanes separate uncertainty; equal times and IP matches do not prove causation.
 
-## Domain boundaries (`backend/app/modules/`)
+Five threshold-based families describe observable authentication patterns. Severity is
+review priority, not a probability of compromise. Legacy artifact scores remain declared
+weighted heuristics. Human acceptance is mandatory for report conclusions. Authentication
+reports require explicit event-set selection. Free-form LLM prose is excluded.
 
-| Module          | Status      | Responsibility                                  |
-| --------------- | ----------- | ----------------------------------------------- |
-| auth            | Implemented | Login, tokens, current user, RBAC helpers       |
-| users           | Implemented | User model, admin creation, admin user management |
-| investigations  | Implemented | Lifecycle, team membership, authorization       |
-| evidence        | Implemented | Registration, storage, verification, custody, timelines |
-| dashboard       | Implemented | Scoped summary counts, attention items, activity |
-| intelligence    | Implemented | Analysis runs, artifacts, correlations, findings, notes, reports |
-| search          | Implemented | Authorized cross-investigation multi-entity search |
-| audit           | Implemented | Append-only application audit log               |
+## Operations and release
 
-Each domain package exposes a router mounted in `app/api/router.py`. Domains
-communicate via direct Python calls (same process), not HTTP or queues.
+Case exports use bounded disk-backed ZIPs with versioned unsigned manifests, explicit
+selection and per-file hashes. The verifier checks structure, provenance, limits and
+report/original references without extracting or executing content. System backup is a
+separate private whole-database operation using PostgreSQL exported snapshots, immutable
+baseline-verified originals and native tools. Restore requires trusted package hashes,
+fresh empty targets and complete fingerprint/hash validation before readiness.
 
-## Frontend interface (implemented)
-
-- React 19 + TypeScript + Tailwind v4 + React Router. All calls go through
-  `src/api/client.ts`; auth state lives in `AuthContext`, theme in
-  `ThemeContext`, notifications in `ToastProvider`.
-- Design tokens are CSS variables in `src/index.css` (`:root` for light,
-  `.dark` for dark) mapped to Tailwind utilities via `@theme inline`
-  (`bg-surface`, `text-ink`, `border-line`, semantic tones). No scattered
-  ad-hoc colors.
-- Light and dark themes with a compact toggle in the top bar, persisted in
-  `localStorage` and applied pre-paint by an inline script in `index.html`.
-  A previously stored `system` preference still resolves against the OS
-  preference; the visible control offers Light and Dark. Motion honors
-  `prefers-reduced-motion`.
-- Approved monochrome brand from `frontend/public/brand/provena-brand-pack/`;
-  production copies live in `frontend/public/brand/` (`mark-*.svg`,
-  `logo-*.svg`, theme-aware `favicon-*.svg`, PNG fallback, Apple touch icon).
-  The logo is never recolored by semantic colors.
-- Shell: compact sidebar (brand, Dashboard, Investigations, Findings, and Users
-  for admins, user card) plus a topbar with multi-category global search,
-  compact theme toggle, role-gated creation, and account menu. Dialogs for forms
-  and confirmations, drawers for registration and detail inspection, toasts for
-  feedback, and skeletons/empty/error states across async views.
-- Global Findings workspace: cross-investigation triage, rule proposals review,
-  severity/status filtering, search, and bulk accept/reject actions.
-- Behavior tests run under vitest (`npm test`): formatting, error semantics,
-  badges, theming, sign-in validation, and analysis labels.
-
-## Evidence storage, integrity, and custody (implemented)
-
-Evidence storage is selected by `EVIDENCE_STORAGE_BACKEND`. The default local
-backend preserves the existing opaque-key filesystem layout. The optional S3
-backend uses private objects, the AWS default credential provider chain, bounded
-streaming, and server-mediated downloads. Domain services use storage
-capabilities rather than filesystem paths. The EC2 deployment uses
-`local` with `EVIDENCE_STORAGE_ROOT`. See [AWS deployment](aws-deployment.md)
-for the live topology. Switching to S3 would require a separate migration and
-verification of existing evidence bytes.
-
-- `Evidence` rows carry a per-investigation human-readable number (`E-001`),
-  metadata, file size, storage key, and the immutable SHA-256 baseline.
-- Uploads stream through `app/modules/evidence/storage.py`, the only module that
-  accesses the evidence backend, under `<investigation-id>/<uuid>` opaque keys.
-  Responses never expose storage keys, paths, or S3 object locations.
-- Verification recomputes SHA-256 later and records each attempt with expected
-  vs observed digests (`verified`, `mismatch`, `unavailable`); baselines are
-  never rewritten.
-- `custody_events` is append-only; the current holder is derived from the
-  latest event. Registration creates the first event automatically.
-- Evidence, investigation, and custody timelines are deterministic assemblies
-  of these records. Full detail in `docs/evidence-integrity.md`.
-
-## Investigation intelligence (implemented)
-
-- Pure pipeline in `app/ai/` (parsers, extractors, normalization,
-  correlation): no FastAPI, no SQLAlchemy, fully unit-tested. Persistence,
-  API, RBAC, and audit live in `app/modules/intelligence/`.
-- Only VERIFIED evidence is processed (hard backend gate); anything else
-  becomes an explicit blocked run outcome with a reason.
-- Supported formats by filename: txt, log, csv, json, and machine-readable
-  PDF via pypdf (no-text PDFs fail with OCR guidance, never silent success).
-- Artifacts carry type, raw and normalized values, structured locators
-  (line, csv row/column, JSON path, PDF page), bounded context, and
-  extractor name/version/method. Deduplication is enforced by a uniqueness
-  constraint over evidence, type, normalized value, locator, and
-  extractor/version, so re-runs never duplicate.
-- Correlations are shared-value, investigation-scoped, and rebuilt
-  deterministically on each completed run, with contributor links.
-- Three versioned rules propose findings with weighted confidence factors;
-  humans accept or reject with reviewer and note. Only accepted findings
-  enter deterministic reports (content-hashed snapshots, print-to-PDF via
-  the browser). Investigator notes attach to cases or findings.
-- Scheduled jobs, queues, and vector stores are deliberately absent: runs
-  execute synchronously inside the request with per-evidence savepoints.
-
-## Evidence storage concept (implemented)
-
-- Uploaded evidence is stored under generated internal keys. Local development
-  uses the git-ignored `EVIDENCE_STORAGE_ROOT`; production can select an
-  existing private S3 bucket.
-- The SHA-256 baseline is computed at ingest and re-verified on demand; the
-  database holds the key, digest, size, content type, uploader, timestamps,
-  verification history, and custody chain.
-- Real evidence must never be committed to the repository. Synthetic demo
-  files live in `sample-data/`.
-
-## Investigation workflow (implemented)
-
-```mermaid
-flowchart LR
-    A[Create Investigation] --> B[Assign Team]
-    B --> C[Register Evidence]
-    C --> D[Verify Integrity]
-    D --> E[Maintain Chain of Custody]
-    E --> F[Analyze Evidence]
-    F --> G[Generate AI Insights]
-    G --> H[Investigator Validation]
-    H --> I[Generate Report]
-    I --> J[Archive Investigation]
-```
-
-All stages in this diagram are implemented. M2 authoritative report prose uses
-deterministic assembly regardless of legacy Ollama settings. Historical reports
-retain their original generation metadata. See [analysis architecture](ai-architecture.md).
-
-## Request / data flow (implemented paths)
-
-1. Investigator acts in the SPA, e.g. `PATCH /api/investigations/3` or an
-   evidence upload to `/api/investigations/3/evidence`.
-2. Backend authenticates the bearer token, loads the user, checks membership
-   and manage permission, validates via Pydantic schemas (or multipart form
-   fields for uploads).
-3. The service mutates Postgres in a transaction and appends audit entries.
-   Uploads stream file bytes to staging storage while hashing, commit the
-   database row, then atomically promote the file.
-4. The SPA refreshes the detail view, including team, evidence, custody,
-   and audit history.
-
-
-## M3 normalized event path
-
-```mermaid
-flowchart LR
-    E[Ready independently verified evidence] --> S[Fresh verified private snapshot]
-    P[Immutable case source profile] --> R[Bounded record parser]
-    S --> R
-    R --> A[Linux SSH/PAM or Windows/Sysmon adapter]
-    A --> N[Normalized fields and explicit time uncertainty]
-    N --> T[Atomic immutable event set and run membership]
-    T --> Q[Authorized paginated query API]
-    Q --> U[Security Events explorer and provenance drawer]
-```
-
-This runs inside the existing FastAPI monolith. PostgreSQL serializes case
- ingestion transactions; no queues or new services are introduced. Existing
-artifact analysis/reports remain separate and compatible. See
-[M3 implementation](m3-implementation.md) for supported formats and limits.
-
-## M4 authentication investigation path
-
-```mermaid
-flowchart LR
-    I[M3 immutable ingestion runs] --> S[Explicit versioned event selection]
-    S --> V[Fresh source digest verification]
-    V --> D[Bounded deterministic authentication rules]
-    D --> F[Existing findings and human review]
-    S --> T[UTC, assumed and uncertain timeline lanes]
-    T --> P[Exact account, IP and host filter pivots]
-    F --> R[Selected-set deterministic report snapshot]
-```
-
-Selections preserve all original memberships and exclude overlapping copied observations
-from independent counting. Alternative profile interpretations are rejected when mixed.
-PostgreSQL case locks and semantic constraints serialize retries; accepted decisions
-remain attached to unchanged findings. Reports require an explicit authentication set,
-and never merge alternative interpretations into conclusions implicitly. See
-[M4 implementation](m4-implementation.md) for rules, budgets and uncertainty semantics.
+`/api/live` checks process response; `/api/ready` checks required dependencies/schema/
+storage without exposing internal paths. CLI diagnostics are read-only and explicit.
+Logs use bounded correlation IDs and omit bodies/tokens. Local Compose is loopback-only.
+CI tests disposable systems and produces validation-only candidates, never deployments.
+See [operations](operations.md), [release policy](releases.md) and
+[implementation evidence](m6-implementation.md).

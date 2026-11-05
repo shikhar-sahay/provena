@@ -265,6 +265,14 @@ test('workspace isolation, analyst restrictions, archived reads and suspension p
     await member.reload(); await member.getByLabel('Saved event set', { exact: true }).selectOption(String(set.id));
     await expect(member.getByRole('button', { name: 'Run detections', exact: true })).toBeDisabled();
     expect((await request(member, `/investigations/${id}/events/runs`, 'POST', { evidence_id: item.id, profile_id: run.profile_id })).status).toBe(403);
+    expect((await request(page, `/investigations/${id}`, 'PATCH', { status: 'open' })).status).toBe(200);
+    expect((await request(page, `/workspaces/current/members/${actor.id}`, 'PATCH', { role: 'investigator' })).status).toBe(200);
+    await member.goto(`/investigations/${id}/analysis`); await member.reload();
+    await expect(member.getByRole('tab', { name: 'Overview', exact: true })).toBeVisible();
+    await expect(member.getByRole('button', { name: 'Run analysis', exact: true })).toHaveCount(0);
+    expect((await request(member, `/investigations/${id}/analysis/runs`, 'POST', { evidence_ids: [item.id] })).status).toBe(403);
+    await member.getByRole('tab', { name: /^Findings/ }).click();
+    await expect(member.getByRole('button', { name: 'Evaluate rules', exact: true })).toBeDisabled();
     expect((await request(page, `/admin/users/${actor.id}`, 'PATCH', { is_active: false })).status).toBe(200);
     expect([403, 404]).toContain((await request(member, `/investigations/${id}`)).status);
     await member.getByRole('button', { name: 'Account menu' }).click();

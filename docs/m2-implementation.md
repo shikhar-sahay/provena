@@ -1,5 +1,7 @@
 # Provena 2.0 M2 implementation handoff
 
+Historical milestone record. Later milestones extend this scope; use the current [guide index](README.md) for setup, operations and supported workflows. Original verification results below remain historical.
+
 Baseline: M1 `e9c701dacb104432851785756c97507a2f8cf874`.
 M2 preserves the modular monolith and M1 exact-input integrity contract. It does
 not add authentication-event schemas, detection families, OCR, a full incident

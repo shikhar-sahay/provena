@@ -184,3 +184,34 @@ and preparation duration. They omit tokens, query strings, bodies, raw records a
 Correlation IDs are also attached to audit metadata. They are correlation aids, not
 authentication. Streaming transfer duration is not the same as response-preparation time.
 Unhandled errors receive safe 503 responses rather than raw SQL/storage exceptions.
+
+## M6 validation, upgrades and troubleshooting
+
+The [developer guide](development.md) owns the disposable Chromium runner and the
+[investigator guide](investigator-guide.md) owns UI terminology. Do not use real evidence
+in browser tests or point their control connection at an application database. Browser
+artifacts are synthetic and separate from release candidates. M6 did not validate any
+live EC2, DNS, TLS, S3 or monitoring configuration.
+
+Before an independently approved upgrade, record the current source/schema revision,
+pause schema-changing work and cache pruning, create/verify a private backup, and restore
+it into a fresh disposable environment. Test migrations and readiness there first. A
+rollback restores a validated compatible backup into fresh targets; published migrations
+are not rewritten or automatically downgraded. Do not upgrade production merely because
+CI is green. A localhost development Compose upgrade is not a production procedure.
+
+| Symptom | Safe next action |
+| --- | --- |
+| Liveness works, readiness fails | Run private CLI preflight; inspect DB/schema/storage without exposing credentials |
+| Ingestion is partial/rejected | Check supported adapter/export schema, explicit profile and coverage; preserve the source |
+| A request response was lost | Inspect durable history; reuse its idempotency key where supported; do not infer rollback |
+| Download is unavailable/expired | Reauthorize, inspect export history and recorded size/hash; regenerate explicitly if needed |
+| Restore marker remains | Keep every writer offline, investigate validation failure and retry into different fresh targets |
+| New Docker volumes work but old ones fail permissions | Review ownership with a validated backup; do not recursively change real evidence blindly |
+| Browser tests refuse startup | Use a dedicated localhost provena_ci control DB, matching browser binaries and current Node/Python |
+
+Schedule generated-cache maintenance through an operator-owned timer only after explicit
+authorization. M6 does not install retention, encryption, off-host backups, alarms or
+production services. Protect API/operator logs and use correlation IDs instead of raw
+source records when diagnosing failures. Existing parser/selection/export budgets remain
+explicit limits; narrower selections or private backup may be required for larger cases.

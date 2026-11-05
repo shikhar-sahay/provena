@@ -11,6 +11,10 @@
 - M5: unsigned verifiable case exports, snapshot-bound private backup/restore tooling,
   read-only deployment preflight, health diagnostics, request correlation and release validation.
 
+- M6: guarded real Chromium investigation workflows, workspace switching, verification
+  permission feedback, dismissed-review race protection, bounded browser pagination,
+  documentation gates and release leak/reproducibility checks.
+
 No final release/tag or production deployment is performed by these implementation steps.
 Before publication, the maintainer must approve licensing, the security disclosure channel,
 release notes and the exact validated commit. See `docs/releases.md`.

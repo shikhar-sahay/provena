@@ -1,209 +1,142 @@
 # Provena
 
-Provena is an explainable AI-assisted digital forensic investigation platform designed to streamline evidence management, investigative analysis, and case reporting. It provides a centralized workspace where investigators can organize cases, preserve evidence integrity, maintain chain-of-custody records, examine correlated findings, and generate traceable investigation reports.
+Provena is an experimental authentication incident investigation workbench. Analysts
+register and verify evidence, interpret supported logs, investigate deterministic
+patterns, review findings and export traceable reports and investigation packages.
 
-Built with React, FastAPI, and PostgreSQL, Provena combines structured investigative workflows with transparent, rule-based analysis and deterministic reporting.
+React/TypeScript, FastAPI and PostgreSQL form a modular monolith. Evidence and
+verifiable analysis are the sources of truth. No model, paid API or external service
+is required. Reports use deterministic templates, not free-form LLM conclusions.
 
-The current development target is **0.1.0-beta.0**, an authentication incident investigation workbench. This is a prerelease validation identifier, not a published release or forensic certification. The repository has no approved license grant yet; license selection and maintainer approval remain public-release blockers. The live deployment is managed separately and may lag this source revision.
+## Status
 
-## Start locally and investigate
+The internal version is **0.1.0-beta.0**, an unpublished prerelease. M0-M5 provide
+workspace isolation, exact-byte evidence snapshots, reproducible analysis, normalized
+events, authentication detections and recovery/export tooling. M6 adds real Chromium
+workflow testing, integration hardening, navigation improvements and documentation gates.
 
-With Docker Compose installed, run `docker compose up --build --wait` from the repository root, then open [the local interface](http://localhost:5173). The local stack binds only to loopback, migrates its development database and checks API readiness. It uses separate persistent database, evidence and export-cache volumes. Do not use its demonstration database credentials for an exposed deployment, or remove volumes containing investigations.
+Suitable for controlled local evaluation with synthetic or explicitly authorized data.
+Not certified forensic software and not an autonomous compromise detector. Public
+release is blocked on owner-approved licensing, confirmed private security reporting,
+release approval and operational validation. No license grant is implied by repository
+visibility. The live AWS deployment is separate and may lag this source; these workflows
+neither access nor deploy it.
 
-Follow the [synthetic authentication demonstration](sample-data/m4-authentication/README.md) to ingest Linux authentication, Windows Security and Sysmon exports, select immutable event sets, run five deterministic detection families and review findings. Unknown timestamps remain uncertain; detections describe observed patterns rather than confirmed compromise.
+## What you can investigate
 
-Open an investigation's **Exports** tab to create a metadata package or explicitly select verified originals. Downloaded packages can be checked offline with `python -m app.ops.archive package.zip` from `backend/`. Hash verification detects internal inconsistency; it does not authenticate the package author. Native PostgreSQL backup/restore, deployment preflight and recovery procedures are in the [operations guide](docs/operations.md).
+- Linux SSH/PAM authentication: accepted/failed password/public-key, invalid users,
+  supported session and explicit denial records in auth.log/secure-style text.
+- Structured Windows Security JSON/JSONL/CSV exports: 4624, 4625, 4634, 4648 and 4740.
+- Structured Sysmon 1/3 process/network context, never authentication verdicts.
+- Repeated-failure, spraying, success-after-failure, explicit-lockout and mixed-outcome
+  burst candidates over explicitly selected immutable event sets.
+- Uncertain source times, exact source locators, entity pivots, analyst decisions and
+  immutable report history.
 
-See [M5 implementation and verification](docs/m5-implementation.md), [release validation](docs/releases.md), [contributing](CONTRIBUTING.md) and [security reporting](SECURITY.md). CI builds private candidate artifacts and a disposable local stack. It does not publish a release or deploy to AWS.
+Artifact analysis separately supports bounded TXT/LOG, CSV, JSON and machine-readable
+PDF. Native binary EVTX, OCR, arbitrary XML, disk/memory image decoding, a SIEM/EDR,
+automatic enforcement and trained anomaly detection are not implemented. See the
+[investigator guide](docs/investigator-guide.md) for exact workflows and limits.
 
-**Live application:** [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login). The deployed frontend and API operate over HTTPS; local development remains available below.
+## Quickstart
 
-## Key capabilities
+Requirements: Docker Compose, or Python 3.13, Node.js 22 and PostgreSQL 16 for native
+setup. Chromium is needed only for browser tests.
 
-- Manage workspaces, case teams, priorities, statuses, investigator notes, and scoped search.
-- Register evidence through recoverable pending/failed/ready states under opaque storage keys with immutable SHA-256 baselines.
-- Record verification outcomes and append-only chain-of-custody events.
-- Process only verified evidence using a bounded private copy whose digest is checked before parsing; record exact input provenance and explicit blocked outcomes.
-- Extract provenance-bearing artifacts and correlate shared values across evidence.
-- Propose findings through versioned rules with visible confidence factors and recommendations.
-- Require human acceptance or rejection before findings enter immutable, content-hashed reports.
-- Review investigation timelines and an append-only application audit trail.
+```sh
+docker compose up --build --wait
+```
 
-The interface supports administrator, investigator, forensic analyst, and evidence custodian roles. The backend enforces workspace membership and investigation permissions for every protected operation.
+Open [localhost:5173](http://localhost:5173). Register an account, create a workspace,
+then choose **New investigation**. The development stack uses separate database,
+evidence and export-cache volumes, loopback ports and demonstration credentials.
+Never expose it as a production configuration or remove volumes containing real cases.
+Registration needs no pre-seeded account.
 
-## Architecture overview
+Follow the [synthetic M4 demonstration](sample-data/m4-authentication/README.md): upload
+the three supplied files, verify each, create the matching profiles in **Security Events**,
+ingest them, then save explicit inputs in **Authentication** and run detections. Review
+one proposal before generating a report. **Exports** defaults to metadata only;
+original bytes require an explicit authorized selection and fresh integrity checks.
 
-Provena is a modular monolith. A React single-page application calls the FastAPI REST API; domain services own authorization, case operations, evidence handling, analysis, and reporting. PostgreSQL stores investigation records and analysis results. Raw evidence bytes are held by a separate storage backend, currently the local filesystem in the AWS deployment.
+```sh
+# From backend/, verify a downloaded package offline:
+python -m app.ops.archive downloaded-export.zip
+```
+
+A passing unsigned manifest proves internal consistency, not authenticity or legal
+admissibility. Packages can contain confidential accounts, excerpts and evidence.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    UI[React, TypeScript, Vite, Tailwind] -->|"/api/*"| REST[FastAPI REST API]
-    REST --> AUTH[Authentication and workspace RBAC]
-    REST --> DOMAIN[Investigation, evidence, custody, audit, reporting services]
-    DOMAIN --> PG[(PostgreSQL)]
-    DOMAIN --> STORE[Evidence storage interface]
-    STORE --> LOCAL[(Local filesystem, deployed)]
-    STORE -. "available in code, not selected on EC2" .-> S3[(Private S3 objects)]
-    DOMAIN --> AI[In-process explainable analysis]
-    AI --> PG
+  UI[React investigator interface] --> API[FastAPI domain services]
+  API --> DB[(PostgreSQL)]
+  API --> Store[Local or optional S3 evidence storage]
+  Store --> Snapshot[Exact verified private snapshots]
+  Snapshot --> Events[Versioned profiles and normalized events]
+  Events --> Sets[Explicit immutable event sets]
+  Sets --> Rules[Deterministic authentication patterns]
+  Rules --> Review[Human review and uncertainty-aware timeline]
+  Review --> Reports[Immutable deterministic reports]
+  API --> Exports[Verified investigation packages]
+  DB --> Recovery[Snapshot-bound native backup and guarded restore]
 ```
 
-Alembic manages database schema changes. Evidence metadata, digests, verification history, custody events, artifacts, correlations, findings, reports, and audit records live in PostgreSQL. Raw evidence is stored separately. Backend checks remain the authorization boundary; hiding actions in the interface is only a usability aid. See [system architecture](docs/architecture.md), [evidence integrity](docs/evidence-integrity.md), and [security](docs/security.md).
+See [architecture](docs/architecture.md), [security](docs/security.md) and
+[evidence integrity](docs/evidence-integrity.md).
 
-### Request flow
+## Development and tests
 
-```mermaid
-flowchart LR
-    B[Browser] -->|"/ or frontend route"| N[Nginx on EC2]
-    N -->|static files or index.html| SPA[React production build]
-    B -->|"/api/* with bearer token"| N
-    N -->|"/api/* on localhost"| API[FastAPI :8000]
-    API --> SVC[Authorized domain services]
-    SVC --> PG[(PostgreSQL 16)]
-    SVC --> EVID[(Local evidence directory)]
-```
+The [development guide](docs/development.md) covers native setup, migrations and failure
+artifacts. Existing PowerShell helpers remain a local-development convenience, not the
+browser test harness or an approved production deployment path.
 
-Nginx serves the built frontend and forwards `/api/` requests without stripping their prefix. FastAPI authenticates and authorizes API calls before accessing records or stored evidence. [AWS deployment](docs/aws-deployment.md) explains the host and reverse-proxy setup.
-
-## Investigation workflow and explainable AI
-
-1. Create or join a workspace, then open a numbered investigation and assign its lead and team.
-2. Register evidence. Provena streams the upload, computes an immutable SHA-256 baseline, and records its initial custody event.
-3. Verify stored bytes against that baseline. Each attempt records the expected and observed digest and a `verified`, `mismatch`, or `unavailable` result. New evidence begins as `not_verified`.
-4. Select evidence for analysis. Only `verified` evidence enters parsing; other integrity states receive explicit blocked outcomes.
-5. Inspect extracted artifacts and shared-value correlations with their source evidence, locators, context, and extractor version.
-6. Review rule-generated findings, matched conditions, weighted confidence factors, and recommended next steps. An investigator accepts or rejects each proposal.
-7. Generate an immutable report from accepted findings, evidence and custody summaries, notes, and traceability data. The report includes a SHA-256 content hash. Audit events record meaningful actions throughout the workflow.
-
-```mermaid
-flowchart LR
-    U[Evidence upload] --> V{Integrity verified?}
-    V -->|Yes| P[Bounded parsing and artifact extraction]
-    V -->|No| BLOCK[Blocked analysis outcome]
-    P --> C[Shared-value correlation]
-    C --> R[Versioned rule reasoning]
-    R --> S[Weighted confidence factors]
-    S --> REC[Rule recommendations]
-    REC --> H[Human review]
-    H -->|Accepted findings| D[Deterministic report]
-    H --> L[Deterministic accepted-finding narrative]
-    L -. "if enabled and grounded" .-> D
-```
-
-The implemented pipeline uses regular expressions, key-aware structured rules, conservative normalization, and `pypdf` for machine-readable PDFs. It supports text, log, CSV, JSON, and machine-readable PDF evidence, extracts 14 controlled artifact types, and applies three versioned rules: `identity-recurrence`, `removable-media-session`, and `external-transfer-sequence`. Confidence is a deterministic weighted ranking score from 0 to 100, **not a calibrated probability or Bayesian estimate**.
-
-Authoritative reports use deterministic templates and exact accepted findings. M2 excludes free-form model prose because references and literal checks cannot establish semantic fidelity. Legacy Ollama configuration and availability probes remain compatible, but model output cannot introduce report conclusions. Historical reports remain unchanged. See [AI architecture](docs/ai-architecture.md).
-
-## Cloud infrastructure
-
-Provena runs in **AWS Asia Pacific (Mumbai), `ap-south-1`** on one Amazon Linux 2023 `t3.micro` EC2 instance with a 20 GB EBS root volume. The instance sits in a public subnet of a custom VPC behind security groups and an internet gateway. Nginx serves the React build and proxies API requests to a systemd-managed FastAPI process bound to localhost port 8000. PostgreSQL 16 and the active evidence directory reside on the same EC2 instance. Operators use AWS Systems Manager Session Manager; an IAM instance role scopes AWS access.
-
-The AWS environment also has an S3 gateway VPC endpoint and separate S3 buckets for evidence-related resources, frontend-related resources, and operational backups or migration artifacts. The active application uses `EVIDENCE_STORAGE_BACKEND=local` with `EVIDENCE_STORAGE_ROOT`; bucket presence does not mean evidence is stored in S3 or frontend assets are served from S3. The gateway endpoint carries EC2-to-S3 traffic only if associated with the instance subnet's route table.
-
-```mermaid
-flowchart TB
-    B[User browser] -->|"DNS lookup"| DNS[DuckDNS hostname]
-    DNS -->|"current public IP"| IGW
-    B -->|"HTTPS 443"| IGW
-    subgraph AWS["AWS ap-south-1"]
-      subgraph VPC["Custom VPC"]
-        IGW[Internet gateway] --> RT[Public route table]
-        subgraph SUBNET["Public subnet"]
-          SG[Application security group]
-          subgraph EC2["EC2 t3.micro, Amazon Linux 2023, 20 GB EBS root"]
-            N[Nginx: frontend and /api proxy]
-            API[FastAPI systemd service :8000]
-            PG[(PostgreSQL 16)]
-            FILES[(Local evidence files)]
-            N -->|"/api/ on localhost"| API
-            API --> PG
-            API --> FILES
-          end
-            SG -->|"HTTPS 443; HTTP 80 redirects"| N
-        end
-        RT --> SG
-        EP[S3 gateway endpoint] -. "associated route table required" .-> S3[(Private S3 buckets)]
-        EC2 -. "authorized S3 operations, when used" .-> EP
-      end
-      ROLE[IAM instance role] -. "scoped permissions" .-> EC2
-      SSM[Systems Manager Session Manager] -->|"management session"| EC2
-    end
-```
-
-DuckDNS updates the hostname when the EC2 public IP changes. Nginx terminates HTTPS with a Let's Encrypt certificate and redirects HTTP to HTTPS; automatic DNS updates and certificate renewal are configured. The current topology does not use CloudFront, RDS, a load balancer, Auto Scaling, or multi-AZ failover. One small EC2 instance is a shared failure domain for the API, database, and local evidence; coordinated backups and restore tests are important. See [AWS deployment](docs/aws-deployment.md), the [team architecture and deployment guide](docs/AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md), and [security](docs/security.md).
-
-## Technology stack
-
-| Layer | Technology |
-| --- | --- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, Vitest |
-| API and services | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, Uvicorn |
-| Data | PostgreSQL 16; local evidence storage in the AWS deployment; optional private S3 backend in code |
-| Analysis | Python parsers and rules, `pypdf`, deterministic correlation and confidence; deterministic authoritative narrative |
-| AWS operations | EC2, EBS, VPC, security groups, internet gateway, S3 gateway endpoint, IAM instance role, S3 buckets, Systems Manager; Nginx and systemd run on EC2 |
-| Security controls | bcrypt password hashes, JWT bearer tokens, workspace and case RBAC, SHA-256 integrity baselines, append-only custody and audit records |
-
-The frontend stores its bearer token in `localStorage`, which page JavaScript can access. This is a security trade-off for a deployed web application; see [security](docs/security.md). Provena is not certified forensic software and makes no legal admissibility claim.
-
-## Getting started
-
-Local prerequisites: Python 3.13+, Node 22+, Docker with Docker Compose, and PowerShell.
-
-```powershell
-./scripts/dev.ps1 setup    # local PostgreSQL, dependencies, migrations, development accounts
-./scripts/dev.ps1 demo     # optional synthetic five-case demo, idempotent
-./scripts/dev.ps1 api      # FastAPI on localhost:8000, separate terminal
-./scripts/dev.ps1 web      # Vite on localhost:5173, separate terminal
-```
-
-The Vite development proxy forwards `/api` to FastAPI. Development uses local evidence storage by default. Do not run the synthetic seed against production. The [development guide](docs/development.md) covers manual setup, configuration, migrations, tests, and report narration safety.
-
-To use the deployed application instead, open the [live HTTPS login](https://provena-app.duckdns.org/login). Do not use local demo credentials as production credentials.
-
-```powershell
-# In backend/
+```sh
+# Backend, in an activated clean virtual environment:
+cd backend
+python -m pip install -r requirements.txt
 python -m pytest
-
-# In frontend/
+python -m pip check
+python -m pip install "pip-audit>=2.9,<3"
+python -m pip_audit -r requirements.txt
+# Frontend, separately:
+cd ../frontend
+npm ci
 npm run lint
 npm run typecheck
 npm test
 npm run build
+npm audit
+npm audit --omit=dev
 ```
 
-## Documentation and roadmap
+Run browser tests from the repository root using the backend environment:
 
-- [System architecture](docs/architecture.md): modules, authorization, data flow, and service boundaries.
-- [AI architecture](docs/ai-architecture.md): extraction, provenance, rules, confidence, review, and Ollama safeguards.
-- [Evidence integrity](docs/evidence-integrity.md): registration, SHA-256 verification, custody, and analysis eligibility.
-- [AWS deployment](docs/aws-deployment.md): Mumbai infrastructure, Nginx/systemd deployment, verification, and limitations.
-- [AWS architecture and deployment review guide](docs/AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md): deployed topology, operations, trade-offs, and technical review questions.
-- [Security](docs/security.md): authentication, IAM, network controls, storage, TLS status, and risks.
-- [Local development](docs/development.md): setup, configuration, migrations, demo, and testing.
-- [Future enhancements](docs/future-enhancements.md): proposed analysis and availability improvements.
+```sh
+# Set M6_POSTGRES_TEST_URL to a dedicated localhost provena_ci control database.
+# Install Chromium once from frontend/: npx playwright install chromium
+python tools/run_e2e.py
+python tools/check_docs.py
+```
 
-Potential future work includes stronger backup and monitoring practices, S3 evidence migration, managed PostgreSQL, higher availability, and carefully evaluated analysis additions. Bayesian scoring, knowledge graphs, cross-case inference, OCR, and spaCy-based NLP are not implemented.
+The browser runner creates a randomly named disposable database and private temporary
+storage. It refuses remote/control-database ambiguity and never reuses a running app.
+The main workflow uses real APIs and Chromium; mocks are restricted to the explicit
+network-failure case. See [browser setup](docs/development.md) before running it.
 
+## Guides and release readiness
 
-## Normalized security events (M3)
+- [Investigator workflow](docs/investigator-guide.md)
+- [Operator setup, backup, restore and troubleshooting](docs/operations.md)
+- [Developer and browser testing guide](docs/development.md)
+- [M6 implementation and readiness assessment](docs/m6-implementation.md)
+- [Release process and blockers](docs/releases.md)
+- [Contributing](CONTRIBUTING.md), [security disclosure](SECURITY.md), [community rules](CODE_OF_CONDUCT.md)
+- [Documentation index and historical milestones](docs/README.md)
 
-The case-scoped Security Events explorer ingests verified Linux SSH/PAM logs and
-structured Windows Security/Sysmon exports through immutable source profiles.
-It preserves exact-input digests, record locators, timestamp uncertainty and
-processing coverage. Reingestion is idempotent; Sysmon is contextual telemetry,
-not authentication success/failure. Native EVTX decoding remains unsupported.
-
-See [M3 implementation](docs/m3-implementation.md) and the
-[synthetic authentication demonstration](sample-data/m3-authentication/README.md).
-
-## Authentication investigation workbench (M4)
-
-Select explicit normalized event sets, run five versioned authentication pattern
-detectors, inspect source-backed findings and review them through the existing
-analyst decision workflow. The Authentication tab includes uncertainty-aware
-timeline lanes, account/IP/host pivots, source provenance and selected-set reports.
-Copies and alternative profile interpretations are not independent attempts.
-Severity describes review priority, never a probability of compromise.
-
-See [M4 implementation](docs/m4-implementation.md) for rule thresholds, limits,
-identity and time semantics, and the [synthetic end-to-end demonstration](sample-data/m4-authentication/README.md).
+CI enforces security, backend/frontend tests, PostgreSQL compatibility, browser workflows,
+documentation checks, verified candidate packaging and disposable container startup.
+Candidates remain validation-only, `publishable=false`. CI does not create a release,
+choose a license or deploy to AWS.

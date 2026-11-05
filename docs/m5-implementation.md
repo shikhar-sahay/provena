@@ -1,5 +1,7 @@
 # M5 operational and release readiness
 
+Historical milestone record. Later milestones extend this scope; use the current [guide index](README.md) for setup, operations and supported workflows. Original verification results below remain historical.
+
 ## M4 closeout
 
 M4 final `2faf335c5dd9355d99e6deb3bab77414aebfdef2` matches its final pushed state and

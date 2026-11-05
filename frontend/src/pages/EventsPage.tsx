@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, TableSkeleton } from "../components/StateViews"
 import { EventProfileForm } from "../components/EventProfileForm";
 import { EventCoverageView } from "../components/EventCoverageView";
 import { actionErrorMessage } from "../lib/errors";
+import { canProduceAnalysis } from '../lib/permissions';
 import type { WorkspaceContext } from "./InvestigationWorkspace";
 
 const initialFilters = { category: "", event_type: "", outcome: "", username: "", host: "", source_ip: "", destination_ip: "", provider: "", event_id: "", evidence_id: "", profile_id: "", run_id: "", start: "", end: "" };
@@ -18,7 +19,7 @@ export default function EventsPage() {
   const { id } = useParams<{ id: string }>();
   const { inv, canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
   const { user } = useAuth();
-  const canIngest = !archivedLocked && (canManage || user?.role === "forensic_analyst");
+  const canIngest = canProduceAnalysis(user?.role, canManage, archivedLocked);
   return <EventExplorer key={id} invId={Number(id)} canIngest={canIngest} caseTitle={inv.title} />;
 }
 

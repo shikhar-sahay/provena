@@ -90,7 +90,8 @@ def build(frontend,output):
                     with path.open('rb') as handle: write(package,'web/'+path.relative_to(frontend).as_posix(),handle)
             manifest={'schema':SCHEMA,'hash_algorithm':'sha256','authenticity':'unsigned-integrity-only',
                 'version':version,'commit':commit,'publication':'validation-artifact-only','publishable':False,
-                'release_blockers':['Maintainer approval is required before creating a release or tag.'] +
+                'release_blockers':['Maintainer approval is required before creating a release or tag.',
+                    'A private security disclosure channel must be confirmed.'] +
                     ([] if 'LICENSE' in tracked else ['A project license grant has not been approved.']), 'files':files}
             package.writestr('manifest.json',archive_tools.canonical(manifest))
         archive_tools.inspect_package(output,expected_schema=SCHEMA,max_bytes=LIMIT)

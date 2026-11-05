@@ -1,103 +1,105 @@
-# Security and evidence controls
+# Security architecture and limits
 
-This document describes application behavior visible in the repository and the AWS deployment. Provena is not certified forensic software.
+This describes repository controls and synthetic verification, not a live deployment
+attestation or forensic certification. See [disclosure policy](../SECURITY.md) and
+[release blockers](releases.md).
 
-## Identity and authorization
+## Threat model and boundaries
 
-### Workspace administration (M0)
+The important boundaries are browser to authenticated API, active workspace to case
+membership, database metadata to evidence storage, untrusted evidence to bounded parsers,
+analytical support to human review, and private backups to an explicitly trusted restore.
+Protect confidential records against unauthorized users, accidental cross-case references,
+malformed input, mutable storage, interrupted operations and operational mistakes.
+A privileged database/filesystem administrator remains outside application-level
+append-only guarantees. SHA-256 manifests are not independent authentication.
 
-`GET /api/admin/users` and `PATCH /api/admin/users/{id}` are scoped to the
-administrator's current workspace. Their `role` and `is_active` fields describe
-workspace membership, not the global account. The existing PATCH payload is
-retained; setting `is_active=false` suspends access to this workspace only.
-Sign-in and other authorized workspaces remain available. There is no supported
-platform-superadministrator API; global account availability is not editable by
-workspace administrators.
+| Boundary | Backend behavior |
+| --- | --- |
+| Global account / workspace | Workspace administrators can suspend membership, not globally disable a shared account |
+| Workspace / case | Active selected workspace membership plus case team membership or workspace administration |
+| Case mutation | Case creator/lead or workspace administrator; assigned analysts/custodians have narrow capabilities |
+| Verification | Case manager or assigned evidence custodian, with archived-case restrictions |
+| Findings and reports | Managers review findings and generate reports; explicit event sets for authentication conclusions |
+| Case exports | Readers may export metadata; original bundles require management permission and explicit verified files |
+| Restore | Maintainer CLI only, trusted package hash, fresh isolated DB/storage and full validation |
 
-Suspended memberships remain visible in administration lists, but are excluded
-from active team-selection lists. Restoration is an explicit administrator
-action; an invitation cannot bypass suspension. Membership changes are audited.
-The acting administrator cannot suspend their own membership. Role changes and
-suspensions protect the last active administrator of the affected workspace,
-counting active memberships of globally active users, rather than cached global
-roles. Both operations lock the workspace row on PostgreSQL before checking.
+Last-active-administrator protections lock the workspace on PostgreSQL. Surviving case
+membership cannot bypass workspace suspension. Same-name accounts in different domains
+or hosts are not merged. Case-scoped IDs from another case fail even when a caller can
+access both cases. Role changes may require a browser refresh to update controls; API checks remain immediate.
+UI controls do not replace backend authorization; nonexistent and
+inaccessible investigations normally share a 404 response.
 
-Every case access requires active membership in an active workspace, the selected
-workspace must match, and case-team or workspace-administrator permission must
-also hold. Surviving case membership does not bypass suspension. These checks
-cover evidence, downloads, analysis, findings, notes, reports, custody and audit.
-An unavailable selected workspace is projected as absent in auth responses;
-onboarding offers the user's remaining authorized workspaces. Existing browser
-state may require a refresh after suspension; backend checks apply immediately.
-No schema migration is needed because membership already stores `is_active`.
+## Authentication and browser behavior
 
-### Multipart dependencies and CI
+Passwords use bcrypt; bearer JWT signing secrets and lifetime are configured through the
+environment. Production rejects default/weak secrets, unsafe HTTPS CORS origins, broad
+proxy trust and non-PostgreSQL URLs. Public health responses omit private connection data.
+Proxy/TLS/DNS correctness requires operator validation outside application preflight.
 
-`python-multipart>=0.0.27,<0.1` excludes versions affected by
-[GHSA-pp6c-gr5w-3c5g](https://github.com/Kludex/python-multipart/security/advisories/GHSA-pp6c-gr5w-3c5g).
-M0 tested python-multipart 0.0.33 with FastAPI 0.116.2 and Starlette 0.48.0;
-M1 replaces those framework versions with the audited resolution below. Synthetic tests cover ordinary uploads, exact size limits,
-oversized and empty files, missing boundaries, malformed headers, incomplete
-parts and excessive part-header values. Rejected requests must not register
-evidence or leave stored files.
+Tokens remain in localStorage and are readable by page JavaScript if XSS occurs. They
+are not HttpOnly cookie sessions. Bearer authorization is explicit, so cross-site requests
+do not automatically gain cookie credentials; CORS is not authorization. No claim of
+complete brute-force protection, perfect revocation or protection against a compromised
+browser is made. Logout/session refresh, invalid login and workspace boundaries are
+browser-tested. A future cookie/session redesign requires explicit compatibility/security
+work, not a silent change in M6.
 
-CI runs `python -m pip_audit -r backend/requirements.txt` in a separate job.
-It checks freshly resolved direct and transitive requirements against published
-advisories; it does not attest to production's installed packages, unpublished
-vulnerabilities, frontend packages or operating-system packages. Advisory service
-and package-index access are required. Findings fail the job; no blanket ignore
-or automatic production upgrade is configured. Backend requirements remain
-bounded ranges, not an exact deployment lockfile.
+## Evidence, custody and analysis
 
-M1 resolves the M0 dependency findings using a compatible FastAPI/Starlette
-upgrade and pytest >=9.0.3. The tested clean resolution is FastAPI 0.149.0,
-Starlette 1.10.0 and pytest 9.2.0; pip check and pip-audit pass without ignores.
-The M0 scan reported pytest PYSEC-2026-1845 (fixed in 9.0.3), and Starlette
-PYSEC-2026-1942 (0.49.1), PYSEC-2026-161 (1.0.1), PYSEC-2026-2281 and
-PYSEC-2026-2280 (1.1.0), PYSEC-2026-248 (1.3.0), and PYSEC-2026-249 (1.3.1).
-Repeated entries in run 29 were duplicates, not separate application exploits.
-FastAPI's old <0.117 constraint capped Starlette below 0.49, so upgrading only
-Starlette would have produced an incompatible environment. M1 lets the resolver
-select compatible versions instead of forcing an installation. Advisory data
-is available in [run 29](https://github.com/shikhar-sahay/provena/actions/runs/41858064380)
-and the [Starlette security advisories](https://github.com/Kludex/starlette/security/advisories).
+Registration creates immutable SHA-256 baselines under generated storage keys. Ready,
+verified evidence is independently copied and hashed for analysis/ingestion and original
+exports; the same private snapshot is consumed. Historical flags alone do not satisfy
+integrity. Missing/mismatched bytes block relevant operations and retain verification
+history. Storage paths are absent from ordinary API/case-export metadata.
 
-CI uses Node 24-compatible official checkout/setup actions, keeps Python 3.13
-and Node 22 application runtimes, and explicitly runs frontend type checking.
-An isolated PostgreSQL 16 service checks fresh migrations and schema drift.
-Docker was unavailable locally. A standalone PostgreSQL 16.15 cluster in a
-new temporary directory, bound only to loopback port 55477, verified the full
-migration chain, `alembic check`, and parallel idempotent registration. It used
-only a fresh synthetic database and was stopped afterward. The drift check
-exposed legacy workspace metadata declaring unique indexes where the published
-migration creates unique constraints plus ordinary indexes. Model declarations
-now match that existing schema; published migrations were not rewritten.
-SQLite tests alone still do not prove PostgreSQL concurrency safety.
+Parsing, record counts, input sizes, output rows and execution results are bounded.
+Coverage, omitted results and unsupported temporal comparisons remain explicit. Timestamp
+assumptions do not become source facts. Deterministic rules describe observed patterns,
+not guilt or compromise probability. Authoritative reports use templates and exact
+accepted current findings; legacy Ollama availability does not enable model allegations.
 
-Local migration backups are excluded by `/migration-backup/` in `.gitignore`.
-Ignore rules do not protect already tracked files or deliberate force-adds.
-Operators must still review the staged diff; backup contents are never test data.
+Custody/audit rows have no ordinary modification endpoints. They are application-level
+append-only records, not cryptographic signatures or certified legal chain of custody.
+Immutable report hashes detect inconsistency, not who authored the database state.
+[Evidence integrity](evidence-integrity.md) details the exact-byte contract.
 
-Provena hashes passwords with bcrypt and issues signed JWT bearer tokens. Workspace membership establishes the first authorization boundary. Investigation membership and roles further restrict case access and actions. Administrators are scoped to their workspace. Backend checks enforce access to evidence, analysis, findings, reports, and downloads; frontend controls are only user-interface guidance.
+## Export and backup security
 
-The browser stores the token in `localStorage`. Page JavaScript can read it if script injection occurs. Keep dependencies current, review content security policy and Nginx headers, and consider HttpOnly cookies in a future authentication change. Never log tokens or place them in URLs. Production must use a strong unique `SECRET_KEY` and exact allowed origins.
+ZIPs use generated paths and bounded disk-backed construction. The standard-library
+verifier does not extract or execute package data. It validates versioned provenance,
+explicit selections, file inventory, digests, report hashes and original references;
+unsafe paths, duplicate entries/keys, links and decompression-budget violations fail.
+An attacker who can replace both data and unsigned hashes can forge consistency, which
+is why independent trusted hash references and access controls remain necessary.
 
-## Evidence and provenance
+Exports can contain confidential excerpts even without originals. Downloads reauthorize
+and copy/check the archive before streaming. Only complete, unexpired packages download.
+Recovery preserves nonexpired completed artifacts. Client disconnects can leave a completed
+or recoverable operation; inspect history before generating another export.
 
-Evidence registration streams bytes and records an immutable SHA-256 baseline. Later verification hashes stored bytes and records `verified`, `mismatch`, or `unavailable` with expected and observed digests. Unverified or failed evidence cannot enter analysis. Original filenames do not become storage paths; external API responses omit internal storage keys. Custody and audit records are append-only through the application API.
+System backups contain all application accounts/hashes and evidence. Protect/encrypt them
+outside the tool; keep independent trusted whole-package digests. An exported PostgreSQL
+snapshot binds the native dump, metadata fingerprints and baseline-verified originals.
+Pause DDL/pruning and keep restore targets exclusively offline. Trusted restore executes
+native database definitions intentionally; never restore unknown third-party SQL or case
+exports as backups. Existing user objects/roots are refused, and an incomplete marker
+blocks readiness until restored fingerprints and report hashes match.
 
-The current EC2 deployment uses local evidence files. Back up the directory with PostgreSQL and test restoration against recorded baselines. A separate S3 backend exists in code but is not selected by the live deployment. See [evidence integrity](evidence-integrity.md).
+## CI and residual risks
 
-## AWS boundaries
+CI audits Python requirements and both npm dependency sets without blanket ignores.
+Release packaging uses a committed-source allowlist, rejects private runtime paths and
+scans high-confidence private-key/AWS/GitHub-token patterns, including chunk boundaries.
+This is a limited leak check, not proof that arbitrary secrets cannot be present. Review
+staged diffs and artifacts. Ignore rules do not protect already tracked files or force-adds.
 
-The deployment uses a public-subnet EC2 instance, security groups, a scoped IAM instance role, private S3 buckets, and Systems Manager Session Manager. Verify that only intended web ports are public, while FastAPI port 8000 and PostgreSQL port 5432 stay local. An S3 gateway endpoint affects EC2-to-S3 routing only when associated with its route table. IAM and bucket policies should permit only the active operational backup or migration prefixes, with no embedded access keys.
+Browser tests use only randomly owned localhost databases and private synthetic storage.
+Failure traces may contain short-lived synthetic tokens; artifacts expire after seven days.
+No real case may be used with this harness. Docker startup, migrations and browser jobs
+run on disposable CI infrastructure; passing them does not validate the AWS host.
 
-PostgreSQL, evidence files, and the frontend share one EC2 failure domain. Confirm EBS encryption, filesystem permissions, backups, restore testing, disk alarms, log retention, and instance patching in the AWS account. The repository cannot attest that these operational checks have been completed.
-
-## Transport security
-
-The deployed domain uses a Let's Encrypt certificate with Nginx TLS termination. Port 80 redirects to HTTPS; DuckDNS IP updates and certificate renewal are configured, and a renewal dry run succeeded on October 19, 2026. The certificate expires January 17, 2027 unless renewed. The DuckDNS token is held in a root-protected file outside the repository. HTTPS protects transport but does not replace secret rotation, patching, backups, access review, or application security testing. Keep `CORS_ORIGINS` restricted to the exact production origin and verify uploads and downloads after web-server changes.
-
-## Reporting and AI trust
-
-The deterministic rule engine proposes findings with cited evidence, locators, factors, and recommendations. Human acceptance is required for reports. M2 excludes free-form model narration from authoritative reports even if legacy Ollama settings are enabled; deterministic assembly preserves accepted finding meaning. Neither a generated narrative nor a confidence score proves an allegation. Reports are immutable content-hashed snapshots, not cryptographic signatures.
+Operators still own OS patching, reverse-proxy headers, TLS renewal, encryption, backups,
+retention, monitoring, disk capacity, access review and independent security assessment.
+No live AWS/S3, production database or personal evidence was tested in M6.

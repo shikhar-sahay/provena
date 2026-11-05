@@ -1,5 +1,7 @@
 # Provena 2.0 M3: normalized security events
 
+Historical milestone record. Later milestones extend this scope; use the current [guide index](README.md) for setup, operations and supported workflows. Original verification results below remain historical.
+
 M3 adds a record-aware event path beside the existing artifact/rule pipeline.
 It preserves M0 authorization, M1 exact-input verification and M2 historical
 provenance. It does not add detections, a full timeline or native EVTX decoding.

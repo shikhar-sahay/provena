@@ -1,5 +1,7 @@
 # AWS deployment: current single-instance architecture
 
+Historical deployment reference, not current live-host verification or authorization to operate production. M6 did not contact AWS. Use the [current operations guide](operations.md) for implemented local/recovery procedures and obtain separate approval before any live action.
+
 Provena runs on a single EC2 instance in Asia Pacific (Mumbai), `ap-south-1`. This guide describes that deployment and its operational boundaries. The repository contains application configuration and earlier, unimplemented container/CloudFront plans, but no infrastructure-as-code or live account inventory. Verify commands, service names, mount points, and network rules against the EC2 instance before using them. Do not copy development credentials to production.
 
 Live application: [https://provena-app.duckdns.org/login](https://provena-app.duckdns.org/login). The [team architecture and deployment review guide](AWS_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md) explains the complete topology and operations.

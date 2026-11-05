@@ -1,5 +1,7 @@
 # Provena AWS architecture and deployment review guide
 
+Historical deployment reference, not current live-host verification or authorization to operate production. M6 did not contact AWS. Use the [current operations guide](operations.md) for implemented local/recovery procedures and obtain separate approval before any live action.
+
 This guide is for team study and technical review. It separates three kinds of evidence: **repository-verified** means visible in application code or tracked documentation; **deployment-confirmed** means operational details supplied by the team for October 19, 2026; **reconstructed** means a safe sequence or command to reproduce or inspect the architecture, not a claim about exact historical shell commands. The repository has no infrastructure-as-code or copy of the live Nginx and systemd configuration. Do not paste secrets into commands or commit production configuration.
 
 ## 1. Introduction and deployment overview

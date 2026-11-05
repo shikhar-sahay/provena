@@ -15,6 +15,7 @@ import { Dialog } from "../components/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "../components/StateViews";
 import { useToast } from "../components/Toast";
 import { actionErrorMessage } from "../lib/errors";
+import { canProduceAnalysis } from '../lib/permissions';
 import { RUN_EVIDENCE_LABELS, RUN_STATUS_LABELS } from "../lib/analysis";
 import { formatDate, timeAgo } from "../lib/format";
 import type { WorkspaceContext } from "./InvestigationWorkspace";
@@ -26,7 +27,7 @@ type SubTab = "overview" | "artifacts" | "correlations" | "findings";
 
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>();
-  const { inv } = useOutletContext<WorkspaceContext>();
+  const { inv, canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
   const { user } = useAuth();
   const [tab, setTab] = useState<SubTab>("overview");
   const [runs, setRuns] = useState<AnalysisRun[] | null>(null);
@@ -38,11 +39,7 @@ export default function AnalysisPage() {
   const [running, setRunning] = useState(false);
 
   const invId = Number(id);
-  const canInitiate =
-    !!user &&
-    (user.role === "admin" ||
-      user.role === "investigator" ||
-      user.role === "forensic_analyst");
+  const canInitiate = canProduceAnalysis(user?.role, canManage, archivedLocked);
 
   const load = useCallback(async () => {
     try {

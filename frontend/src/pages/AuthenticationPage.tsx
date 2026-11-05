@@ -9,6 +9,7 @@ import { Drawer } from '../components/Dialog';
 import { EmptyState, ErrorState } from '../components/StateViews';
 import { EventDetail } from './EventsPage';
 import { actionErrorMessage } from '../lib/errors';
+import { canProduceFindings } from '../lib/permissions';
 import type { WorkspaceContext } from './InvestigationWorkspace';
 
 const emptyFilters = { lane: 'utc', username: '', account_domain: '', domain_missing: '', provider: '', host: '', source_ip: '', outcome: '', event_type: '', start: '', end: '', finding_id: '' };
@@ -18,7 +19,7 @@ export default function AuthenticationPage() {
   const { id } = useParams();
   const { canManage, archivedLocked } = useOutletContext<WorkspaceContext>();
   const { user } = useAuth();
-  return <AuthenticationWorkbench key={id} invId={Number(id)} canProduce={!archivedLocked && (canManage || user?.role === 'forensic_analyst')} canReview={!archivedLocked && canManage} />;
+  return <AuthenticationWorkbench key={id} invId={Number(id)} canProduce={canProduceFindings(user?.role, canManage, archivedLocked)} canReview={!archivedLocked && canManage} />;
 }
 
 export function AuthenticationWorkbench({ invId, canProduce, canReview }: { invId: number; canProduce: boolean; canReview: boolean }) {

@@ -1,254 +1,136 @@
-# Development Guide
+# Development and browser testing
 
-## Account and workspace onboarding
+Use Python 3.13, Node.js 22 and PostgreSQL 16. Docker Compose is optional for native
+setup and required for the container smoke test. No model or paid API is needed.
+Read [architecture](architecture.md), [security](security.md) and [contribution rules](../CONTRIBUTING.md).
 
-The sign-in page links to self-service registration. A newly registered user
-has no workspace and is redirected to onboarding. They can create a workspace,
-which makes them its administrator, or enter an invite code created by a
-workspace administrator. Invite codes are stored only as SHA-256 hashes and
-the full code is returned only when created.
+## Local application
 
-The development seed remains idempotent and creates or repairs the `Provena
-Demo Workspace` membership for all four local accounts.
+`docker compose up --build --wait` starts the development DB/API/Vite stack, migrates its
+own DB and checks readiness. Open http://localhost:5173, register and create a workspace.
+Database, evidence and exports use distinct named volumes and loopback ports. Do not
+remove volumes holding investigations. Do not use these demo credentials in a shared or
+production deployment. Compose intentionally does not use a private production env file.
 
-## Report narrative safety
+For native development, create a dedicated local database owned by your development
+role. Activate a new virtual environment, install `backend/requirements.txt` and supply
+`DATABASE_URL` through your private process environment. The application reads an optional
+backend/.env only when launched from backend/, and process variables take precedence.
+Never commit environment files. See [operations](operations.md) for configuration limits.
 
-M2 authoritative reports use deterministic assembly regardless of legacy Ollama
-settings. No model is needed or contacted for report generation. The Workspace
-page may still probe an explicitly configured local provider for compatibility,
-but availability does not enable authoritative model prose. Descriptions and
-notes are report metadata, not instructions. See [analysis architecture](ai-architecture.md).
+From the root, `python -m venv backend/.venv` creates the environment. Activate with
+`backend/.venv/Scripts/Activate.ps1` on PowerShell or `source backend/.venv/bin/activate`
+on POSIX, then run `python -m pip install -r backend/requirements.txt`. PostgreSQL role
+and database creation require your local database administrator, not application seed
+credentials. Keep application and test databases separate.
 
-## Fresh demo walkthrough
-
-1. Register a new account and create a workspace.
-2. Open Workspace, choose a role, generate an invite, and copy the code.
-3. Register a second account in another browser profile and join with the code.
-4. Assign workspace members to a new investigation.
-5. Register synthetic evidence, verify its SHA-256, and record custody.
-6. Run analysis as an assigned analyst. Inspect artifacts, locators,
-   correlations, rule conditions, and weighted confidence.
-7. Accept or reject findings as an investigator and add review context.
-8. Generate a report. Inspect deterministic narrative mode, context hash, accepted findings,
-   and final report content hash.
-9. Confirm reports remain usable without any local model.
-
-## Prerequisites
-
-Python 3.13+, Node 22+, Docker + Docker Compose.
-
-## Canonical local workflow (Windows PowerShell)
-
-`scripts/dev.ps1` is the single entry point for native development
-(Docker Postgres on host :5433, backend and frontend from source):
-
-```powershell
-./scripts/dev.ps1 setup    # db, venv, dependencies, migrations, user seed
-./scripts/dev.ps1 demo     # optional synthetic demo investigation
-./scripts/dev.ps1 api      # backend on :8000 with reload (new terminal)
-./scripts/dev.ps1 web      # frontend on :5173 (new terminal)
-./scripts/dev.ps1 health   # check API health and db container
-./scripts/dev.ps1 reset -Force   # wipe the dev database and reseed
-```
-
-`setup` creates `backend/.venv`, installs dependencies, starts Postgres,
-applies migrations, runs the user seed, and writes `backend/.env` with local
-defaults (created once, never overwritten). The backend resolves
-`DATABASE_URL` from the process environment first, so either export it or
-rely on `backend/.env`.
-
-Full-container alternative: `docker compose up --build` (db :5433,
-api :8000, web :5173). The two paths use different databases; do not mix them.
-
-## Manual setup (without the script)
-
-```powershell
-docker compose up -d db
-python -m venv backend/.venv
-backend/.venv/Scripts/python -m pip install -r backend/requirements.txt
-$env:DATABASE_URL = "postgresql+psycopg2://provena:provena@localhost:5433/provena"
-# from backend/:
+```sh
+# From backend/, in the activated environment and with the local DATABASE_URL:
 python -m alembic upgrade head
-python -m app.seed
+python -m alembic check
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# A second terminal, frontend/:
+npm ci
+npm run dev
 ```
 
-Open `http://localhost:5173` (frontend) and
-`http://localhost:8000/api/health` (backend health).
+The development Vite proxy forwards /api to localhost:8000 unless explicitly configured.
+A production build uses VITE_API_URL at build time; blank selects same-origin /api. Do
+not point local tests at a remote API. `scripts/dev.ps1` remains a Windows convenience
+for local setup/seeding. Its explicit reset command destroys its development data and
+is never required by browser tests or routine startup.
 
-## Development users
+## Backend and frontend checks
 
-The user seed (`python -m app.seed`) creates one login per role. It is
-idempotent: safe to rerun.
+```sh
+# backend/
+python -m pytest -q
+python -m pip check
+python -m pip install "pip-audit>=2.9,<3"
+python -m pip_audit -r requirements.txt
+# frontend/
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit
+npm audit --omit=dev
+# repository root
+python tools/check_docs.py
+git diff --check
+```
 
-| Username       | Role               |
-| -------------- | ------------------ |
-| admin          | Admin              |
-| investigator   | Investigator       |
-| analyst        | Forensic Analyst   |
-| custodian      | Evidence Custodian |
+Component tests live under frontend/src and use Vitest/jsdom. Playwright tests live
+under frontend/e2e and are separately type checked; npm test never collects them.
+PostgreSQL-specific pytest checks require M1_POSTGRES_TEST_URL targeting a dedicated
+localhost provena_ci database and M5_PG_BIN pointing to matching native tools. Without
+that explicit environment those checks skip, which is not PostgreSQL verification.
+M5 recovery creates fresh randomly named databases and retains them for inspection.
 
-The password defaults to `provena-dev` and can be overridden with the
-`SEED_DEV_PASSWORD` environment variable. **Local development only.**
-Never use these credentials anywhere shared or production-like.
+## Real browser suite
 
-## Demo investigation (optional)
+Install frontend dependencies, then `npx playwright install chromium` from frontend/.
+On Ubuntu use `npx playwright install --with-deps chromium`. The pinned Playwright release
+is 1.64.1, including matching browser binaries. The latest test-package metadata briefly
+referenced an unavailable core release during implementation, so this complete release
+was selected rather than forcing an incompatible installation.
 
-`python -m app.seed_demo` (from `backend/`, after the user seed) builds five
-fully synthetic investigations at different stages. The hero exfiltration
-case includes verified, awaiting-verification, and controlled mismatch states,
-two real analysis runs, extracted artifacts, shared-value correlations,
-rule-generated findings with mixed review states, custody activity, notes, and
-an offline deterministic report. Supporting cases provide pending review,
-partial analysis, attention-required, and closed historical states. Every
-record is created through application services. No findings or analysis output
-are inserted directly, and the seed never calls Ollama. Reruns add only missing
-demo state and do not duplicate records. It refuses to run with
-`APP_ENV=production`.
+Create a dedicated localhost PostgreSQL **provena_ci** control database with a role
+allowed to create/drop its own test databases. This must not contain application or
+production evidence. Set the connection through M6_POSTGRES_TEST_URL, for example a
+private `postgresql+psycopg2://...@127.0.0.1:5432/provena_ci` value.
 
-To rebuild all local development data from scratch, use the existing explicit
-reset flow, then run the demo seed:
+One optional dedicated local control container (entirely synthetic, not the app DB):
+
+```sh
+docker run --name provena-browser-db -e POSTGRES_USER=provena_ci -e POSTGRES_PASSWORD=synthetic_local_only -e POSTGRES_DB=provena_ci -p 127.0.0.1:55482:5432 -d postgres:16-alpine
+docker exec provena-browser-db pg_isready -U provena_ci -d provena_ci
+```
+
+After it is ready, use
+`postgresql+psycopg2://provena_ci:synthetic_local_only@127.0.0.1:55482/provena_ci`
+only for this loopback test container. These invented credentials are never production
+defaults. Stop only this container when finished. Native PostgreSQL is also supported,
+as demonstrated by the passwordless local test-cluster example below.
 
 ```powershell
-./scripts/dev.ps1 reset -Force
-./scripts/dev.ps1 demo
+# Windows example, local disposable cluster only, activated backend environment:
+$env:M6_POSTGRES_TEST_URL = 'postgresql+psycopg2://provena_ci@127.0.0.1:55481/provena_ci'
+python tools/run_e2e.py
+# Focused rerun, still a fresh isolated application:
+python tools/run_e2e.py --grep 'workspace isolation'
 ```
 
-The reset command is destructive to the local development database and stored
-development evidence, so it always remains a separate, explicit operation.
+The Python runner refuses remote hosts, other control-database names and URL options.
+It creates only a randomly named provena_e2e_UUID database, migrates it, builds the actual
+frontend, starts loopback API/preview servers on temporary ports and uses private temporary
+evidence/cache roots and a random signing secret. No existing server, database or env
+file is reused. Teardown stops only owned processes and drops only that created database.
+Browser contexts and fresh synthetic workspaces isolate tests; tests do not require order.
+No privileged test endpoint is added to the application.
 
-## Running services without Docker
+The main journey uses real APIs, adapters, detections, reports and browser downloads;
+no responses are mocked. Only the named network-failure test aborts one download. Browser
+requests to origins other than the owned web/API servers are rejected by the suite.
+Traces/screenshots are retained on failure; HTML reports and synthetic metrics are under
+ignored frontend/playwright-report and frontend/test-results. Artifacts can contain
+**synthetic** tokens and records, never run this suite on real cases. CI retains them
+seven days. Open a trace with `npx playwright show-trace PATH` from frontend/.
 
-Prefer `./scripts/dev.ps1 api` and `./scripts/dev.ps1 web`. The manual
-equivalent:
+The runner rebuilds dist using its ephemeral API URL. Run `npm run build` again with
+VITE_API_URL unset before manually packaging a same-origin release candidate. CI's
+release job builds from its own clean checkout and never uses the browser job's dist.
 
-```powershell
-# Backend (from backend/, venv active or via .venv/Scripts/python.exe)
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload   # serves :8000
+## Failure diagnosis and migrations
 
-# Frontend (from frontend/)
-npm install
-npm run dev                               # serves :5173, proxies /api to the backend
-```
+A setup failure exits nonzero and retains setup.log/API logs in the ignored artifact
+folder. Check PostgreSQL availability/role privileges, browser installation and Node/Python
+versions. Ports are allocated locally; a binding race fails safely instead of reusing
+another app. Missing control configuration refuses execution before application startup.
+There are no arbitrary test sleeps; network/DOM assertions wait for observable outcomes.
 
-Use `python -m` entry points (not global `alembic`/`uvicorn` installs) so the
-project virtualenv is always the interpreter. The backend needs no database
-to start: `/api/health` reports `"db": "not_configured"` until `DATABASE_URL`
-is set.
-
-## Environment variables
-
-| Variable              | Used by | Default (dev)                                  |
-| --------------------- | ------- | ---------------------------------------------- |
-| `APP_ENV`             | Backend | `development` (`production` blocks the seed)   |
-| `DATABASE_URL`        | Backend | `postgresql+psycopg2://provena:provena@localhost:5433/provena` |
-| `CORS_ORIGINS`        | Backend | `http://localhost:5173`                        |
-| `SECRET_KEY`          | Backend | dev-only default; set a real value if shared   |
-| `SEED_DEV_PASSWORD`   | Seed    | `provena-dev` (local development only)         |
-| `EVIDENCE_STORAGE_BACKEND` | Backend | `local` (`s3` for private S3 objects)   |
-| `EVIDENCE_STORAGE_ROOT` | Backend | `./evidence-storage` (`/evidence` in Compose) |
-| `S3_EVIDENCE_BUCKET`  | Backend | empty (required for the S3 backend)             |
-| `AWS_REGION`          | Backend | empty (required for the S3 backend)             |
-| `EVIDENCE_MAX_UPLOAD_BYTES` | Backend | `104857600` (100 MiB)                    |
-| `LLM_ENABLED`         | Backend | `false` (deterministic reporting only)             |
-| `LLM_PROVIDER`        | Backend | `deterministic` (`ollama` enables local narrative) |
-| `OLLAMA_BASE_URL`     | Backend | `http://127.0.0.1:11434`                           |
-| `OLLAMA_MODEL`        | Backend | empty (required when `LLM_ENABLED=true`)           |
-| `LLM_TIMEOUT_SECONDS` | Backend | `30.0`                                             |
-| `TRUSTED_PROXY_IPS`   | Backend | empty (forwarding headers are not trusted)         |
-| `VITE_API_URL`        | Frontend| unset or empty (same-origin `/api`; Vite dev proxy handles local requests) |
-
-See `.env.example`. Never commit `.env` or any secrets.
-
-## Tests, lint, formatting
-
-```powershell
-python -m pytest                     # from backend/ (SQLite-backed, no Postgres needed)
-npm run lint                         # from frontend/
-npm run typecheck                    # from frontend/
-npm test                             # from frontend/ (vitest behavior tests)
-npm run build                         # from frontend/ (production build)
-```
-
-Backend evidence tests override `EVIDENCE_STORAGE_ROOT` with a temporary
-directory, so test uploads never touch real storage. Intelligence tests run
-against throwaway SQLite databases the same way; PDF fixtures are generated
-in-test with the standard library.
-
-The PDF parser needs `pypdf` (`backend/requirements.txt`). Regenerate the
-synthetic demo PDF after editing its source:
-
-```powershell
-python sample-data/make_access_report.py   # from the repository root
-```
-
-CI (`.github/workflows/ci.yml`, pinned to `ubuntu-24.04`) runs backend
-tests plus frontend lint, tests, and build on push and pull request.
-
-## Database migrations (Alembic)
-
-Migrations live in `backend/alembic/versions/` and read `DATABASE_URL`
-from the app settings (process environment first, then `backend/.env`).
-
-```powershell
-python -m alembic upgrade head       # from backend/
-python -m alembic downgrade base     # roll everything back (dev databases only)
-python -m alembic revision --autogenerate -m "describe change"
-```
-
-Use `python -m alembic` (not a global install) so migrations run against the
-project virtualenv. Backend tests use throwaway SQLite databases; Alembic
-remains the only schema-management strategy for PostgreSQL.
-
-## Evidence storage
-
-- Storage defaults to the local filesystem under `EVIDENCE_STORAGE_ROOT` and
-  can use an existing private S3 bucket. Both backends use generated internal
-  keys; the database holds digests and metadata.
-- Uploads are capped by `EVIDENCE_MAX_UPLOAD_BYTES` (default 100 MiB) and
-  empty files are rejected.
-- In Docker Compose, the API service mounts the `provena_evidence` volume at
-  `/evidence`. Runtime uploads are git-ignored; synthetic demo logs live in
-  `sample-data/` and can be registered as evidence for walkthroughs.
-
-The live Nginx/systemd EC2 deployment is documented in
-[AWS deployment](aws-deployment.md). The production Docker Compose file is
-an alternative preparation path, not the live Nginx/systemd setup.
-
-## PostgreSQL ports
-
-Provena's Docker database publishes **host port 5433** (container port 5432),
-because many machines already run Postgres on 5432. The internal Compose
-service still uses `db:5432`; only the host mapping differs. Local (non-Docker)
-runs use `localhost:5433` via `DATABASE_URL`.
-
-## Docker workflow
-
-- `docker compose up --build`: full local stack.
-- `docker compose up db`: only Postgres (run API/web from source).
-- `docker compose down -v`: stop everything and delete the dev database volume.
-- `docker compose config`: validate the Compose file without starting anything.
-
-## Local URLs
-
-- Frontend: `http://localhost:5173`
-- Backend health: `http://localhost:8000/api/health`
-- Backend API: `http://localhost:8000/api/...`
-- Postgres: `localhost:5433` (user/password/db: `provena`)
-
-## Troubleshooting
-
-- **Backend can't reach Postgres:** check `DATABASE_URL` host (`localhost` for
-  local runs, `db` inside Compose), the port (5433 on the host), and that the
-  `db` container is healthy.
-- **"Port is already allocated" for 5433:** another service uses it; remap the
-  host port in `docker-compose.yml` and update `DATABASE_URL` to match.
-- **Frontend shows a sign-in error:** the UI distinguishes causes. "Invalid
-  username or password" means credentials; "Cannot reach the Provena backend"
-  means the API is not running (start it, then verify
-  `http://localhost:8000/api/health` directly).
-- **401 after seed:** you may be logging in with the wrong password; rerun the
-  seed or check `SEED_DEV_PASSWORD`.
-- **Stale frontend deps in Docker:** the `web` service mounts `./frontend`, but
-  `node_modules` lives in an anonymous volume; run `docker compose build web`
-  after dependency changes.
+Change models and add a new Alembic revision; never rewrite a published migration. Verify
+fresh upgrades, populated prior-schema upgrades and alembic check on disposable PostgreSQL.
+Update rule/parser/adapter identities when semantics change and preserve old reports and
+reviews. See [release checklist](releases.md) and [M6 evidence](m6-implementation.md).

@@ -1,5 +1,7 @@
 # M4 authentication investigation workbench
 
+Historical milestone record. Later milestones extend this scope; use the current [guide index](README.md) for setup, operations and supported workflows. Original verification results below remain historical.
+
 The implementation uses the existing modular monolith,
 immutable normalized events and shared Finding review model. Production is not deployed.
 

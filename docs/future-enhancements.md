@@ -6,7 +6,7 @@ These are proposals, not implemented features or deployment claims. They should 
 
 - Bayesian or calibrated confidence models could be explored only with validated data and a clear distinction from today's deterministic weighted scores.
 - A case-scoped investigation knowledge graph could expose relationships between people, hosts, files, devices, and events while preserving links to the original artifacts.
-- Automated timeline reconstruction could align supported timestamp formats and flag clock uncertainty.
+- Incident-level reconstruction beyond the implemented M4 authentication timeline could add independently justified clock correction and broader source relationships. Current uncertainty lanes are already implemented.
 - Cross-case pattern analysis and evidence similarity detection would need explicit workspace authorization, provenance, false-positive measurement, and privacy review.
 - spaCy or another NLP library could assist controlled entity extraction if it materially improves recall without weakening source locators or explainability. It is not a current dependency.
 - Integration with established digital forensic tools could import structured results with checksums, tool/version metadata, and source references.

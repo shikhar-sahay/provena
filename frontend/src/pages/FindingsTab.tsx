@@ -19,6 +19,7 @@ import { EmptyState, ErrorState, Skeleton } from "../components/StateViews";
 import { useToast } from "../components/Toast";
 import { FINDING_STATUS_LABELS, severityTone } from "../lib/analysis";
 import { actionErrorMessage } from "../lib/errors";
+import { canProduceFindings } from '../lib/permissions';
 import { displayName, formatDate, timeAgo } from "../lib/format";
 
 export default function FindingsTab({
@@ -44,6 +45,7 @@ export default function FindingsTab({
       user.id === inv.created_by.id ||
       user.id === inv.lead_investigator.id);
   const archivedLocked = inv.status === "archived" && user?.role !== "admin";
+  const canProduce = canProduceFindings(user?.role, canValidate, archivedLocked);
 
   const load = useCallback(async () => {
     try {
@@ -95,13 +97,13 @@ export default function FindingsTab({
         <p className="text-sm text-ink2">
           Deterministic rule proposals over extracted artifacts. Validation is human-only.
         </p>
-        <Button variant="primary" size="sm" loading={generating} onClick={() => void onGenerate()}>
+        <Button variant="primary" size="sm" disabled={!canProduce} loading={generating} onClick={() => void onGenerate()}>
           Evaluate rules
         </Button>
       </div>
 
       <RuleCoverageView coverage={coverage} />
-      {coverage.some((row) => row.omitted_count > 0 && row.output_limit < 200) && <Button disabled={generating} onClick={() => void onGenerate(200)}>Evaluate up to 200 results per rule</Button>}
+      {coverage.some((row) => row.omitted_count > 0 && row.output_limit < 200) && <Button disabled={generating || !canProduce} onClick={() => void onGenerate(200)}>Evaluate up to 200 results per rule</Button>}
       {findings.length === 0 ? (
         <EmptyState
           icon={<FileSearch size={22} />}

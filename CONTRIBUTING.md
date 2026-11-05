@@ -26,3 +26,20 @@ Unicode U+2014. Explain what could not be verified instead of claiming a check p
 
 Licensing is an open owner decision before public-beta distribution. Contributions must
 not introduce third-party material without permission or invent a project license grant.
+
+## Browser, documentation and release checks
+
+Read the [developer guide](docs/development.md) and run the real browser suite through
+`python tools/run_e2e.py` with a dedicated localhost control database. Never point it at
+an existing application or real evidence. Keep component and E2E tests separate and add
+regressions for material UI/integration fixes. Do not mock the principal investigation
+journey. Prefer accessible selectors and observable network/DOM waits over sleeps.
+
+Run `python tools/check_docs.py` after explicitly staging new guides so links are checked
+against tracked source. Update the [investigator guide](docs/investigator-guide.md) when
+UI workflows change. Preserve historical milestone measurements instead of silently
+replacing them with new results. Mermaid fence checks are not complete syntax rendering.
+
+Release validation compares frontend builds and scans high-confidence secret patterns,
+but human artifact/diff review remains necessary. Synthetic browser traces/downloads are
+ignored test artifacts, never source or candidate inputs. See [release policy](docs/releases.md).

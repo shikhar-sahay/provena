@@ -182,3 +182,17 @@ interrupted attempts under the case lock; retry creates new run membership witho
 duplicating event identities. Event exploration exposes historical snapshots,
 with recorded integrity eligibility, not a continuous file-integrity guarantee.
 See [M3 lifecycle and query policy](m3-implementation.md).
+
+## Browser workflow and export boundary
+
+The [investigator guide](investigator-guide.md) explains the current registration,
+verification, immutable interpretation, reviewed report and export workflow. M6 exercises
+that journey in Chromium against an owned disposable PostgreSQL application. UI role
+feedback is now consistent with verification permissions; backend gates remain decisive.
+
+Portable case exports and private system backups are distinct. Case packages default to
+metadata and explicitly identify any original-byte inclusion. Offline verification checks
+structure/provenance/hashes without executing content, and is not a signature or legal
+custody certification. Private backups include account hashes and evidence and require
+trusted fresh-target restoration. See [operations](operations.md) for actual recovery
+commands, quiescence requirements, readiness markers and limitations.

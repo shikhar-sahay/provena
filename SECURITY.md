@@ -18,3 +18,8 @@ Hashes and unsigned manifests demonstrate internal integrity consistency. They a
 digital signatures or independent proof of provenance. Backup packages contain sensitive
 database/account and evidence data; protect/encrypt them and never attach them to issues.
 Do not post bearer tokens, database URLs or storage keys in logs/screenshots/issues.
+
+The [current security architecture](docs/security.md) describes workspace/case boundaries,
+export/restore threats and residual localStorage/unsigned-manifest limitations. M6 browser
+tests use disposable synthetic systems and do not establish live-host or full WCAG/security
+certification. Candidate secret-pattern scans are limited checks, not proof of no secrets.

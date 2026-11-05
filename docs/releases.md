@@ -1,45 +1,73 @@
-# Pre-release and release-validation policy
+# Prerelease validation and release checklist
 
-The internal version is `0.1.0-beta.0`. Backend `app/version.py` is the release-version
-source of truth; frontend package metadata must match. This is a development pre-release,
-not a published final release, certification or assurance of operational admissibility.
+The version is **0.1.0-beta.0**, an unpublished development prerelease. Backend
+app/version.py is the version source; frontend metadata must match. Parser, adapter,
+normalization and rule versions remain separate investigative identities. Never describe
+passing CI as certification or public-release approval.
 
-Every main/PR CI run preserves dependency, backend, frontend and PostgreSQL gates. After
-all four pass, the reusable `release-validation` workflow builds a production frontend,
-creates a bounded candidate from committed allowlisted source and compiled public assets,
-verifies every artifact digest, and tests a fresh disposable Docker Compose database/API.
-The candidate and JSON metadata are uploaded as a seven-day Actions artifact. No AWS
-deployment, GitHub release creation or tag publication occurs.
+## Automated validation
 
-Candidate construction uses `git archive HEAD`, not uncommitted working-tree source.
-Private environment files, runtime evidence, backups, model files, generated caches and
-untracked deployment documents cannot enter the allowlisted source artifact. Only the
-explicit synthetic M3/M4 authentication datasets and M5 demonstration instructions are included. The candidate manifest
-records application version, exact commit, file SHA-256 digests and publication blockers.
-It is unsigned and marked `publishable=false` until explicit maintainer approval.
+Main/PR CI has eight jobs: Python dependencies, backend pytest, frontend component/lint/
+type/build/npm audits, PostgreSQL migrations/concurrency/recovery, real Chromium workflows,
+offline documentation checks, candidate validation and disposable Compose startup.
+Candidate/container jobs are gated on the first six. No gate is weakened to pass a build.
 
-Reproduce after committing the intended source and building the frontend:
+The candidate job builds the frontend, compares an independent second build under the
+same source/runtime/environment, packages committed allowlisted source and public web
+assets, verifies inventory/digests, and uploads seven-day validation artifacts. The source
+includes browser configuration/tests, synthetic fixtures and current guides. Runtime
+evidence, environment files, backups, caches and local untracked documents are excluded.
+High-confidence secret patterns fail packaging; this does not replace human review.
+
+Candidate manifests record schema, source SHA, version, per-file SHA-256/size and known
+publication blockers. They are unsigned and always `publishable=false`. No release/tag,
+package publication, AWS deployment or infrastructure change is performed.
+
+After committing and rebuilding frontend/dist with the intended environment:
 
 ```sh
-python tools/build_release.py --frontend frontend/dist --output /private/provena-candidate.zip
+python tools/check_docs.py
+python tools/check_build.py
+python tools/build_release.py --frontend frontend/dist --output /private/new-candidate.zip
 ```
 
-Do not reuse an existing output path. A new version requires a meaningful changelog,
-passing CI on the exact release commit, tested schema upgrade and fresh restore, and
-maintainer review of sensitive-file exclusions. Substantial schema/behavior compatibility
-changes require explicit upgrade notes. Pre-release patch increments must still record
-parser/rule/normalization versions independently; application version alone is not
-investigative identity.
+Use a fresh output path. The E2E runner builds with ephemeral API ports; rebuild normally
+before local packaging. CI candidates use a separate clean checkout. Reproducibility
+checks cover identical environment builds, not arbitrary OS/compiler combinations.
 
-## Publication blockers
+## Engineering checklist
 
-- No project license file existed at M5 start. The owner must choose and approve a
-  license before describing a distributed beta as licensed open-source software.
-  M5 does not make a legal licensing choice or add an invented grant.
-- A private security-disclosure channel must be confirmed before a public beta. See
-  `SECURITY.md`; no invented email address or response guarantee is supplied.
-- A maintainer must explicitly approve any release/tag and independently authorize any
-  production deployment. Passing tests or generating an artifact is not that approval.
-- Real deployment ownership, backups, restore drill, storage capacity, secrets, TLS and
-  monitoring must be validated through a controlled operations process. M5 never accessed
-  or changed the live EC2/DuckDNS deployment.
+- Full backend/component/browser suites and audits pass on the exact intended revision.
+- Fresh and populated prior-schema upgrades, alembic check and native restore pass on
+  disposable PostgreSQL; SQLite is not concurrency evidence.
+- Browser demonstration covers review, historical stability and offline verification of
+  real downloads. Failure traces are synthetic, bounded by job limits and excluded from Git.
+- README, investigator/operator/developer/security guides and changelog describe actual
+  behavior. Relative links and Mermaid fence/declaration checks pass. Full diagram rendering
+  and external URLs are not claimed to be checked by the lightweight documentation tool.
+- Inspect explicit staged changes, release inventory and secret-pattern results. No real
+  evidence, private backups, credentials or unrelated local work enter a candidate.
+- Record source SHA, all job conclusions, limitations, migration compatibility and rollback
+  procedure. Changes requiring rollback use a validated backup into fresh targets.
+
+## Owner decisions, still blocked
+
+- Choose and approve a license. No license existed at M5/M6 start; repository visibility
+  does not create a license grant. The implementation does not invent one.
+- Confirm a private vulnerability-reporting channel/contact. SECURITY.md explains safe
+  reporting without inventing an email or response guarantee.
+- Explicitly approve the public beta, release notes, tag and publication. CI is not approval.
+
+## Operational prerequisites, separately authorized
+
+- Select a staging environment, configure strong secrets/TLS/proxy/storage permissions
+  and validate health with the actual deployment owner.
+- Install encrypted off-host backup/retention procedures and complete a controlled restore
+  drill. M5 tools exist; M6 does not provision a scheduler, encryption service or cloud.
+- Approve and validate live migrations/deployment, rollback, monitoring, disk alerts,
+  certificate renewal and EC2 capacity. No live load test or AWS access is authorized here.
+- Perform manual browser/accessibility validation on target devices, and independent
+  security/operational review appropriate to the sensitivity of intended evidence.
+
+The current recommendation is in [M6 readiness](m6-implementation.md). Controlled local
+synthetic evaluation is distinct from staging authorization and public-release readiness.
