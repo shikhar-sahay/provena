@@ -24,6 +24,7 @@ export interface WorkspaceContext {
 const TABS = [
   { to: "", label: "Overview", end: true },
   { to: "evidence", label: "Evidence", end: false },
+  { to: "events", label: "Security Events", end: true },
   { to: "analysis", label: "AI Analysis", end: false },
   { to: "timeline", label: "Timeline", end: true },
   { to: "custody", label: "Custody", end: true },

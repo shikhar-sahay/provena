@@ -938,3 +938,57 @@ export const api = {
     });
   },
 };
+
+
+export interface EventProfileConfig {
+  adapter: "linux_auth" | "windows_security" | "sysmon";
+  format: "syslog" | "json" | "jsonl" | "csv";
+  encoding: "utf-8" | "utf-8-sig" | "latin-1";
+  source_host: string | null;
+  timezone: string | null;
+  year: number | null;
+  timestamp_convention: "source" | "iso8601" | "syslog";
+}
+export interface EventProfile {
+  id: number; name: string; semantic_key: string; version: string;
+  configuration: EventProfileConfig;
+}
+export interface EventCoverage {
+  status?: string; records_total?: number | null; recognized?: number; unrecognized?: number;
+  rejected?: number; omitted?: number | null; events_created?: number; warnings?: string[];
+  issues?: { locator: Record<string, unknown>; reason: string }[];
+}
+export interface EventRun {
+  id: number; evidence_id: number; profile_id: number; status: string;
+  input_sha256: string | null; verification_id: number | null;
+  coverage: EventCoverage; error: string | null; created_at: string;
+}
+export interface SecurityEvent {
+  id: number; semantic_key: string; evidence_id: number; evidence_number: string;
+  first_run_id: number; profile_id: number; input_sha256: string; record_fingerprint: string;
+  provider: string; category: string; event_type: string; outcome: string; event_id: string | null;
+  username: string | null; account_domain: string | null; hostname: string | null;
+  source_ip: string | null; destination_ip: string | null; source_port: number | null;
+  destination_port: number | null; original_timestamp: string | null; timestamp_utc: string | null;
+  time_semantics: { certainty: string; precision: string | null; assumptions: Record<string, unknown>[]; warnings: string[] };
+  attributes: Record<string, unknown>; warnings: string[]; locator: Record<string, unknown>;
+  profile_snapshot: Record<string, unknown>; adapter_version: string; normalization_version: string;
+  coverage_status: string; support_verified: boolean;
+}
+export interface EventPage { items: SecurityEvent[]; total: number; limit: number; offset: number; time_policy: string; view_policy: string }
+export interface EventRunPage { items: EventRun[]; total: number; limit: number; offset: number }
+export const eventApi = {
+  profiles: (id: number) => apiFetch<EventProfile[]>(`/api/investigations/${id}/events/profiles`),
+  createProfile: (id: number, name: string, configuration: EventProfileConfig) => apiFetch<EventProfile>(
+    `/api/investigations/${id}/events/profiles`, { method: "POST", body: JSON.stringify({ name, configuration }) }),
+  runs: (id: number, offset = 0) => apiFetch<EventRunPage>(`/api/investigations/${id}/events/runs?limit=25&offset=${offset}`),
+  ingest: (id: number, evidence_id: number, profile_id: number) => apiFetch<EventRun>(`/api/investigations/${id}/events/runs`,
+    { method: "POST", body: JSON.stringify({ evidence_id, profile_id }) }),
+  recover: (id: number, run: number) => apiFetch<EventRun>(`/api/investigations/${id}/events/runs/${run}/recover`, { method: "POST" }),
+  list: (id: number, filters: Record<string, string>, offset = 0) => {
+    const params = new URLSearchParams({ limit: "50", offset: String(offset) });
+    Object.entries(filters).forEach(([key, value]) => { if (value.trim()) params.set(key, value.trim()); });
+    return apiFetch<EventPage>(`/api/investigations/${id}/events?${params}`);
+  },
+  detail: (id: number, key: string) => apiFetch<SecurityEvent>(`/api/investigations/${id}/events/${key}`),
+};

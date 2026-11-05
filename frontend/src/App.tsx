@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import type { ReactNode } from "react";
 import AppShell from "./components/AppShell";
+import EventsPage from "./pages/EventsPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import AuditTab from "./pages/AuditTab";
 import CustodyTab from "./pages/CustodyTab";
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="evidence/register" element={<RegisterEvidencePage />} />
           <Route path="evidence/:eid" element={<EvidenceDetailPage />} />
           <Route path="analysis" element={<AnalysisPage />} />
+          <Route path="events" element={<EventsPage />} />
           <Route path="timeline" element={<TimelineTab />} />
           <Route path="custody" element={<CustodyTab />} />
           <Route path="reports" element={<ReportsPage />} />

@@ -101,3 +101,20 @@ A complete parse with unsupported records is a partial normalized event set,
 not complete semantic coverage. Up to 20 issue locators explain failures without
 returning evidence text. Existing events retain their first ingestion provenance;
 subsequent run membership and run coverage remain separately queryable.
+
+## Event explorer
+
+The case's Security Events tab provides source-profile configuration/selection,
+verified-evidence selection, ingestion and interrupted-run recovery. It displays
+all query filters, bounded event/run pagination, empty/error/loading states,
+provider/type/outcome context and a provenance drawer with the evidence link,
+record locator/fingerprint, exact input digest, source time/UTC projection,
+uncertainty, assumptions, attributes and semantic identity. Partial ingestion and
+unsupported format feedback remain visible. Recorded integrity eligibility is
+not continuous storage monitoring. Historical events remain visible with warnings
+when a subsequent check marks their supporting evidence unavailable or mismatched.
+
+UI behavior tests cover immutable profile inputs, unknown-year/zone defaults,
+filter and pagination API parameters, event detail provenance, error/empty states,
+verified-evidence gating and duplicate-ingestion feedback. Existing design tokens
+and shared components are retained.
