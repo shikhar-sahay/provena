@@ -1,6 +1,6 @@
 # M4 authentication investigation workbench
 
-Implementation in progress. The implementation uses the existing modular monolith,
+The implementation uses the existing modular monolith,
 immutable normalized events and shared Finding review model. Production is not deployed.
 
 ## Selection and execution
@@ -24,7 +24,7 @@ attempts can be explicitly recovered while holding the case lock.
 
 ## Rules
 
-Version 1 provides repeated failures, password spraying, success after failures,
+Version 1.1 provides repeated failures, password spraying, success after failures,
 explicit lockout concentration and mixed-outcome multi-account activity bursts.
 Parameters are validated and persisted. Earliest qualifying non-overlapping rolling
 windows make candidate selection deterministic. Qualitative severity describes review
@@ -60,3 +60,23 @@ flowchart LR
 
 Migration `53d6b8a0e88b` adds selection, membership, detection run and run-finding
 tables without altering old evidence, event, finding or report rows. It is forward-only.
+
+## Investigator workflow
+
+The case Authentication tab provides source-run selection, reusable immutable sets,
+coverage and duplicate-source counts, configurable detection execution and run history.
+Result details show rule versions, exact parameters, source event previews, temporal
+limitations, shared acceptance/rejection controls, annotations and append-only review
+history. Existing finding pages link back to this workbench and label detections as
+threshold-based review priority rather than displaying a fabricated numerical score.
+
+The timeline has source-declared UTC, profile-assumed and unknown/ambiguous lanes.
+It supports offset-aware ranges, account/domain/host/IP/type/outcome filters, bounded
+pagination and exact detection support filtering. Account pivots retain missing-domain
+and provider scope. Source details link to evidence and original locators. A return
+control preserves detection context during pivots. Ordering is not presented as causality.
+
+New immutable reports include selection provenance, executed configurations, coverage,
+omission accounting and a separate decision inventory. Accepted current detections retain
+all support identities and up to 200 detailed event snapshots. Omitted detail counts are
+explicit; the complete event membership remains queryable. Prior reports are untouched.

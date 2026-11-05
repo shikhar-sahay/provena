@@ -27,7 +27,7 @@ def test_all_families_and_reproducibility():
     assert 'repeated_failures' in kinds(run(failures)[0])
     assert 'success_after_failures' in kinds(run(failures+[event(10,outcome='success')])[0])
     assert 'password_spray' in kinds(run([event(i,user=f'user{i}') for i in range(5)])[0])
-    assert 'lockout_concentration' in kinds(run([event(i,user=f'user{i}',event_id='4740',outcome='unknown',event_type='account_lockout') for i in range(3)])[0])
+    assert 'lockout_concentration' in kinds(run([event(i,user=f'user{i}',provider='Microsoft-Windows-Security-Auditing',category='account',event_id='4740',outcome='unknown',event_type='account_lockout') for i in range(3)])[0])
     burst=[event(i,user=f'user{i%4}',outcome='success' if i%3==0 else 'failure') for i in range(24)]
     results,coverage=run(burst)
     assert 'activity_burst' in kinds(results)
@@ -75,7 +75,7 @@ def test_duplicates_and_equal_or_out_of_order_times():
 def test_limits_are_explicit():
     results,coverage=run([event(i) for i in range(15)],result_limit=1)
     assert len(results)==1
-    assert coverage['rules']['repeated_failures']=={'candidates':3,'returned':1,'omitted':2}
+    assert coverage['rules']['repeated_failures']=={'candidates':3,'returned':1,'omitted':2,'eligible_required_fields':15,'excluded_required_fields':0}
     with pytest.raises(ValueError,match='budget'):
         run([event(0)]*10001)
 

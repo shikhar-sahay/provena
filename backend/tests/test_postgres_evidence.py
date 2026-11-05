@@ -108,6 +108,7 @@ def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monk
     from app.modules.detections.schemas import EventSetCreate, DetectionCreate
     from app.modules.detections.models import InvestigationEventSet, DetectionRunFinding, AuthenticationDetectionRun
     from app.modules.intelligence.models import Finding
+    from app.modules.workspaces.models import WorkspaceMembership
     monkeypatch.setattr(settings,'evidence_storage_backend','local')
     monkeypatch.setattr(settings,'evidence_storage_root',str(tmp_path))
     engine=create_engine(url)
@@ -118,6 +119,8 @@ def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monk
             db.add(actor);db.flush()
             workspace=Workspace(name='Synthetic Authentication',slug=f'auth-{suffix}',created_by_id=actor.id)
             db.add(workspace);db.flush()
+            actor.active_workspace_id=workspace.id
+            db.add(WorkspaceMembership(workspace_id=workspace.id,user_id=actor.id,role='admin',is_active=True))
             inv=Investigation(title='Synthetic authentication',case_number=f'AUTH-{suffix}',workspace_id=workspace.id,created_by_id=actor.id,lead_investigator_id=actor.id)
             db.add(inv);db.commit()
             data=''.join(f'2026-11-05T12:00:{i*3:02d}Z host sshd[123]: Failed password for mira from 192.0.2.1 port {2200+i} ssh2\n' for i in range(5)).encode()
@@ -157,6 +160,11 @@ def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monk
             assert execute(db,inv,DetectionCreate(event_set_id=set_ids[0]),actor).status=='completed'
             assert db.get(Finding,findings[0].id).status=='accepted'
             assert db.scalar(select(func.count()).select_from(AuthenticationDetectionRun).where(AuthenticationDetectionRun.investigation_id==inv_id))==3
+            # Exercise real JSON-bearing PostgreSQL queries, not SQLite DISTINCT semantics.
+            from app.modules.detections.router import findings as query_findings, history
+            page=query_findings(inv_id,event_set_id=set_ids[0],run_id=None,limit=50,offset=0,user=actor,db=db)
+            assert page['total']==1 and page['items'][0].support_current
+            assert history(inv_id,findings[0].id,user=actor,db=db)==[]
     finally:
         engine.dispose()
 

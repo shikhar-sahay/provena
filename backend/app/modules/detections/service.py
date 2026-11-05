@@ -70,8 +70,9 @@ def create_set(db, inv, payload, actor):
     # per occurrence ordinal. Temporal alternatives of overlapping records are rejected.
     source_occurrences=defaultdict(list)
     time_interpretations={}
+    evidence_map={e.id:e for e in db.scalars(select(Evidence).where(Evidence.id.in_({e.evidence_id for e in events})))}
     for event in events:
-        if not current_event(db,event):
+        if not current_event(db,event,evidence_map):
             raise HTTPException(409,'Selected evidence is not currently registered and verified.')
         obs=engine.observation(event_data(event))
         timekey=engine.digest(event.time_semantics)
@@ -96,8 +97,13 @@ def create_set(db, inv, payload, actor):
         return existing
     if db.scalar(select(func.count()).select_from(InvestigationEventSet).where(InvestigationEventSet.investigation_id==inv.id))>=200:
         raise HTTPException(409,'Event set limit reached (200). Reuse an existing selection.')
+    time_counts=defaultdict(int)
+    for event in selected:
+        time_counts[event.time_semantics.get('certainty','unknown')]+=1
     item=InvestigationEventSet(investigation_id=inv.id,semantic_key=key,name=payload.name,version='1',selected_runs=payload.run_ids,
         created_by_id=actor.id,coverage={'sources':canonical_coverage,'selected_events':len(events),'included_events':len(selected),
+        'authentication_events':sum(e.category=='authentication' for e in selected),
+        'evidence_count':len(evidence_map),'timestamp_certainty_counts':dict(time_counts),
         'duplicate_source_occurrences_excluded':len(events)-len(selected),'partial':any(r.status=='partial' for r in runs),
         'warnings':['Overlapping copied/partitioned observations are not independent corroboration.',
                     'UTC projection does not establish source-clock synchronization or causal order.']})
@@ -112,8 +118,8 @@ def create_set(db, inv, payload, actor):
     return item
 
 
-def current_event(db,event):
-    evidence=db.get(Evidence,event.evidence_id)
+def current_event(db,event,evidence_map=None):
+    evidence=evidence_map.get(event.evidence_id) if evidence_map is not None else db.get(Evidence,event.evidence_id)
     return bool(evidence and evidence.registration_status=='ready' and evidence.integrity_status=='verified' and evidence.sha256==event.input_sha256)
 
 
@@ -124,10 +130,15 @@ def support_current(db,finding):
     item=db.get(InvestigationEventSet,snapshot.get('event_set_id'))
     if item is None or item.investigation_id!=finding.investigation_id or item.semantic_key!=snapshot.get('event_set_key'):
         return False
-    selected={e.semantic_key:e for e in members(db,item)}
     keys=snapshot.get('event_keys',[])
-    return bool(keys and all(k in selected and current_event(db,selected[k]) and
-        selected[k].adapter_version==ADAPTER_VERSION and selected[k].normalization_version==NORMALIZATION_VERSION for k in keys))
+    if not keys or len(keys)>engine.LIMIT or len(set(keys))!=len(keys):
+        return False
+    stmt=select(SecurityEvent.semantic_key,SecurityEvent.evidence_id).join(EventSetMember,EventSetMember.event_id==SecurityEvent.id).join(Evidence,Evidence.id==SecurityEvent.evidence_id).where(
+        EventSetMember.set_id==item.id,EventSetMember.included.is_(True),SecurityEvent.investigation_id==finding.investigation_id,
+        SecurityEvent.semantic_key.in_(keys),SecurityEvent.input_sha256==Evidence.sha256,Evidence.registration_status=='ready',
+        Evidence.integrity_status=='verified',SecurityEvent.adapter_version==ADAPTER_VERSION,SecurityEvent.normalization_version==NORMALIZATION_VERSION)
+    valid=db.execute(stmt).all()
+    return len(valid)==len(keys) and {r.evidence_id for r in valid}==set(finding.evidence_ids)
 
 
 def finish(db,inv,actor,run,status,error=None):
@@ -150,27 +161,34 @@ def execute(db,inv,payload,actor):
     db.info['verification_journal']=[]
     try:
         lock_case(db,inv)
+        db.refresh(run)
+        if run.status!='running':
+            return run  # A recovery that obtained the lock before execution remains final.
         events=members(db,item)
         if len(events)>engine.LIMIT:
             return finish(db,inv,actor,run,'blocked','Event selection exceeds evaluation budget.')
         all_selected=members(db,item,included=False)
         evidence_ids=sorted({e.evidence_id for e in all_selected})
+        evidence_map={e.id:e for e in db.scalars(select(Evidence).where(Evidence.id.in_(evidence_ids)))}
+        checks=[]
         for evidence_id in evidence_ids:
-            evidence=db.get(Evidence,evidence_id)
+            evidence=evidence_map[evidence_id]
             if evidence.registration_status!='ready' or evidence.integrity_status!='verified':
                 return finish(db,inv,actor,run,'blocked','Selected evidence is unavailable or not verified.')
             try:
                 with storage.snapshot(evidence.storage_key,evidence.file_size) as verified:
                     observed=verified.sha256
-                record_verification(db,inv,evidence,observed,actor.id,'authentication_detection')
+                check=record_verification(db,inv,evidence,observed,actor.id,'authentication_detection')
             except storage.SizeMismatch:
-                record_verification(db,inv,evidence,None,actor.id,'authentication_detection',size_mismatch=True)
+                check=record_verification(db,inv,evidence,None,actor.id,'authentication_detection',size_mismatch=True)
             except (OSError,ValueError):
-                record_verification(db,inv,evidence,None,actor.id,'authentication_detection')
-        if not events or not all(current_event(db,e) for e in all_selected):
+                check=record_verification(db,inv,evidence,None,actor.id,'authentication_detection')
+            checks.append({'evidence_id':evidence.id,'input_sha256':evidence.sha256,'verification_id':check.id,'integrity_status':evidence.integrity_status})
+            run.coverage={'verification_checks':list(checks)}
+        if not events or not all(current_event(db,e,evidence_map) for e in all_selected):
             return finish(db,inv,actor,run,'blocked','Selected source integrity failed; historical events were not treated as current evidence.')
         proposals,coverage=engine.evaluate([event_data(e) for e in events],run.configuration)
-        run.coverage={**coverage,'input_coverage':item.coverage,'event_set_key':item.semantic_key}
+        run.coverage={**coverage,'verification_checks':checks,'input_coverage':item.coverage,'event_set_key':item.semantic_key}
         bykey={e.semantic_key:e for e in events}
         for proposal in proposals:
             key=engine.digest({'set':item.semantic_key,'proposal':proposal['semantic_key'],'engine':engine.VERSION})

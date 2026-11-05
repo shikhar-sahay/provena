@@ -375,7 +375,7 @@ export default function FindingsWorkspacePage() {
                     {FINDING_STATUS_LABELS[finding.status]}
                   </Badge>
                   <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-ink2">
-                    {finding.confidence}/100
+                    {finding.rule_id.startsWith('auth.') ? 'Threshold-based' : `${finding.confidence}/100`}
                   </span>
                   <button
                     type="button"
@@ -448,7 +448,7 @@ function FindingDetailWorkspaceView({
           {FINDING_STATUS_LABELS[finding.status]}
         </Badge>
         <span className="rounded border border-line px-2 py-0.5 font-mono text-xs text-ink2">
-          Confidence {finding.confidence}/100
+          {finding.rule_id.startsWith('auth.') ? 'Threshold-based review priority' : `Confidence ${finding.confidence}/100`}
         </span>
       </div>
 

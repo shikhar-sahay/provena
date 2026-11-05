@@ -20,6 +20,16 @@ from .schemas import EventSetCreate, DetectionCreate
 router=APIRouter(prefix='/investigations/{investigation_id}/authentication',tags=['authentication-investigation'])
 
 
+@router.get('/rules')
+def rules(investigation_id:int,user=Depends(get_current_user),db=Depends(get_db)):
+    from app.events.detections import RULE_DEFINITIONS, VERSION
+    from .schemas import DetectionConfig
+    case(db,investigation_id,user)
+    return {'engine_version':VERSION,'rules':RULE_DEFINITIONS,'defaults':DetectionConfig().model_dump(),
+            'configuration_schema':DetectionConfig.model_json_schema(),
+            'timestamp_requirement':'Justified UTC projection with second or finer precision; profile assumptions require opt-in.'}
+
+
 def fields(row, names):
     return {name:getattr(row,name) for name in names.split()}
 
@@ -71,11 +81,13 @@ def recover(investigation_id:int,run_id:int,user=Depends(get_current_user),db=De
 def findings(investigation_id:int,event_set_id:int=Query(gt=0),run_id:int|None=Query(None,gt=0),limit:int=Query(50,ge=1,le=200),offset:int=Query(0,ge=0,le=100000),user=Depends(get_current_user),db=Depends(get_db)):
     inv=case(db,investigation_id,user)
     service.get_set(db,inv,event_set_id)
-    stmt=select(Finding).join(DetectionRunFinding,DetectionRunFinding.finding_id==Finding.id).join(AuthenticationDetectionRun,AuthenticationDetectionRun.id==DetectionRunFinding.run_id).where(
-        Finding.investigation_id==inv.id,AuthenticationDetectionRun.event_set_id==event_set_id,AuthenticationDetectionRun.status=='completed')
+    ids=select(DetectionRunFinding.finding_id).join(AuthenticationDetectionRun,AuthenticationDetectionRun.id==DetectionRunFinding.run_id).where(
+        AuthenticationDetectionRun.investigation_id==inv.id,AuthenticationDetectionRun.event_set_id==event_set_id,AuthenticationDetectionRun.status=='completed')
     if run_id:
-        stmt=stmt.where(AuthenticationDetectionRun.id==run_id)
-    stmt=stmt.distinct()
+        ids=ids.where(AuthenticationDetectionRun.id==run_id)
+    # PostgreSQL JSON columns have no equality operator; deduplicate membership
+    # through scalar identifiers rather than SELECT DISTINCT on whole findings.
+    stmt=select(Finding).where(Finding.investigation_id==inv.id,Finding.id.in_(ids))
     total=db.scalar(select(func.count()).select_from(stmt.subquery()))
     return {'items':[_to_finding_read(db,f) for f in db.scalars(stmt.order_by(Finding.rule_id,Finding.inputs_key).limit(limit).offset(offset))],'total':total,'limit':limit,'offset':offset}
 

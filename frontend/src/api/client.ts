@@ -402,7 +402,10 @@ export interface RuleCoverage {
 }
 
 export interface Finding {
-  support_snapshot?: { identity_version: string; coverage: Record<string, ParserCoverage> } | null;
+  support_snapshot?: { identity_version?: string; coverage?: Record<string, ParserCoverage>;
+    kind?: string; event_set_id?: number; event_set_key?: string; event_keys?: string[];
+    detection?: AuthenticationDetection; input_coverage?: AuthenticationCoverage;
+    source_events?: SecurityEvent[]; source_event_snapshot_omitted?: number } | null;
   support_current?: boolean;
   id: number;
   investigation_id: number;
@@ -476,6 +479,9 @@ export interface Report {
 }
 
 export interface ReportContent {
+  authentication_investigation?: { policy: string; omitted_runs: number; sets: { semantic_key: string; name: string; selected_runs: number[]; coverage: AuthenticationCoverage }[];
+    runs: AuthenticationRun[]; decision_snapshots: { id: number; rule_id: string; status: string; support_current: boolean; review_note: string | null }[];
+    decision_snapshot_limit: number; decision_snapshots_may_be_truncated: boolean };
   rule_coverage?: RuleCoverage[];
   excluded_stale_finding_ids?: number[];
   support_policy?: string;
@@ -517,6 +523,7 @@ export interface ReportContent {
   }[];
   timeline: TimelineEntry[];
   accepted_findings: {
+    support_snapshot?: Finding['support_snapshot'];
     id: number;
     rule_id: string;
     rule_version: string;
@@ -977,6 +984,27 @@ export interface SecurityEvent {
 }
 export interface EventPage { items: SecurityEvent[]; total: number; limit: number; offset: number; time_policy: string; view_policy: string }
 export interface EventRunPage { items: EventRun[]; total: number; limit: number; offset: number }
+export interface AuthenticationCoverage {
+  authentication_events?: number; evidence_count?: number; timestamp_certainty_counts?: Record<string, number>;
+  selected_events: number; included_events: number; duplicate_source_occurrences_excluded: number;
+  partial: boolean; warnings: string[];
+  sources: { input_sha256: string; profile_key: string; status: string; coverage: EventCoverage }[];
+}
+export interface AuthenticationDetection {
+  rule_id: string; rule_version: string; count: number; entities: { group: (string | null)[] };
+  severity_rationale: string; limitations: string[]; configuration: Record<string, unknown>;
+  event_keys: string[]; time_start: string; time_end: string;
+}
+export interface InvestigationEventSet {
+  id: number; name: string; semantic_key: string; selected_runs: number[]; coverage: AuthenticationCoverage;
+}
+export interface AuthenticationRun {
+  id: number; event_set_id: number; status: string; engine_version: string; error: string | null;
+  configuration: Record<string, unknown>;
+  coverage: { evaluated?: number; eligible?: number; excluded?: Record<string, number>;
+    result_count?: number; budget_exhausted?: boolean;
+    rules?: Record<string, { candidates: number; returned: number; omitted: number }> };
+}
 export const eventApi = {
   profiles: (id: number) => apiFetch<EventProfile[]>(`/api/investigations/${id}/events/profiles`),
   createProfile: (id: number, name: string, configuration: EventProfileConfig) => apiFetch<EventProfile>(
@@ -991,4 +1019,19 @@ export const eventApi = {
     return apiFetch<EventPage>(`/api/investigations/${id}/events?${params}`);
   },
   detail: (id: number, key: string) => apiFetch<SecurityEvent>(`/api/investigations/${id}/events/${key}`),
+};
+
+export const authenticationApi = {
+  sets: (id: number) => apiFetch<InvestigationEventSet[]>(`/api/investigations/${id}/authentication/sets`),
+  createSet: (id: number, name: string, run_ids: number[]) => apiFetch<InvestigationEventSet>(`/api/investigations/${id}/authentication/sets`, { method: 'POST', body: JSON.stringify({ name, run_ids }) }),
+  execute: (id: number, event_set_id: number, configuration: Record<string, unknown>) => apiFetch<AuthenticationRun>(`/api/investigations/${id}/authentication/runs`, { method: 'POST', body: JSON.stringify({ event_set_id, configuration }) }),
+  runs: (id: number, set: number, offset = 0) => apiFetch<{ items: AuthenticationRun[]; total: number }>(`/api/investigations/${id}/authentication/runs?event_set_id=${set}&offset=${offset}`),
+  recover: (id: number, run: number) => apiFetch<AuthenticationRun>(`/api/investigations/${id}/authentication/runs/${run}/recover`, { method: 'POST' }),
+  findings: (id: number, set: number, offset = 0, run?: number) => apiFetch<{ items: Finding[]; total: number }>(`/api/investigations/${id}/authentication/findings?event_set_id=${set}&offset=${offset}${run ? `&run_id=${run}` : ''}`),
+  history: (id: number, finding: number) => apiFetch<{ actor_id: number; created_at: string; action: string; decision: Record<string, unknown> }[]>(`/api/investigations/${id}/authentication/findings/${finding}/history`),
+  timeline: (id: number, set: number, filters: Record<string, string>, offset = 0) => {
+    const params = new URLSearchParams({ event_set_id: String(set), limit: '50', offset: String(offset) });
+    Object.entries(filters).forEach(([key, value]) => { if (value.trim()) params.set(key, value.trim()); });
+    return apiFetch<{ items: SecurityEvent[]; total: number; ordering: string; lane: string; coverage: AuthenticationCoverage }>(`/api/investigations/${id}/authentication/timeline?${params}`);
+  },
 };

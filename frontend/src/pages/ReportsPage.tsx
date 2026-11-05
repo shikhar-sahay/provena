@@ -182,6 +182,18 @@ function ReportView({ report }: { report: Report }) {
 
         {presentation.mode === "ai_enhanced" && <p role="alert" className="text-sm text-warning-ink">Historical model prose has not been revalidated under M2. Consult the structured accepted findings and their original support.</p>}
         <ReportSection title="Rule evaluation coverage at report generation"><RuleCoverageView coverage={content.rule_coverage ?? []} /></ReportSection>
+        {content.authentication_investigation && <ReportSection title="Authentication investigation inputs and execution">
+          <p>{content.authentication_investigation.policy}</p>
+          <p className="text-xs text-ink2">{content.authentication_investigation.omitted_runs} older runs omitted from this bounded inventory.</p>
+          {content.authentication_investigation.sets.map(set => <div key={set.semantic_key} className="my-2 rounded border border-line p-3">
+            <p className="font-medium">{set.name}</p><p className="break-all font-mono text-xs">{set.semantic_key}</p>
+            <p>{set.coverage.included_events} events; {set.coverage.duplicate_source_occurrences_excluded} copied occurrences excluded; {set.coverage.partial ? 'partial' : 'complete declared'} source coverage.</p>
+            <details><summary>Input provenance and coverage</summary><pre className="overflow-auto text-xs">{JSON.stringify(set.coverage, null, 2)}</pre></details>
+          </div>)}
+          <details><summary>Executed rules, configurations and omission accounting</summary><pre className="overflow-auto text-xs">{JSON.stringify(content.authentication_investigation.runs, null, 2)}</pre></details>
+          <details><summary>Decision inventory, separate from accepted conclusions</summary><pre className="overflow-auto text-xs">{JSON.stringify(content.authentication_investigation.decision_snapshots, null, 2)}</pre>
+            {content.authentication_investigation.decision_snapshots_may_be_truncated && <p>Decision inventory reached its {content.authentication_investigation.decision_snapshot_limit} item limit.</p>}</details>
+        </ReportSection>}
         <ReportSection title="Executive summary">
           <p className="whitespace-pre-wrap text-ink2">{presentation.executiveSummary}</p>
           <p className="mt-1 text-xs text-ink3">
@@ -232,9 +244,12 @@ function ReportView({ report }: { report: Report }) {
                     <p className="mt-1 text-ink2">{presentation.findingNarratives[String(finding.id)]}</p>
                   )}
                   <p className="text-xs text-ink3">
-                    {finding.rule_id}-v{finding.rule_version} · {finding.severity} · confidence{" "}
-                    {finding.confidence}/100 · reviewed by {finding.reviewer ?? "unknown"}
+                    {finding.rule_id}-v{finding.rule_version} · {finding.severity} · {finding.rule_id.startsWith('auth.') ? 'Threshold-based review priority' : `confidence ${finding.confidence}/100`} · reviewed by {finding.reviewer ?? "unknown"}
                   </p>
+                  {finding.support_snapshot?.kind === 'authentication_detection' && <details><summary>Detection thresholds, source events and time uncertainty</summary>
+                    <pre className="overflow-auto text-xs">{JSON.stringify(finding.support_snapshot, null, 2)}</pre>
+                    {!!finding.support_snapshot.source_event_snapshot_omitted && <p>{finding.support_snapshot.source_event_snapshot_omitted} source-event detail snapshots omitted; complete support identities are retained.</p>}
+                  </details>}
                 </li>
               ))}
             </ol>

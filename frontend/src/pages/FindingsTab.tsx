@@ -135,7 +135,7 @@ export default function FindingsTab({
                   {FINDING_STATUS_LABELS[finding.status]}
                 </Badge>
                 <span className="text-xs tabular-nums text-ink2" title="Deterministic weighted score for ranking, not a probability">
-                  {finding.confidence}/100
+                  {finding.rule_id.startsWith('auth.') ? 'Threshold-based' : `${finding.confidence}/100`}
                 </span>
               </div>
               <p className="mt-1 line-clamp-2 text-[13px] text-ink2">{finding.summary}</p>
@@ -246,12 +246,12 @@ function FindingDetail({
           {FINDING_STATUS_LABELS[finding.status]}
         </Badge>
         <span className="text-sm tabular-nums" title="Deterministic weighted score for ranking, not a probability">
-          Confidence {finding.confidence}/100
+          {finding.rule_id.startsWith('auth.') ? 'Threshold-based review priority' : `Confidence ${finding.confidence}/100`}
         </span>
       </div>
 
       <p className="text-sm">{finding.summary}</p>
-      {finding.support_snapshot && Object.entries(finding.support_snapshot.coverage).map(([id, coverage]) => (
+      {finding.support_snapshot && Object.entries(finding.support_snapshot.coverage ?? {}).map(([id, coverage]) => (
         <ParserCoverageView key={id} coverage={coverage} label={`Evidence #${id}`} />
       ))}
 
@@ -274,7 +274,7 @@ function FindingDetail({
             </li>
           ))}
         </ol>
-        <ScoreExplanation score={finding.confidence} weights={finding.factors.map((factor) => factor.weight)} />
+        {finding.rule_id.startsWith('auth.') ? <Link to={`/investigations/${invId}/authentication`} className="text-sm underline">Open authentication workbench for event support, thresholds and limitations</Link> : <ScoreExplanation score={finding.confidence} weights={finding.factors.map((factor) => factor.weight)} />}
       </section>
 
       <section>
