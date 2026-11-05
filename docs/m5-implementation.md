@@ -42,6 +42,14 @@ unsafe paths, duplicate entries/JSON keys, symlinks, encrypted/unsupported compr
 decompression-budget violations, unsupported schemas and report/evidence hash mismatches.
 Unsigned consistency is not authenticity, a signature or certification.
 
+The final verifier also requires typed actor/case references, a UTC creation time,
+explicit bounded selections, matching report/original inventories, event-set coverage
+and processing-version metadata. Backup manifests require schema/application versions,
+consistency metadata and well-formed bounded table fingerprints. Missing provenance
+cannot pass merely because file hashes match. Metadata-only packages can inventory
+large originals without including their bytes. Existing generated M5 manifests already
+contain these fields; the format stays at version 1 and old report hashes are unchanged.
+
 ## Snapshot-bound disaster recovery
 
 `python -m app.ops.recovery` provides private system backup and trusted fresh-target
@@ -81,6 +89,15 @@ exceptions receive safe responses. Export cleanup is an explicit bounded maintai
 The case Exports tab provides selection, metadata/original separation, permissions,
 safe operation status, bounded history, downloads, recovery and offline instructions.
 Ambiguous network retries preserve the request key; changed selections create a new key.
+
+Cancellation is not an implicit rollback guarantee. A synchronous worker may finish
+after a client disconnects; consult durable history and retry with the same request key.
+Hard interruptions before completion leave a `running` operation that cannot download
+and can be explicitly recovered. An interruption after the completion commit retains its
+completed state and package. Regression tests interrupt building and both sides of the
+completion commit, check audit retention/idempotent retry, and prove that recovery never
+deletes an unrelated completed export. Request cancellation also preserves its original
+exception and resets correlation context instead of masking it with a logging error.
 
 Release validation is gated on existing CI jobs, builds a clean frontend and a verified
 candidate from committed allowlisted source, then tests disposable Compose startup. It
@@ -138,6 +155,13 @@ Workbench/release commit: `fc655b1cbe22696e9023e084095bb450bef23f0d`.
 on the latter with all six jobs: dependencies, backend, frontend, PostgreSQL migrations,
 candidate verification/upload and disposable Compose startup/readiness.
 
+Cancellation/handoff commit `bebcc83a97121fa28f4bdab74fee0dcb814b9c07` was also
+verified on [CI #56](https://github.com/shikhar-sahay/provena/actions/runs/42036829400):
+all six jobs passed, with 378 backend tests plus six PostgreSQL checks in the dedicated
+job, and 66 frontend tests. The continuation found the cancellation fix already committed
+and retained it. Remaining changes enforce the existing manifest contract and add
+interruption/commit-boundary tests; they do not reimplement M4 or change schema history.
+
 | Command/check | Actual result |
 | --- | --- |
 | Fresh Python 3.13 environment, `python -m pip install -r backend/requirements.txt "pip-audit>=2.9,<3"` | Successful resolution/install |
@@ -178,3 +202,30 @@ and a separately authorized operational restore/deployment drill remain release 
 Direct S3 restoration, signed exports and browser UI automation are not claimed. Source
 S3 behavior is tested through an in-memory fake. Restore requires exclusive operator
 control of a fresh target; backups require schema changes and pruning to remain paused.
+
+## Final continuation verification
+
+The final reviewed application source was exported from the Git index into a new
+temporary directory, excluding unrelated local work. With `APP_ENV=test`,
+`M1_POSTGRES_TEST_URL` set to the dedicated localhost `provena_ci` database and
+`M5_PG_BIN` selecting PostgreSQL 16.15 utilities, `python -m pytest -q` passed
+**400 tests, no skips, in 382.72 s**. This supersedes the older 382-test snapshot;
+it includes all six real PostgreSQL checks, archive/provenance validation, three hard
+interruption/commit-boundary cases and M0-M4 regressions. The targeted command
+`python -m pytest tests/test_m5_archive_attacks.py tests/test_m5_exports.py tests/test_m5_operations.py -q`
+also passed all 65 tests.
+
+The continuation reran `npm ci`, lint, typecheck, all **66 frontend tests**, production
+build, `npm audit` and `npm audit --omit=dev`; every command succeeded, both audits found
+zero vulnerabilities. `python -m pip check` and `python -m pip_audit -r backend/requirements.txt`
+again succeeded with no broken requirements or known vulnerabilities. Dependency files
+are unchanged from the clean Python environment installed earlier in M5. Read-only
+preflight and `alembic check` again passed against the explicit disposable targets.
+
+Final commit and exact workflow URL/conclusions are supplied in the implementation
+handoff after the push. The [main CI history](https://github.com/shikhar-sahay/provena/actions/workflows/ci.yml?query=branch%3Amain)
+contains the final revision's six required jobs. Candidate packaging must retain
+`publishable=false`; neither a release/tag nor a production deployment is authorized.
+Manual browser testing and independently authorized operational deployment/restore
+drills remain prerequisites for public beta. Browser downloads buffer a bounded archive;
+very large packages need client-memory planning as well as server disk capacity.

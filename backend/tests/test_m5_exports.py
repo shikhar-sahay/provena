@@ -187,6 +187,58 @@ def test_interrupted_builder_cleanup_is_operation_scoped(tmp_path,monkeypatch):
     assert (unsafe/'other.txt').read_text()=='preserve'
 
 
+@pytest.mark.parametrize('phase',['build','commit_before','commit_after'])
+def test_interruption_preserves_completed_exports_and_durable_recovery(client,investigator,db_session,storage_dir,monkeypatch,phase):
+    from app.modules.exports import service,artifacts
+    from app.modules.exports.schemas import ExportCreate
+    from app.modules.investigations.models import Investigation
+    from app.modules.audit.models import AuditEvent
+    class Interrupted(BaseException): pass
+    base,h,item,selected,report=package(client,investigator,db_session)
+    completed=client.post(base+'/exports',headers=h,json={'mode':'metadata'}).json()
+    stable=db_session.get(InvestigationExport,completed['id'])
+    stable_path=artifacts.path(stable.artifact_key)
+    stable_bytes=stable_path.read_bytes()
+    inv=db_session.get(Investigation,int(base.rsplit('/',1)[1]))
+    original_build=service.build;original_commit=db_session.commit
+    if phase=='build':
+        def interrupted_build(db,inv,actor,item,target):
+            target.write_bytes(b'synthetic interrupted builder')
+            raise Interrupted()
+        monkeypatch.setattr(service,'build',interrupted_build)
+    else:
+        commits=[]
+        def interrupted_commit():
+            commits.append(True)
+            if len(commits)==2:
+                if phase=='commit_after': original_commit()
+                raise Interrupted()
+            original_commit()
+        monkeypatch.setattr(db_session,'commit',interrupted_commit)
+    with pytest.raises(Interrupted):
+        service.create(db_session,inv,ExportCreate(mode='metadata'),investigator,'interrupted-synthetic')
+    db_session.rollback()
+    monkeypatch.setattr(service,'build',original_build)
+    monkeypatch.setattr(db_session,'commit',original_commit)
+    interrupted=db_session.scalar(select(InvestigationExport).where(InvestigationExport.id!=stable.id))
+    assert interrupted.status==('completed' if phase=='commit_after' else 'running')
+    assert not list(artifacts.root().glob('building-*'))
+    retry=client.post(base+'/exports',headers={**h,'Idempotency-Key':'interrupted-synthetic'},json={'mode':'metadata'}).json()
+    assert retry['id']==interrupted.id
+    expected=200 if phase=='commit_after' else 409
+    assert client.get(base+f'/exports/{interrupted.id}/download',headers=h).status_code==expected
+    recovered=client.post(base+f'/exports/{interrupted.id}/recover',headers=h).json()
+    assert recovered['status']==('completed' if phase=='commit_after' else 'failed')
+    assert artifacts.path(interrupted.artifact_key).exists()==(phase=='commit_after')
+    assert stable_path.read_bytes()==stable_bytes
+    assert client.post(base+f'/exports/{stable.id}/recover',headers=h).json()['status']=='completed'
+    assert stable_path.read_bytes()==stable_bytes
+    if phase!='commit_after':
+        assert db_session.scalar(select(AuditEvent).where(AuditEvent.action=='EXPORT_RECOVERED')) is not None
+        replacement=client.post(base+'/exports',headers={**h,'Idempotency-Key':'fresh-after-recovery'},json={'mode':'metadata'}).json()
+        assert replacement['status']=='completed' and replacement['id']!=interrupted.id
+
+
 @pytest.mark.parametrize('change',['unchanged','missing','after_snapshot'])
 def test_original_export_storage_contract(backend,client,investigator,db_session,monkeypatch,change):
     from contextlib import contextmanager
