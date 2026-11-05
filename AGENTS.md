@@ -104,6 +104,13 @@ sample-data/         # synthetic demo data only (see its README)
 - **Security/forensics:** Never commit `.env`, uploads, evidence, DB dumps,
   models, venvs, build artifacts. Real investigative evidence must never enter
   the repo. Never describe the project as certified forensic software.
+- **Authentication workbench:** `app/events/detections.py` is a pure deterministic
+  engine; `app/modules/detections/` persists explicit event sets and runs. Reuse
+  Finding review decisions, never add a competing review model. Do not combine
+  alternative interpretations or copied observations as independent attempts.
+  Preserve time uncertainty, support keys, rule/config versions and omission counts.
+  Reports require explicit event-set selection for authentication conclusions.
+  Severity is review priority, not probability. See `docs/m4-implementation.md`.
 
 ## 6. Testing and docs requirements
 

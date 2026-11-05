@@ -303,3 +303,23 @@ This runs inside the existing FastAPI monolith. PostgreSQL serializes case
  ingestion transactions; no queues or new services are introduced. Existing
 artifact analysis/reports remain separate and compatible. See
 [M3 implementation](m3-implementation.md) for supported formats and limits.
+
+## M4 authentication investigation path
+
+```mermaid
+flowchart LR
+    I[M3 immutable ingestion runs] --> S[Explicit versioned event selection]
+    S --> V[Fresh source digest verification]
+    V --> D[Bounded deterministic authentication rules]
+    D --> F[Existing findings and human review]
+    S --> T[UTC, assumed and uncertain timeline lanes]
+    T --> P[Exact account, IP and host filter pivots]
+    F --> R[Selected-set deterministic report snapshot]
+```
+
+Selections preserve all original memberships and exclude overlapping copied observations
+from independent counting. Alternative profile interpretations are rejected when mixed.
+PostgreSQL case locks and semantic constraints serialize retries; accepted decisions
+remain attached to unchanged findings. Reports require an explicit authentication set,
+and never merge alternative interpretations into conclusions implicitly. See
+[M4 implementation](m4-implementation.md) for rules, budgets and uncertainty semantics.

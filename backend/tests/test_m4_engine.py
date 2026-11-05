@@ -84,3 +84,68 @@ def test_spray_per_account_limit_and_window():
     concentrated=[event(i,user='mira' if i<10 else f'user{i}') for i in range(14)]
     assert 'password_spray' not in kinds(run(concentrated)[0])
     assert not run([event(i*100) for i in range(5)],window_seconds=10)[0]
+
+
+def test_missing_ip_and_host_grouping_do_not_invent_accounts():
+    failures=[event(i,source_ip=None) for i in range(5)]
+    assert kinds(run(failures)[0])=={'repeated_failures'}
+    assert not run(failures,grouping='account_host_source')[0]
+    nameless=[event(i,username=None,source_ip=None) for i in range(5)]
+    assert not run(nameless)[0]
+    assert kinds(run(nameless,grouping='host')[0])=={'repeated_failures'}
+
+
+def test_nat_pattern_is_qualified_not_actor_attribution():
+    results,_=run([event(i,user=f'user{i}') for i in range(5)])
+    spray=next(r for r in results if r['rule_id']=='auth.password_spray')
+    assert 'Shared NAT' in spray['summary'] and 'actor identity' in str(spray['limitations'])
+
+
+@pytest.mark.parametrize('certainty',['unknown','ambiguous','nonexistent','missing'])
+def test_unknown_chronology_cannot_produce_success_after_failures(certainty):
+    events=[event(i,time_semantics={'certainty':certainty,'precision':'second'}) for i in range(5)]
+    assert 'success_after_failures' not in kinds(run(events+[event(10,outcome='success')],allow_assumed_time=True)[0])
+
+
+def test_fractional_precision_and_window_boundaries():
+    semantics={'certainty':'source_offset','precision':'fraction_3'}
+    failures=[event(i,timestamp_utc=f'2026-11-05T00:00:00.00{i}Z',time_semantics=semantics) for i in range(2)]
+    equal_edge=event(3,outcome='success',timestamp_utc='2026-11-05T00:00:00.002Z',time_semantics=semantics)
+    assert 'success_after_failures' not in kinds(run(failures+[equal_edge],min_failures=2,min_occurrences=2,clock_uncertainty_seconds=0)[0])
+    later={**equal_edge,'timestamp_utc':'2026-11-05T00:00:00.003Z'}
+    assert 'success_after_failures' in kinds(run(failures+[later],min_failures=2,min_occurrences=2,clock_uncertainty_seconds=0)[0])
+    assert not run([event(i*10) for i in range(2)],window_seconds=30,min_failures=2,min_occurrences=2)[0]
+
+
+def test_linux_explicit_lockouts_and_ordinary_denials_are_distinct():
+    lockouts=[event(i,user=f'user{i}',event_type='account_denied',attributes={'denial_reason':'source reports account locked'}) for i in range(3)]
+    assert 'lockout_concentration' in kinds(run(lockouts)[0])
+    assert 'lockout_concentration' not in kinds(run([{**e,'attributes':{}} for e in lockouts])[0])
+    numeric=[event(i,user=f'user{i}',event_id='4740',event_type='logon') for i in range(3)]
+    assert 'lockout_concentration' not in kinds(run(numeric)[0])
+
+
+def test_pure_failures_are_not_mixed_outcome_activity_bursts():
+    failures=[event(i,user=f'user{i%4}') for i in range(40)]
+    assert 'activity_burst' not in kinds(run(failures)[0])
+
+
+def test_versions_and_material_parameters_change_identities():
+    original=run([event(i) for i in range(5)])[0]
+    changed=run([event(i) for i in range(5)],window_seconds=400)[0]
+    assert original[0]['semantic_key']!=changed[0]['semantic_key']
+
+
+def test_ssh_companion_messages_are_not_independent_attempts():
+    events=[]
+    for i in range(3):
+        events.extend([event(i),event(i+10,event_type='invalid_user'),event(i+20,event_type='pam_authentication')])
+    results,coverage=run(events)
+    assert not results and coverage['excluded']['secondary_authentication_context']==6
+    assert 'repeated_failures' in kinds(run([event(i,provider='sudo',event_type='pam_authentication') for i in range(5)])[0])
+
+
+def test_varying_precision_does_not_expire_relevant_failures_prematurely():
+    events=[event(0),event(1,outcome='success',timestamp_utc='2026-11-05T00:00:09.5Z'),
+        event(2,timestamp_utc='2026-11-05T00:00:09.6Z',time_semantics={'certainty':'source_offset','precision':'fraction_1'})]
+    assert 'repeated_failures' in kinds(run(events,window_seconds=10,min_failures=2,min_occurrences=2)[0])

@@ -250,6 +250,7 @@ def get_correlation(
 def _to_finding_read(db: Session, finding) -> FindingRead:
     data = FindingRead.model_validate(finding)
     data.support_current = reasoning.support_current(db, finding)
+    data.confidence_applicable = (finding.support_snapshot or {}).get('kind') != 'authentication_detection'
     data.reviewer_username = finding.reviewer.username if finding.reviewer else None
     if finding.investigation:
         data.investigation_title = finding.investigation.title
@@ -489,12 +490,13 @@ def _to_report_read(db: Session, report) -> ReportRead:
 @router.post("/reports", response_model=ReportRead, status_code=status.HTTP_201_CREATED)
 def generate_report(
     investigation_id: int,
+    event_set_id: int | None = Query(default=None, gt=0),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     inv = inv_service.get_investigation(db, investigation_id)
     inv = reasoning.ensure_finding_review(db, inv, user)
-    return _to_report_read(db, reasoning.generate_report(db, inv, user))
+    return _to_report_read(db, reasoning.generate_report(db, inv, user, authentication_event_set_id=event_set_id))
 
 
 @router.get("/reports", response_model=list[ReportRead])

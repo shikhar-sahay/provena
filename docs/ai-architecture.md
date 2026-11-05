@@ -200,3 +200,15 @@ analyst decisions and report hashes are not rewritten or automatically bound to
 these new events. M4 must explicitly select source-profile interpretations and
 respect unknown times, duplicate occurrences and partial ingestion before adding
 versioned detections.
+
+## M4 deterministic authentication patterns
+
+M4 implements that explicit selection boundary in `app/modules/detections/` and pure
+versioned rules in `app/events/detections.py`. Five observable pattern families operate
+on immutable selected normalized events. Unknown chronology is excluded from temporal
+claims; profile assumptions require opt-in. Copies do not provide independent counts.
+Results reuse shared finding review, preserve support keys and publish atomically.
+Severity is qualitative review priority; no invented confidence score or model prose
+is used. Timeline lanes and exact entity filters expose uncertainty and provenance.
+Only reviewed, current findings from an explicitly selected set enter authentication
+report conclusions. See [M4 implementation](m4-implementation.md).

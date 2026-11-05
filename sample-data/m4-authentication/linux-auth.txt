@@ -1,0 +1,46 @@
+2026-11-05T12:00:00Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2200 ssh2
+2026-11-05T12:00:03Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2201 ssh2
+2026-11-05T12:00:06Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2202 ssh2
+2026-11-05T12:00:09Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2203 ssh2
+2026-11-05T12:00:12Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2204 ssh2
+2026-11-05T12:00:15Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2205 ssh2
+2026-11-05T12:00:30Z gateway sshd[410]: Accepted publickey for mira from 192.0.2.10 port 2300 ssh2
+2026-11-05T12:01:00Z gateway sshd[420]: Failed password for spray0 from 192.0.2.20 port 2400 ssh2
+2026-11-05T12:01:03Z gateway sshd[420]: Failed password for spray1 from 192.0.2.20 port 2401 ssh2
+2026-11-05T12:01:06Z gateway sshd[420]: Failed password for spray2 from 192.0.2.20 port 2402 ssh2
+2026-11-05T12:01:09Z gateway sshd[420]: Failed password for spray3 from 192.0.2.20 port 2403 ssh2
+2026-11-05T12:01:12Z gateway sshd[420]: Failed password for spray4 from 192.0.2.20 port 2404 ssh2
+2026-11-05T12:01:15Z gateway sshd[420]: Failed password for spray5 from 192.0.2.20 port 2405 ssh2
+2026-11-05T12:02:00Z app-host sshd[430]: Accepted password for service0 from 2001:db8::30 port 2500 ssh2
+2026-11-05T12:02:02Z app-host sshd[430]: Failed password for service1 from 2001:db8::30 port 2501 ssh2
+2026-11-05T12:02:04Z app-host sshd[430]: Failed password for service2 from 2001:db8::30 port 2502 ssh2
+2026-11-05T12:02:06Z app-host sshd[430]: Accepted password for service3 from 2001:db8::30 port 2503 ssh2
+2026-11-05T12:02:08Z app-host sshd[430]: Failed password for service0 from 2001:db8::30 port 2504 ssh2
+2026-11-05T12:02:10Z app-host sshd[430]: Failed password for service1 from 2001:db8::30 port 2505 ssh2
+2026-11-05T12:02:12Z app-host sshd[430]: Accepted password for service2 from 2001:db8::30 port 2506 ssh2
+2026-11-05T12:02:14Z app-host sshd[430]: Failed password for service3 from 2001:db8::30 port 2507 ssh2
+2026-11-05T12:02:16Z app-host sshd[430]: Failed password for service0 from 2001:db8::30 port 2508 ssh2
+2026-11-05T12:02:18Z app-host sshd[430]: Accepted password for service1 from 2001:db8::30 port 2509 ssh2
+2026-11-05T12:02:20Z app-host sshd[430]: Failed password for service2 from 2001:db8::30 port 2510 ssh2
+2026-11-05T12:02:22Z app-host sshd[430]: Failed password for service3 from 2001:db8::30 port 2511 ssh2
+2026-11-05T12:02:24Z app-host sshd[430]: Accepted password for service0 from 2001:db8::30 port 2512 ssh2
+2026-11-05T12:02:26Z app-host sshd[430]: Failed password for service1 from 2001:db8::30 port 2513 ssh2
+2026-11-05T12:02:28Z app-host sshd[430]: Failed password for service2 from 2001:db8::30 port 2514 ssh2
+2026-11-05T12:02:30Z app-host sshd[430]: Accepted password for service3 from 2001:db8::30 port 2515 ssh2
+2026-11-05T12:02:32Z app-host sshd[430]: Failed password for service0 from 2001:db8::30 port 2516 ssh2
+2026-11-05T12:02:34Z app-host sshd[430]: Failed password for service1 from 2001:db8::30 port 2517 ssh2
+2026-11-05T12:02:36Z app-host sshd[430]: Accepted password for service2 from 2001:db8::30 port 2518 ssh2
+2026-11-05T12:02:38Z app-host sshd[430]: Failed password for service3 from 2001:db8::30 port 2519 ssh2
+2026-11-05T12:02:40Z app-host sshd[430]: Failed password for service0 from 2001:db8::30 port 2520 ssh2
+2026-11-05T12:02:42Z app-host sshd[430]: Accepted password for service1 from 2001:db8::30 port 2521 ssh2
+2026-11-05T12:02:44Z app-host sshd[430]: Failed password for service2 from 2001:db8::30 port 2522 ssh2
+2026-11-05T12:02:46Z app-host sshd[430]: Failed password for service3 from 2001:db8::30 port 2523 ssh2
+Nov  5 12:03:00 unknown-clock sshd[440]: Failed password for yearless from 192.0.2.40 port 2600 ssh2
+Nov  5 12:03:03 unknown-clock sshd[440]: Failed password for yearless from 192.0.2.40 port 2601 ssh2
+Nov  5 12:03:06 unknown-clock sshd[440]: Failed password for yearless from 192.0.2.40 port 2602 ssh2
+Nov  5 12:03:09 unknown-clock sshd[440]: Failed password for yearless from 192.0.2.40 port 2603 ssh2
+Nov  5 12:03:12 unknown-clock sshd[440]: Failed password for yearless from 192.0.2.40 port 2604 ssh2
+sshd[450]: Failed password for missingtime from 192.0.2.50 port 2700 ssh2
+2026-11-05T12:00:00Z gateway sshd[410]: Failed password for mira from 192.0.2.10 port 2200 ssh2
+unsupported program message
+2026-11-05T12:04:00Z gateway sshd[460]: Failed password for malformed from invalid-ip port nope

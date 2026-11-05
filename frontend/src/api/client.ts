@@ -402,6 +402,7 @@ export interface RuleCoverage {
 }
 
 export interface Finding {
+  confidence_applicable?: boolean;
   support_snapshot?: { identity_version?: string; coverage?: Record<string, ParserCoverage>;
     kind?: string; event_set_id?: number; event_set_key?: string; event_keys?: string[];
     detection?: AuthenticationDetection; input_coverage?: AuthenticationCoverage;
@@ -912,8 +913,8 @@ export const api = {
       body: JSON.stringify({ body }),
     });
   },
-  generateReport(invId: number) {
-    return apiFetch<Report>(`/api/investigations/${invId}/analysis/reports`, {
+  generateReport(invId: number, eventSetId?: number) {
+    return apiFetch<Report>(`/api/investigations/${invId}/analysis/reports${eventSetId ? `?event_set_id=${eventSetId}` : ''}`, {
       method: "POST",
     });
   },

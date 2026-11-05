@@ -152,12 +152,17 @@ def finish(db,inv,actor,run,status,error=None):
 def execute(db,inv,payload,actor):
     item=get_set(db,inv,payload.event_set_id)
     run=AuthenticationDetectionRun(investigation_id=inv.id,event_set_id=item.id,initiated_by_id=actor.id,
-        engine_version=engine.VERSION,status='running',configuration=payload.configuration.model_dump(),coverage={})
+        engine_version=engine.VERSION,status='running',configuration=payload.configuration.model_dump(),
+        coverage={'input_coverage':item.coverage,'event_set_key':item.semantic_key,'evaluated':0,'result_count':0})
     db.add(run)
-    db.flush()
-    run_id=run.id
-    audit(db,inv,actor,'AUTH_DETECTION_STARTED',{'run_id':run.id,'event_set_key':item.semantic_key})
-    db.commit()
+    try:
+        db.flush()
+        run_id=run.id
+        audit(db,inv,actor,'AUTH_DETECTION_STARTED',{'run_id':run.id,'event_set_key':item.semantic_key})
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(503,'Could not confirm detection attempt registration. Inspect run history before retrying.') from exc
     db.info['verification_journal']=[]
     try:
         lock_case(db,inv)
@@ -191,6 +196,8 @@ def execute(db,inv,payload,actor):
         run.coverage={**coverage,'verification_checks':checks,'input_coverage':item.coverage,'event_set_key':item.semantic_key}
         bykey={e.semantic_key:e for e in events}
         for proposal in proposals:
+            if item.coverage['partial']:
+                proposal['limitations'].append('Selected source coverage is partial. Unsupported, rejected or omitted records were not evaluated as absent activity.')
             key=engine.digest({'set':item.semantic_key,'proposal':proposal['semantic_key'],'engine':engine.VERSION})
             finding=db.scalar(select(Finding).where(Finding.investigation_id==inv.id,Finding.rule_id==proposal['rule_id'],Finding.inputs_key==key))
             if finding is None:
@@ -214,8 +221,11 @@ def execute(db,inv,payload,actor):
         run=db.get(AuthenticationDetectionRun,run_id)
         if run.status=='completed':
             return run
+        retained=[]
         for eid,observed,actor_id,size_changed in checks:
-            record_verification(db,inv,db.get(Evidence,eid),observed,actor_id,'authentication_detection_failure',size_mismatch=size_changed)
+            check=record_verification(db,inv,db.get(Evidence,eid),observed,actor_id,'authentication_detection_failure',size_mismatch=size_changed)
+            retained.append({'evidence_id':eid,'verification_id':check.id,'integrity_status':check.result})
+        run.coverage={**run.coverage,'verification_checks':retained,'result_count':0,'evaluation_complete':False}
         finish(db,inv,actor,run,'failed','Detection failed safely; no partial results were published. Retry or inspect run history.')
         raise HTTPException(503,'Detection could not complete. Inspect run history before retrying.') from exc
     finally:

@@ -283,6 +283,10 @@ def review_finding(
     db: Session, inv: Investigation, finding: Finding, status_value: str,
     note: str | None, reviewer: User,
 ) -> Finding:
+    # Serialize decisions with runs/reports, and record the actual preceding
+    # committed decision rather than a stale ORM copy from a concurrent request.
+    db.execute(select(Investigation.id).where(Investigation.id == inv.id).with_for_update()).scalar_one()
+    db.refresh(finding)
     previous_decision = {'status': finding.status, 'reviewer_id': finding.reviewer_id,
                          'review_note': finding.review_note,
                          'reviewed_at': finding.reviewed_at.isoformat() if finding.reviewed_at else None}
@@ -388,7 +392,8 @@ def _next_report_number(db: Session, investigation_id: int) -> int:
 
 
 def generate_report(
-    db: Session, inv: Investigation, user: User, *, force_deterministic: bool = False
+    db: Session, inv: Investigation, user: User, *, force_deterministic: bool = False,
+    authentication_event_set_id: int | None = None,
 ) -> Report:
     """Snapshot accepted findings, deterministic records, and grounded narrative."""
     from app.modules.intelligence.models import Report
@@ -396,13 +401,19 @@ def generate_report(
 
     full = inv_service.get_investigation(db, inv.id)
     assert full is not None
+    if authentication_event_set_id is not None:
+        from app.modules.detections.service import get_set
+        get_set(db, full, authentication_event_set_id)
     db.execute(select(Investigation.id).where(Investigation.id == full.id).with_for_update()).scalar_one()
     recheck_support(db, full, user, "report")
     evidence_items = ev_service.list_evidence(db, full)
-    excluded = [f.id for f in list_findings(db, full) if f.status == FindingStatus.ACCEPTED.value and not support_current(db, f)]
+    accepted_candidates = [f for f in list_findings(db, full) if f.status == FindingStatus.ACCEPTED.value]
+    current = {f.id: support_current(db, f) for f in accepted_candidates}
+    excluded = [f.id for f in accepted_candidates if not current[f.id]]
+    unselected = [f.id for f in accepted_candidates if (f.support_snapshot or {}).get('kind') == 'authentication_detection'
+                  and (f.support_snapshot or {}).get('event_set_id') != authentication_event_set_id]
     accepted = [
-        f for f in list_findings(db, full)
-        if f.status == FindingStatus.ACCEPTED.value and support_current(db, f)
+        f for f in accepted_candidates if current[f.id] and f.id not in unselected
     ]
     notes = list_notes(db, full)
     evidence_summary = []
@@ -441,6 +452,7 @@ def generate_report(
                 "summary": finding.summary,
                 "severity": finding.severity,
                 "confidence": finding.confidence,
+                "confidence_applicable": (finding.support_snapshot or {}).get('kind') != 'authentication_detection',
                 "factors": finding.factors,
                 "evidence_ids": finding.evidence_ids,
                 "artifact_ids": finding.artifact_ids,
@@ -521,7 +533,8 @@ def generate_report(
         ],
         "accepted_findings": findings_payload,
         "rule_coverage": latest_rule_coverage(db, full),
-        "authentication_investigation": authentication_report_context(db, full),
+        "authentication_investigation": authentication_report_context(db, full, authentication_event_set_id),
+        "excluded_unselected_authentication_finding_ids": unselected,
         "recommendations": recommendations,
         "investigator_notes": [
             {"author": n.author.username if n.author else None,
@@ -565,18 +578,21 @@ def generate_report(
     return report
 
 
-def authentication_report_context(db: Session, inv: Investigation) -> dict:
+def authentication_report_context(db: Session, inv: Investigation, selected_set_id: int | None = None) -> dict:
     """Execution inventory and decision snapshots, separate from accepted conclusions."""
     from app.modules.detections.models import AuthenticationDetectionRun, InvestigationEventSet, DetectionRunFinding
     runs = list(db.scalars(select(AuthenticationDetectionRun).where(
         AuthenticationDetectionRun.investigation_id == inv.id).order_by(AuthenticationDetectionRun.id.desc()).limit(25)))
     set_ids = {r.event_set_id for r in runs}
+    if selected_set_id is not None:
+        set_ids.add(selected_set_id)
     sets = list(db.scalars(select(InvestigationEventSet).where(InvestigationEventSet.id.in_(set_ids))))
     findings = list(db.scalars(select(Finding).where(Finding.investigation_id == inv.id,
         Finding.id.in_(select(DetectionRunFinding.finding_id).where(DetectionRunFinding.run_id.in_([r.id for r in runs]))))
         .order_by(Finding.id).limit(1000)))
     total_runs = db.scalar(select(func.count()).select_from(AuthenticationDetectionRun).where(AuthenticationDetectionRun.investigation_id == inv.id))
-    return {'policy': 'Execution and review inventory only. Only accepted findings with current support enter conclusions. UTC projections do not establish causation.',
+    return {'policy': 'Execution and review inventory only. Authentication conclusions require an explicitly selected event set and accepted findings with current support. Alternative interpretations are never combined implicitly. UTC projections do not establish causation.',
+        'selected_event_set_id':selected_set_id,
         'run_limit':25,'omitted_runs':max(0,total_runs-len(runs)),
         'sets':[{'semantic_key':s.semantic_key,'name':s.name,'selected_runs':s.selected_runs,'coverage':s.coverage} for s in sets],
         'runs':[{'id':r.id,'event_set_id':r.event_set_id,'status':r.status,'engine_version':r.engine_version,

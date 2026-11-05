@@ -120,6 +120,7 @@ class CorrelationDetailRead(CorrelationRead):
 
 
 class FindingRead(BaseModel):
+    confidence_applicable: bool = True
     support_snapshot: dict | None = None
     support_current: bool = False
     model_config = ConfigDict(from_attributes=True)

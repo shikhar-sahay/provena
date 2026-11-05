@@ -51,7 +51,13 @@ def sets(investigation_id:int,user=Depends(get_current_user),db=Depends(get_db))
 @router.post('/sets',status_code=201)
 def create_set(investigation_id:int,payload:EventSetCreate,user=Depends(get_current_user),db=Depends(get_db)):
     inv=reasoning.ensure_finding_produce(db,case(db,investigation_id,user),user)
-    return set_read(service.create_set(db,inv,payload,user))
+    try:
+        return set_read(service.create_set(db,inv,payload,user))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(503,'Could not confirm event selection. Inspect saved selections before retrying.') from exc
 
 
 @router.post('/runs',status_code=201)
@@ -149,8 +155,9 @@ def timeline(investigation_id:int,event_set_id:int=Query(gt=0),
             raise HTTPException(404,'Finding does not belong to this event set.')
         stmt=stmt.where(SecurityEvent.semantic_key.in_(finding.support_snapshot['event_keys']))
     total=db.scalar(select(func.count()).select_from(stmt.subquery()))
-    order=(SecurityEvent.evidence_id,SecurityEvent.semantic_key) if lane=='uncertain' else (SecurityEvent.timestamp_utc,SecurityEvent.semantic_key)
+    order=(SecurityEvent.evidence_id,SecurityEvent.locator['line'].as_integer().asc().nulls_last(),
+           SecurityEvent.locator['row'].as_integer().asc().nulls_last(),SecurityEvent.semantic_key) if lane=='uncertain' else (SecurityEvent.timestamp_utc,SecurityEvent.semantic_key)
     rows=list(db.scalars(stmt.order_by(*order).limit(limit).offset(offset)))
     return {'items':[{**EventRead.model_validate(e).model_dump(),'support_verified':current_integrity(db,e)} for e in rows],
         'total':total,'limit':limit,'offset':offset,'lane':lane,'coverage':item.coverage,
-        'ordering':'UTC projections with explicit assumptions; not causal order.' if lane!='uncertain' else 'Grouped by source; stable display ordering is not event-time ordering.'}
+        'ordering':'UTC projections with explicit assumptions; not causal order.' if lane!='uncertain' else 'Grouped by source and line/row when available; record order is not event-time order. Other locators use stable identity order.'}

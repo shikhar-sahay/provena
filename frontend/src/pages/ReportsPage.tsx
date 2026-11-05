@@ -3,6 +3,7 @@ import { RuleCoverageView } from "../components/RuleCoverageView";
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { FileText, Printer } from "lucide-react";
 import { api } from "../api/client";
 import type { Report } from "../api/client";
@@ -81,6 +82,7 @@ export default function ReportsPage() {
           </Button>
         )}
       </div>
+      <p className="text-xs text-ink2">Authentication conclusions require an explicit event set. <Link className="underline" to={`/investigations/${invId}/authentication`}>Generate them from the Authentication workbench</Link>. General reports exclude unselected authentication interpretations.</p>
 
       {reports.length === 0 ? (
         <EmptyState

@@ -179,8 +179,19 @@ The case-scoped Security Events explorer ingests verified Linux SSH/PAM logs and
 structured Windows Security/Sysmon exports through immutable source profiles.
 It preserves exact-input digests, record locators, timestamp uncertainty and
 processing coverage. Reingestion is idempotent; Sysmon is contextual telemetry,
-not authentication success/failure. Native EVTX decoding, event detections and
-a cross-source incident timeline are not implemented in M3.
+not authentication success/failure. Native EVTX decoding remains unsupported.
 
 See [M3 implementation](docs/m3-implementation.md) and the
 [synthetic authentication demonstration](sample-data/m3-authentication/README.md).
+
+## Authentication investigation workbench (M4)
+
+Select explicit normalized event sets, run five versioned authentication pattern
+detectors, inspect source-backed findings and review them through the existing
+analyst decision workflow. The Authentication tab includes uncertainty-aware
+timeline lanes, account/IP/host pivots, source provenance and selected-set reports.
+Copies and alternative profile interpretations are not independent attempts.
+Severity describes review priority, never a probability of compromise.
+
+See [M4 implementation](docs/m4-implementation.md) for rule thresholds, limits,
+identity and time semantics, and the [synthetic end-to-end demonstration](sample-data/m4-authentication/README.md).

@@ -165,6 +165,25 @@ def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monk
             page=query_findings(inv_id,event_set_id=set_ids[0],run_id=None,limit=50,offset=0,user=actor,db=db)
             assert page['total']==1 and page['items'][0].support_current
             assert history(inv_id,findings[0].id,user=actor,db=db)==[]
+            finding_id=findings[0].id
+        barrier=Barrier(2)
+        def review(state):
+            from app.modules.intelligence.reasoning import review_finding
+            with Session(engine) as db:
+                actor,inv,finding=db.get(User,uid),db.get(Investigation,inv_id),db.get(Finding,finding_id)
+                barrier.wait(timeout=15)
+                review_finding(db,inv,finding,state,'Synthetic concurrent decision',actor)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(review,state) for state in ('accepted','rejected')]
+            for future in futures: future.result(timeout=60)
+        with Session(engine) as db:
+            from app.modules.audit.models import AuditEvent
+            events=list(db.scalars(select(AuditEvent).where(AuditEvent.resource_id==str(inv_id),
+                AuditEvent.event_metadata['finding_id'].as_integer()==finding_id).order_by(AuditEvent.id)))
+            assert len(events)==2
+            assert events[0].event_metadata['previous_decision']['status']=='accepted'
+            assert events[1].event_metadata['previous_decision']['status']==events[0].event_metadata['decision']['status']
+            assert db.get(Finding,finding_id).status==events[1].event_metadata['decision']['status']
     finally:
         engine.dispose()
 
@@ -211,5 +230,74 @@ def test_postgres_parallel_event_ingestion(tmp_path, monkeypatch):
             assert db.scalar(select(func.count()).select_from(SecurityEvent).where(SecurityEvent.investigation_id==inv_id))==2
             for run_id in runs:
                 assert db.scalar(select(func.count()).select_from(EventRunMember).where(EventRunMember.run_id==run_id))==2
+    finally:
+        engine.dispose()
+
+
+def test_postgres_m3_upgrade_preserves_investigation_history(tmp_path, monkeypatch):
+    """A fresh isolated schema is populated at M3, then upgraded without rewriting history."""
+    import hashlib
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    from app.modules.events.service import create_profile, ingest
+    from app.modules.events.schemas import ProfileCreate
+    from app.modules.events.models import SecurityEvent, EventRunMember
+    from app.modules.evidence.service import verify_evidence
+    from app.modules.intelligence.models import Finding, Report
+    url=os.getenv('M1_POSTGRES_TEST_URL')
+    if not url:
+        pytest.skip('Disposable PostgreSQL CI database not configured.')
+    parsed=make_url(url)
+    assert parsed.database=='provena_ci' and parsed.host in {'127.0.0.1','localhost'}
+    schema='m4_upgrade_'+uuid.uuid4().hex
+    control=create_engine(url)
+    with control.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    control.dispose()
+    isolated=parsed.update_query_dict({'options':f'-csearch_path={schema}'}).render_as_string(hide_password=False)
+    environment={**os.environ,'DATABASE_URL':isolated,'APP_ENV':'test'}
+    def migrate(*args):
+        result=subprocess.run([sys.executable,'-m','alembic',*args],env=environment,
+            cwd=Path(__file__).resolve().parents[1],capture_output=True,text=True,timeout=120)
+        assert result.returncode==0,result.stdout+result.stderr
+    migrate('upgrade','294d21d0205e')
+    monkeypatch.setattr(settings,'evidence_storage_backend','local')
+    monkeypatch.setattr(settings,'evidence_storage_root',str(tmp_path))
+    engine=create_engine(isolated)
+    try:
+        with Session(engine) as db:
+            actor=User(username='migration_synthetic',email='migration@example.test',password_hash='unused',role='admin')
+            db.add(actor);db.flush()
+            workspace=Workspace(name='Historical',slug='historical',created_by_id=actor.id)
+            db.add(workspace);db.flush()
+            inv=Investigation(title='M3 preserved',case_number='M3-UPGRADE',workspace_id=workspace.id,created_by_id=actor.id,lead_investigator_id=actor.id)
+            db.add(inv);db.commit()
+            evidence=register_evidence(db,inv,title='Original synthetic',description='',evidence_type=EvidenceType.LOG,source='Synthetic',acquired_at=None,filename='auth.log',content_type='text/plain',stream=io.BytesIO(b'2026-11-05T12:00:00Z host sshd[1]: Failed password for mira from 192.0.2.1 port 2200 ssh2\n'),actor=actor)
+            verify_evidence(db,inv,evidence,actor)
+            profile=create_profile(db,inv,ProfileCreate(name='M3 original',configuration={'adapter':'linux_auth','format':'syslog'}),actor)
+            ingestion=ingest(db,inv,evidence.id,profile.id,actor)
+            event=db.scalar(select(SecurityEvent))
+            original_event_key=event.semantic_key
+            for index,state in enumerate(('accepted','rejected')):
+                db.add(Finding(investigation_id=inv.id,rule_id='m2.historical',rule_version='2',inputs_key=str(index)*64,
+                    title='Historical finding',summary='Synthetic preserved history',severity='low',confidence=10,factors=[],
+                    evidence_ids=[evidence.id],artifact_ids=[],correlation_ids=[],recommendations=[],status=state))
+            content={'generator':'grounded-report-v4','synthetic':'Historical immutable snapshot'}
+            report_hash=hashlib.sha256(json.dumps(content,sort_keys=True).encode()).hexdigest()
+            db.add(Report(investigation_id=inv.id,report_number=1,content=content,content_sha256=report_hash,generated_by_id=actor.id))
+            db.commit()
+            inv_id,eid,run_id=inv.id,evidence.id,ingestion.id
+        migrate('upgrade','head')
+        migrate('check')
+        with Session(engine) as db:
+            assert db.scalar(select(Report.content_sha256))==report_hash
+            assert set(db.scalars(select(Finding.status)))=={'accepted','rejected'}
+            assert db.scalar(select(SecurityEvent.semantic_key))==original_event_key
+            assert db.scalar(select(EventRunMember.run_id))==run_id
+            assert db.get(Evidence,eid).integrity_status=='verified'
+            from app.modules.detections.models import InvestigationEventSet
+            assert db.scalar(select(func.count()).select_from(InvestigationEventSet))==0
     finally:
         engine.dispose()

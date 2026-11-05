@@ -3,12 +3,13 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 import hashlib
 import json
+import heapq
 
-VERSION = '1.1'
+VERSION = '1.3'
 RULES = ('repeated_failures', 'password_spray', 'success_after_failures', 'lockout_concentration', 'activity_burst')
 LIMIT = 10000
 RULE_DEFINITIONS = {
-    'repeated_failures': {'required_fields':['username','hostname','outcome'], 'criteria':'At least max(min_failures,min_occurrences) distinct observations of failures in window_seconds.', 'severity':'medium'},
+    'repeated_failures': {'required_fields':['hostname','outcome','username unless grouping=host'], 'criteria':'At least max(min_failures,min_occurrences) distinct observations of failures in window_seconds.', 'severity':'medium'},
     'password_spray': {'required_fields':['username','hostname','source_ip','outcome'], 'criteria':'At least spray_min_accounts exact scoped accounts; no account exceeds spray_max_per_account failures in the qualifying window.', 'severity':'medium'},
     'success_after_failures': {'required_fields':['username','hostname','source_ip','outcome'], 'criteria':'A success strictly after min_failures failures in the same account/host/source scope, outside timestamp precision plus clock_uncertainty_seconds.', 'severity':'high'},
     'lockout_concentration': {'required_fields':['hostname','event_type','provider'], 'criteria':'At least lockout_min_events explicit source-reported lockouts involving lockout_min_accounts scoped accounts.', 'severity':'medium'},
@@ -43,6 +44,17 @@ def explicit_lockout(event):
             event.get('provider') in ('sshd', 'login', 'su', 'sudo') and
             event.get('event_type') == 'account_denied' and
             event.get('attributes', {}).get('denial_reason') == 'source reports account locked')
+
+
+def primary_authentication(event):
+    """Do not count SSH invalid-user/PAM companion messages as extra attempts.
+
+    Non-SSH PAM providers have no parallel logon representation in the M3 adapter.
+    Their explicit authentication-failure records can supply primary observations.
+    """
+    return event.get('category')=='authentication' and (
+        event.get('event_type')=='logon' or (event.get('event_type')=='pam_authentication'
+        and event.get('provider') in ('login','su','sudo')))
 
 
 def projected(event, config):
@@ -86,6 +98,9 @@ def evaluate(events, config):
         if event.get('category') != 'authentication' and not explicit_lockout(event):
             excluded['non_authentication'] += 1
             continue
+        if not primary_authentication(event) and not explicit_lockout(event):
+            excluded['secondary_authentication_context'] += 1
+            continue
         time = projected(event, config)
         if time is None:
             excluded['unsupported_time'] += 1
@@ -100,9 +115,16 @@ def evaluate(events, config):
 
     def emit(rule, group, members, explanation, severity='medium'):
         keys = sorted(e['semantic_key'] for _, e in members)
+        rationale={
+            'repeated_failures':'Medium review priority: repeated failures meet a threshold but do not establish compromise.',
+            'password_spray':'Medium review priority: multi-account failures warrant review; shared egress and misconfiguration remain alternatives.',
+            'success_after_failures':'High review priority: a strictly later success accompanies repeated failures in the exact account/host/source scope. It is not proof of compromise.',
+            'lockout_concentration':'Medium review priority: multiple explicit source-reported lockouts indicate account-access impact requiring validation.',
+            'activity_burst':'Medium review priority: mixed-outcome multi-account volume exceeds a declared threshold without a learned baseline.',
+        }[rule]
         results.append(dict(rule_id='auth.' + rule, rule_version=VERSION,
             title=rule.replace('_', ' ').capitalize() + ' candidate', summary=explanation,
-            severity=severity, severity_rationale=('Review priority based on the declared threshold and observed pattern; not compromise probability.'),
+            severity=severity, severity_rationale=rationale,
             entities={'group': list(group)}, event_keys=keys, count=len(keys),
             time_start=members[0][0].isoformat(), time_end=members[-1][0].isoformat(),
             limitations=limitations + (['Profile-based time assumptions were permitted.'] if config['allow_assumed_time'] else [])))
@@ -110,23 +132,30 @@ def evaluate(events, config):
     for rule in RULES:
         groups = defaultdict(list)
         for time, event in eligible:
+            if rule!='lockout_concentration' and not primary_authentication(event):
+                continue
             identity = account(event)
             if rule in ('repeated_failures', 'success_after_failures'):
-                if not identity:
-                    continue
-                group = identity
+                if rule == 'repeated_failures' and config['grouping'] == 'host':
+                    if not event.get('hostname'):
+                        continue
+                    group = (event['hostname'], event['provider'])
+                else:
+                    if not identity:
+                        continue
+                    group = identity
                 if rule == 'success_after_failures' or config['grouping'] == 'account_host_source':
                     if not event.get('source_ip'):
                         continue
                     group += (event['source_ip'],)
-                elif config['grouping'] == 'host' and rule == 'repeated_failures':
-                    group = (event['hostname'], event['provider'])
             elif rule == 'password_spray':
                 if not identity or not event.get('source_ip'):
                     continue
                 group = (event['source_ip'], event['hostname'], event.get('account_domain'), identity[3])
             else:
                 if not event.get('hostname'):
+                    continue
+                if rule=='activity_burst' and not identity:
                     continue
                 group = (event['hostname'], event.get('account_domain'), event['provider'])
             groups[group].append((time, event))
@@ -135,8 +164,11 @@ def evaluate(events, config):
             current = deque()
             counts = defaultdict(int)
             outcomes = defaultdict(int)
+            active_failures, matured, deadlines = {}, set(), []
             for time, event in groups[group]:
-                while current and time + precision_interval(event) - current[0][0] > window:
+                # Half-open windows over reported UTC projections. Only monotone
+                # lower bounds expire records; precision can vary between rows.
+                while current and time - current[0][0] >= window:
                     _, expired = current.popleft()
                     identity = account(expired)
                     if identity in counts:
@@ -144,17 +176,28 @@ def evaluate(events, config):
                         if not counts[identity]:
                             del counts[identity]
                     outcomes[expired['outcome']] -= 1
+                    active_failures.pop(expired['semantic_key'],None)
+                    matured.discard(expired['semantic_key'])
                 failure = event['outcome'] == 'failure'
                 lockout = explicit_lockout(event)
                 if rule == 'success_after_failures':
                     if event['outcome'] == 'success':
-                        # Second-resolution timestamps represent intervals, not exact instants.
-                        prior = [(t,e) for t,e in current if time - t > precision_interval(e) + timedelta(seconds=config['clock_uncertainty_seconds'])]
-                        if len(prior) >= config['min_failures']:
+                        # Each failure enters/leaves the maturity heap once. Repeated
+                        # successes cannot cause quadratic rescans of immature failures.
+                        while deadlines and deadlines[0][0] < time:
+                            _, key = heapq.heappop(deadlines)
+                            if key in active_failures:
+                                matured.add(key)
+                        if len(matured) >= config['min_failures']:
+                            prior=sorted((active_failures[k] for k in matured),key=lambda pair:(pair[0],pair[1]['semantic_key']))
                             emit(rule, group, prior + [(time,event)], 'A success followed the required failures for the same exact account, host and source IP. This does not establish compromise or a shared actor.', 'high')
                             current.clear()
+                            active_failures.clear();matured.clear();deadlines.clear()
                     elif failure:
                         current.append((time,event))
+                        active_failures[event['semantic_key']]=(time,event)
+                        deadline=time+precision_interval(event)+timedelta(seconds=config['clock_uncertainty_seconds'])
+                        heapq.heappush(deadlines,(deadline,event['semantic_key']))
                     continue
                 if rule in ('repeated_failures', 'password_spray') and not failure:
                     continue

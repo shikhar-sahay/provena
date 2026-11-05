@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthenticationWorkbench } from './AuthenticationPage';
 import { api, authenticationApi, eventApi } from '../api/client';
-import type { Finding, SecurityEvent, InvestigationEventSet, AuthenticationRun } from '../api/client';
+import type { Finding, SecurityEvent, InvestigationEventSet, AuthenticationRun, Report } from '../api/client';
 
 vi.mock('../api/client', async original => ({ ...(await original<typeof import('../api/client')>()),
   eventApi: { runs: vi.fn(), profiles: vi.fn() },
@@ -132,4 +132,31 @@ it('shows API errors without pretending an empty result is successful', async ()
   await screen.findByRole('option', { name: /Explicit lab inputs/ });
   await userEvent.selectOptions(screen.getByLabelText('Saved event set'), '1');
   expect(await screen.findByText(/Could not load the authentication workbench/)).toBeInTheDocument();
+});
+
+it('generates a report with explicit selected-set scope', async () => {
+  vi.mocked(api.generateReport).mockResolvedValue({ report_number: 2 } as Report);
+  renderWorkbench(); await choose();
+  await userEvent.click(screen.getByRole('button', { name: 'Generate reviewed report' }));
+  await waitFor(() => expect(api.generateReport).toHaveBeenCalledWith(1, 1));
+  expect(await screen.findByText(/Immutable report 2 generated for this event set/)).toBeInTheDocument();
+});
+
+it('keeps omission and execution context visible when no detections are returned', async () => {
+  vi.mocked(authenticationApi.findings).mockResolvedValue({ items: [], total: 0 });
+  renderWorkbench();
+  await screen.findByRole('option', { name: /Explicit lab inputs/ });
+  await userEvent.selectOptions(screen.getByLabelText('Saved event set'), '1');
+  expect(await screen.findByText('No results in this view')).toBeInTheDocument();
+  expect(screen.getByText(/Check execution status, eligible events, coverage and omitted counts/)).toBeInTheDocument();
+});
+
+it('does not display old findings under a new selection when its request fails', async () => {
+  vi.mocked(authenticationApi.sets).mockResolvedValue([selection, { ...selection, id: 2, name: 'Alternative selection' }]);
+  const page = { items: [event], total: 1, ordering: 'UTC projection', lane: 'utc', coverage: selection.coverage };
+  vi.mocked(authenticationApi.timeline).mockImplementation((_id, selected) => selected === 2 ? Promise.reject(new Error('Synthetic failed selection')) : Promise.resolve(page));
+  renderWorkbench(); await choose();
+  await userEvent.selectOptions(screen.getByLabelText('Saved event set'), '2');
+  await screen.findByText(/Could not load the authentication workbench/);
+  expect(screen.queryByText(finding.title)).not.toBeInTheDocument();
 });

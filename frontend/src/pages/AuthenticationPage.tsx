@@ -69,6 +69,7 @@ export function AuthenticationWorkbench({ invId, canProduce, canReview }: { invI
   const load = useCallback(async () => {
     const request = ++generation.current;
     setLoading(true); setTimeline(null); setError(null);
+    setFindings([]); setFindingTotal(0); setRuns([]); setRunTotal(0);
     try {
       const [allSets, sourceRuns, evidenceRows, profileRows] = await Promise.all([authenticationApi.sets(invId), eventApi.runs(invId, sourceOffset), api.listEvidence(invId), eventApi.profiles(invId)]);
       const current = allSets.some(s => s.id === setId) ? setId : 0;
@@ -169,7 +170,7 @@ export function AuthenticationWorkbench({ invId, canProduce, canReview }: { invI
           <p className="mt-1 text-sm text-ink2">{f.summary}</p><p className="text-xs">{f.support_snapshot?.event_keys?.length ?? 0} supporting events · {f.support_current ? 'Current support' : 'Historical or unavailable support'}</p>
         </button>)}
         {findingTotal > 50 && <Pagination offset={findingOffset} total={findingTotal} size={50} change={setFindingOffset} label="Findings" />}
-        <Button disabled={!canReview || busy} onClick={() => void act(async () => { const report = await api.generateReport(invId); setNotice(`Immutable report ${report.report_number} generated. Only accepted findings with current support enter conclusions.`); })}>Generate reviewed report</Button>{' '}<Link className="text-sm underline" to={`/investigations/${invId}/reports`}>View reports</Link>
+        <Button disabled={!canReview || busy} onClick={() => void act(async () => { const report = await api.generateReport(invId, setId); setNotice(`Immutable report ${report.report_number} generated for this event set. Only accepted findings with current support enter conclusions.`); })}>Generate reviewed report</Button>{' '}<Link className="text-sm underline" to={`/investigations/${invId}/reports`}>View reports</Link>
       </section>
       <section className="space-y-3 rounded-lg border border-line p-4" aria-label="Incident timeline">
         <h3 className="font-semibold">4. Explore activity and pivot</h3>
