@@ -45,3 +45,14 @@ Budgets: 10 MiB input, 20,000 records, 32,768 characters per record, depth 16,
 omitted records have separate accounting. Duplicate JSON keys and non-standard
 constants are rejected. Record fingerprints describe decoded lines or canonical
 structured records; the original verified byte SHA-256 remains authoritative.
+
+## Frontend dependency remediation
+
+M3 updates the compatible Vite 8 patch range and refreshes transitive lockfile
+resolutions (including undici and zod). ESLint/typescript-eslint still requested
+vulnerable minimatch 10.x, so a documented minimatch 11.0.1 override supplies the
+patched API; Node 22 and the existing lint configuration were tested. No forced
+npm audit fix or advisory suppression was used. Both full `npm audit` and
+`npm audit --omit=dev` report zero findings and are now enforced in CI. Backend
+pip-audit remains enforced. The package manifest preserves the other existing
+major ranges rather than adopting npm's suggested unrelated downgrades.
