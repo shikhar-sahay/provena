@@ -20,6 +20,7 @@ SOURCE=['backend/app','backend/alembic','backend/tests','backend/requirements.tx
     'sample-data/m3-authentication','sample-data/m4-authentication','sample-data/m5-operations',
     '.github/workflows/ci.yml','.github/workflows/release-validation.yml']
 DOCS=['docs/architecture.md','docs/ai-architecture.md','docs/evidence-integrity.md','docs/development.md',
+    'docs/security.md','docs/m2-implementation.md','docs/m3-implementation.md',
     'docs/m4-implementation.md','docs/m5-implementation.md','docs/operations.md','docs/releases.md',
     'CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','CHANGELOG.md','LICENSE']
 

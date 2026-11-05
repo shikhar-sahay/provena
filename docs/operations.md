@@ -103,6 +103,8 @@ copied and verified. This is not an independently timed dump plus a changing dir
 copy. New database writes after the snapshot are excluded. Concurrent pruning or external
 tampering can make the backup fail safely; avoid pruning during backup. Pending evidence
 registrations and known integrity failures must be recovered before a complete backup.
+Pause migrations and other schema changes for the entire backup. MVCC row snapshots do
+not make arbitrary concurrent schema maintenance safe.
 Running analytical/export operations remain running in the snapshot and require recovery
 after restoration. PostgreSQL sequence counters may advance independently of MVCC rows;
 semantic event/finding identities do not depend on sequence allocation.
@@ -125,7 +127,8 @@ They fail rather than silently truncate. No existing backup file is overwritten.
 1. Verify the whole-package SHA-256 using an independently trusted reference. Do not
    restore investigation exports or unknown third-party SQL as system backups.
 2. Create a new empty PostgreSQL database and new evidence/cache target paths. The
-   application must remain stopped or disconnected from this restore target.
+   application and all other writers must remain stopped or disconnected from this
+   restore target. Empty-target checks do not fence arbitrary external database writers.
 3. Use the application release matching the backup's Alembic revision. Configure a
    private `RESTORE_DATABASE_URL` for the empty target, not the source database.
 4. Run the explicit trusted restore:

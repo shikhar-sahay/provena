@@ -24,6 +24,7 @@ class RequestDiagnostics(BaseHTTPMiddleware):
         request.state.request_id=request_id
         context_token=request_context.set(request_id)
         started=time.perf_counter()
+        category='interrupted'
         try:
             response=await call_next(request)
             category='server_error' if response.status_code>=500 else 'rejected' if response.status_code>=400 else 'completed'

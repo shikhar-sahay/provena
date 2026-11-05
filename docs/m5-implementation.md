@@ -103,8 +103,8 @@ copies, manage off-host retention and perform their own controlled deployment/re
 
 Docker Desktop's local engine was unavailable during implementation; real PostgreSQL
 tests used a disposable local PostgreSQL 16.15 cluster. The CI release workflow validates
-fresh container startup. Final test counts, performance and exact CI/commit information
-are recorded after validation in the implementation handoff.
+fresh container startup, which passed in CI #55. The final pushed revision and subsequent
+workflow conclusion are also supplied in the implementation handoff.
 
 ## Reproducible demonstration and measurements
 
@@ -129,3 +129,52 @@ validation but not full environment provisioning. All table fingerprints, report
 review states, selected events and case isolation matched; the intentionally post-boundary
 annotation was absent. Larger databases and evidence inventories require independent
 capacity planning and restore drills.
+
+## Verification record
+
+Backend foundation commit: `8a75b0b4fe4fe9176864807ab7d6ca50e98f8484`.
+Workbench/release commit: `fc655b1cbe22696e9023e084095bb450bef23f0d`.
+[CI #55](https://github.com/shikhar-sahay/provena/actions/runs/42035809689) succeeded
+on the latter with all six jobs: dependencies, backend, frontend, PostgreSQL migrations,
+candidate verification/upload and disposable Compose startup/readiness.
+
+| Command/check | Actual result |
+| --- | --- |
+| Fresh Python 3.13 environment, `python -m pip install -r backend/requirements.txt "pip-audit>=2.9,<3"` | Successful resolution/install |
+| `python -m pip check` | No broken requirements |
+| `python -m pip_audit -r backend/requirements.txt` | No known vulnerabilities |
+| `python -m pytest -q`, clean archive of backend foundation with isolated PostgreSQL enabled | 382 passed, 381.34 s |
+| CI #55 `python -m pytest` | 377 passed, 6 PostgreSQL checks explicitly skipped in this job |
+| CI #55 `python -m pytest tests/test_postgres_evidence.py tests/test_m5_recovery.py -q` | All 6 PostgreSQL checks passed, 7.22 s |
+| Final export tests after operation-owned interrupted-temporary cleanup | 19 passed |
+| Final operational tests including cancellation/context cleanup | 13 passed |
+| `python -m alembic upgrade head` and `python -m alembic check`, disposable PostgreSQL | Current at `ee5b99eb5ce4`, no new upgrade operations |
+| `python -m app.ops.preflight --database --storage`, explicit synthetic targets | Ready, database/schema and both local roots healthy |
+| `npm ci`, `npm audit`, `npm audit --omit=dev` | Installed successfully, both audits zero vulnerabilities |
+| `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` | Passed; 66 frontend tests in 23 files |
+| `docker compose config --quiet` locally | Passed; actual Docker daemon unavailable locally |
+| CI #55 disposable Compose build/start plus `/api/live` and `/api/ready` | Passed on Ubuntu Docker |
+| `python tools/build_release.py --frontend frontend/dist --output NEW_PATH.zip` | Verified unsigned candidate, committed allowlist only, not publishable |
+| `git diff --check` and reviewed explicit staging | Passed; private environment/backup/evidence paths excluded |
+
+The 382-test clean-source run predates the additional interrupted-builder and request
+cancellation regressions; those passed separately. CI #55 already includes the builder
+regression. This distinction prevents treating an older local test count as a later
+single-run result. The two expected warnings are Starlette's test-client deprecation
+and the deliberate duplicate-name malicious ZIP fixture. Frontend build also reports
+the existing approximately 504 kB bundle warning; no gate was suppressed.
+
+Fresh and populated M3/M4 PostgreSQL upgrades preserve accepted/rejected decisions,
+evidence digests, normalized-event keys, ingestion membership and original report hashes.
+Native restore verifies every table fingerprint, not just selected demo counts. Tests
+include concurrent retries and a post-snapshot write; SQLite is not used to claim those
+PostgreSQL guarantees. Cancellation preserves its original exception while resetting
+request diagnostics. Interrupted builder cleanup is scoped to its operation's generated
+file and refuses unexpected contents instead of deleting recursively.
+
+No live AWS, production database or real investigative evidence was contacted. Private
+backup encryption/off-host retention, confirmed private disclosure, approved licensing
+and a separately authorized operational restore/deployment drill remain release work.
+Direct S3 restoration, signed exports and browser UI automation are not claimed. Source
+S3 behavior is tested through an in-memory fake. Restore requires exclusive operator
+control of a fresh target; backups require schema changes and pruning to remain paused.

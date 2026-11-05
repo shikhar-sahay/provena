@@ -51,3 +51,15 @@ def test_offline_preflight_is_read_only(tmp_path):
     result=diagnostics(config,storage=True)
     assert result['ready'] and not target.exists()
     assert local_directory(str(target))=='ok'
+
+
+def test_cancelled_requests_preserve_cancellation_and_reset_diagnostics(caplog):
+    import asyncio
+    from starlette.requests import Request
+    from app.core.observability import RequestDiagnostics,request_context
+    request=Request({'type':'http','method':'GET','path':'/private-interrupted-path','headers':[]})
+    async def interrupted(request): raise asyncio.CancelledError()
+    with caplog.at_level(logging.INFO,logger='provena.operations'):
+        with pytest.raises(asyncio.CancelledError): asyncio.run(RequestDiagnostics(None).dispatch(request,interrupted))
+    assert request_context.get() is None
+    assert 'interrupted' in caplog.text and '/private-interrupted-path' not in caplog.text
