@@ -6,6 +6,10 @@ Do not execute unresolved placeholders or bypass an unchecked gate. No automatic
 deployment workflow exists. Record private paths/resource identities and approvals in
 the owner's protected worksheet, not this public file.
 
+The concrete [Gate 1 recovery proposal](gate1-recovery-plan.md) separates backup
+authorization from deployment authorization. Preparation is approved; neither
+production execution gate is approved at this handoff.
+
 ## Frozen decision record
 
 - Production checkout: `9024ccd55c89c84876aeb5d7ea3b352f108fb5c1`.
@@ -21,8 +25,16 @@ the owner's protected worksheet, not this public file.
 - [ ] Identify the exact existing host/region and approved SSM route privately; compare
   it to the observed Amazon Linux 2023.12 t3.micro. Never select a host by guessed IP.
 - [ ] Record change owner, DB operator, reviewer, incident contact and rollback decision maker.
-- [ ] Obtain explicit backup/evidence access authorization, maintenance duration, migration,
-  configuration/service/frontend switch, synthetic smoke and rollback permissions.
+- [ ] Obtain Gate 1 approval for original-evidence access, writer fencing, native backup,
+  encryption, existing-bucket ciphertext transfer and fresh isolated restore/migration.
+  Explicitly include permission to resume only the unchanged legacy service after
+  the verified boundary; proposed downtime budget is 15 minutes, not a duration promise.
+- [ ] Before Gate 1, confirm the PC volume is encrypted, the owner-only recovery key
+  has independent escrow, private targets have enough space, and a synthetic ciphertext
+  transfer/key-recovery test can run before service interruption. Never share private keys.
+- [ ] Obtain separate Gate 2 approval only after Gate 1 acceptance: final backup refresh,
+  live migrations, configuration/service/frontend switch, synthetic smoke and rollback.
+  Gate 1 approval never includes live schema or release changes.
 - [ ] Agree RPO and what happens to writes after opening traffic; production RTO is unmeasured.
 - [ ] Record OLD_RELEASE, OLD_PYTHON, NEW_RELEASE, NEW_PYTHON, API_SERVICE, SERVICE_USER,
   ENV_FILE, FRONTEND_ROOT, EVIDENCE_ROOT, EXPORTS_ROOT, TMPDIR and PG_BIN privately.
@@ -87,7 +99,7 @@ section 7 of the runbook; it requires total writer exclusion.
   locks and duration. Keep real data out of CI and browser synthetic fixtures.
 - [ ] Sign off backup consistency and real-baseline recoverability. If either fails, abort.
 
-## D. Conditional upgrade, only after all gates are signed
+## D. Conditional upgrade, only after Gate 2 and all readiness gates are signed
 
 - [ ] Confirm owner execution approval and maintenance are still valid; update the final
   consistent backup if writers resumed after rehearsal. Never use an outdated boundary silently.

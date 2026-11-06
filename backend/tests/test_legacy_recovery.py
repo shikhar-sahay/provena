@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import uuid
+import importlib.util
 
 import pytest
 from sqlalchemy import create_engine, MetaData, text
@@ -77,6 +78,11 @@ def test_native_legacy_restore_then_m6_upgrade(tmp_path, monkeypatch):
             connection.execute(text("SET TIME ZONE 'UTC'"))
             before = fingerprints(connection)
             validate_reports(connection)
+            helper_path = Path(__file__).resolve().parents[2] / 'tools/legacy_projection.py'
+            spec = importlib.util.spec_from_file_location('legacy_projection', helper_path)
+            projection = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(projection)
+            original_projection = projection.capture(connection)
         # No application or external writer exists during this synthetic boundary.
         dump = tmp_path / 'legacy.dump'
         result = subprocess.run([native('pg_dump', pg_bin), '--format=custom', '--no-owner', '--no-acl',
@@ -104,12 +110,15 @@ def test_native_legacy_restore_then_m6_upgrade(tmp_path, monkeypatch):
         with target.connect() as connection:
             connection.execute(text("SET TIME ZONE 'UTC'"))
             assert fingerprints(connection) == before
+            assert projection.verify(connection, original_projection, '9b6e5c4d3a21')['legacy_projection_preserved']
             validate_reports(connection)
             assert connection.scalar(text('SELECT count(*) FROM investigation_notes')) == 0
         restored.complete_restore()
         migrate(urls[1], 'upgrade', 'head')
         migrate(urls[1], 'check')
         with target.connect() as connection:
+            connection.execute(text("SET TIME ZONE 'UTC'"))
+            assert projection.verify(connection, original_projection, 'ee5b99eb5ce4')['legacy_projection_preserved']
             assert connection.scalar(text('SELECT version_num FROM alembic_version')) == 'ee5b99eb5ce4'
             assert connection.scalar(text('SELECT content_sha256 FROM reports')) == report_hash
             assert set(connection.scalars(text('SELECT status FROM findings'))) == {'accepted', 'rejected'}

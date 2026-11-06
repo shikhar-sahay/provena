@@ -74,6 +74,13 @@ same source can change the archive hash; record the new digest instead of reusin
 old one. No production-consistent backup or real-baseline restore has been completed
 by this assessment, so production execution remains gated.
 
+The [Gate 1 proposal](gate1-recovery-plan.md) now specifies owner-controlled encrypted
+PC recovery storage, owner-only key generation, existing-bucket ciphertext transfer
+and fresh PostgreSQL restoration. Key/volume confirmation and execution approval are
+still pending. Its tests and new documentation do not replace the frozen application
+artifact. Gate 1 backup approval and Gate 2 deployment approval are distinct; resumed
+legacy writes require a fresh final backup boundary before an approved upgrade.
+
 - Select a staging environment, configure strong secrets/TLS/proxy/storage permissions
   and validate health with the actual deployment owner.
 - Install encrypted off-host backup/retention procedures and complete a controlled restore

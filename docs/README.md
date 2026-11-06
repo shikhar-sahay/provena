@@ -11,6 +11,7 @@
 - [Release policy and checklist](releases.md)
 - [M6 production deployment assessment and gated upgrade/rollback runbook](deployment-readiness-m6.md)
 - [Operator deployment execution and rollback checklist](deployment-execution-checklist.md)
+- [Gate 1 legacy backup, owner key preparation and isolated recovery proposal](gate1-recovery-plan.md)
 - [Contributing](../CONTRIBUTING.md) and [private security reporting](../SECURITY.md)
 - [M6 implementation and release-readiness evidence](m6-implementation.md)
 

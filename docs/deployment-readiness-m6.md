@@ -781,6 +781,51 @@ to add to this count. Documentation checks cover 31 tracked Markdown documents. 
 preparation commit, push and exact CI conclusions accompany the handoff; they do not
 change the frozen CI #61 application candidate.
 
+## Gate 1 preparation continuation, 6 November 2026
+
+The [concrete recovery proposal](gate1-recovery-plan.md) and private owner worksheet
+now separate Gate 1 backup/rehearsal authorization from Gate 2 live upgrade approval.
+Neither execution gate has been approved. No original evidence was read, production
+backup created, service stopped, package installed, database migrated or configuration
+changed during this preparation.
+
+Read-only refresh at 14:30:43 UTC reconfirmed source
+`9024ccd55c89c84876aeb5d7ea3b352f108fb5c1`, active legacy service, Alembic
+`9b6e5c4d3a21` and database size 10,607,639 bytes. Existing native PostgreSQL clients
+are 16.15, OpenSSL is 3.5.8 and AWS CLI is 2.36.47. The frozen deployment candidate
+remains `36763611139923236e981da6cd66beeae56145cf`, despite later preparation commits.
+
+The existing operations bucket's owner console shows Block all public access On and
+Bucket owner enforced. The instance role cannot read the public-access-block policy;
+this was an AccessDenied result, not a reason to alter IAM. Ciphertext upload rights
+remain unverified and must be tested with a synthetic challenge after Gate 1 approval,
+before downtime. Previously observed no-versioning/no-Object-Lock settings do not give
+immutable retention. No objects were opened or transferred during this inspection.
+
+The local Windows 11 Home PC has approximately 41.4 GiB free and 15.65 GiB RAM,
+OpenSSL 3.5.2 and PostgreSQL 16.15 tools. Volume encryption is not yet owner-confirmed;
+the owner must confirm Device Encryption and independent recovery-key availability,
+or select another already encrypted volume. The dedicated CMS recipient key has not
+been generated. The private metadata-only plan has owner/SYSTEM access and no backup
+contents; restricted permissions alone are not encryption.
+
+Synthetic streaming AES-256-GCM CMS with RSA-3072 OAEP/SHA-256 successfully encrypted
+and restored 1,277,952 bytes; modified and truncated ciphertext failed. Throwaway test
+keys are not recovery keys. Owner-only interactive passphrase entry, independent key
+escrow and a real synthetic transfer/decryption challenge remain prerequisites.
+
+The strengthened native legacy recovery test compares every original table's old
+field projection before backup, after native restore and after all six migrations.
+Added columns are allowed; changed credentials, notes, decisions, original report
+content or other old fields are not. Six unit cases exercise the projection guard.
+These synthetic checks improve Gate B evidence but cannot satisfy real-data Gate D.
+
+Next: owner encryption/key preparation, approval of the exact private plan, then
+Gate 1 execution only. Proposed 15-minute downtime is a budget, not a benchmark.
+Gate 1 must explicitly allow starting only the unchanged legacy service after the
+verified backup boundary; otherwise resumption requires another instruction. Full
+production upgrade remains **NO-GO** until Gate 1 succeeds and Gate 2 is approved.
+
 ## Repository evidence index
 
 - [Settings and production validation](../backend/app/core/config.py),

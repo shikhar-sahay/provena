@@ -208,6 +208,14 @@ Unhandled errors receive safe 503 responses rather than raw SQL/storage exceptio
 
 ## M6 validation, upgrades and troubleshooting
 
+The current [Gate 1 recovery proposal](gate1-recovery-plan.md) defines the owner-only
+key ceremony, encrypted-PC prerequisite, ciphertext-only transfer, consistent native
+legacy backup and isolated rehearsal. It is preparation, not permission to execute.
+The old production schema cannot use the M5 head-dependent backup command directly.
+Gate 1 must separately authorize fencing and resumption of the unchanged legacy
+service; Gate 2 later authorizes live migrations and release switching. No private
+key, secret, original evidence or real backup belongs in repository/CI artifacts.
+
 The [developer guide](development.md) owns the disposable Chromium runner and the
 [investigator guide](investigator-guide.md) owns UI terminology. Do not use real evidence
 in browser tests or point their control connection at an application database. Browser
