@@ -44,15 +44,18 @@ from the bucket's existence or its `migration/` prefix.
 The Windows 11 Home recovery PC has about 15.65 GiB RAM and 41.4 GiB free on C: at
 inspection, OpenSSL 3.5.2 and PostgreSQL 16.15 utilities. Existing synthetic fixtures
 are not an approved real-data restore environment. Free space must be refreshed
-before use. Volume encryption and independent recovery-key storage require owner
-confirmation. NTFS permissions alone do not encrypt a folder.
+before use. The owner subsequently confirmed C: is 100% used-space encrypted with
+XTS-AES 128, Protection On, TPM and numerical-password protectors, using an elevated
+local check. This is an owner-reported observation, not an agent inspection.
+Independent BitLocker recovery-key storage remains unconfirmed. NTFS permissions
+alone do not encrypt a folder, and used-space encryption is not a secure-erasure claim.
 
 Before requesting execution, the owner must:
 
-1. Confirm Windows Device Encryption is On and its recovery key is saved independently,
-   or identify an already encrypted owner-controlled volume. Do not send its recovery
-   key. If unavailable, stop: do not place real backup/plaintext data there. Enabling
-   encryption is a separate manual owner action, not something this plan automates.
+1. Confirm the active BitLocker volume's recovery key is saved independently, or
+   identify another already encrypted owner-controlled volume with verified recovery.
+   Do not send its recovery key. Until confirmed, stop: do not place real backup or
+   plaintext data there. No encryption-setting changes are authorized by this plan.
 2. Choose a recovery directory outside Git, browser sync and OneDrive on that encrypted
    volume. Restrict it to the owner and SYSTEM; inspect effective permissions. Keep
    plaintext, PostgreSQL data/WAL, evidence copies and temporary files under it.

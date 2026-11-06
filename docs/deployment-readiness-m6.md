@@ -803,9 +803,11 @@ before downtime. Previously observed no-versioning/no-Object-Lock settings do no
 immutable retention. No objects were opened or transferred during this inspection.
 
 The local Windows 11 Home PC has approximately 41.4 GiB free and 15.65 GiB RAM,
-OpenSSL 3.5.2 and PostgreSQL 16.15 tools. Volume encryption is not yet owner-confirmed;
-the owner must confirm Device Encryption and independent recovery-key availability,
-or select another already encrypted volume. The dedicated CMS recipient key has not
+OpenSSL 3.5.2 and PostgreSQL 16.15 tools. The owner subsequently confirmed through an
+elevated local check that C: is 100% used-space encrypted with XTS-AES 128 and Protection
+On (TPM and numerical-password protectors). This is owner-reported, not agent-inspected.
+Independent BitLocker recovery-key storage is still unconfirmed and required. The
+dedicated CMS recipient key has not
 been generated. The private metadata-only plan has owner/SYSTEM access and no backup
 contents; restricted permissions alone are not encryption.
 
