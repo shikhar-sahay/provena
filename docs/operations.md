@@ -1,5 +1,10 @@
 # Maintainer operations
 
+For the existing EC2 deployment, use the [M6 deployment assessment and gated runbook](deployment-readiness-m6.md).
+It separates public observations from historical host claims and defines the unknowns,
+legacy backup branch, maintenance gates and fresh-target rollback. No production action
+is approved by these instructions or by passing CI.
+
 These commands describe implemented local/disposable workflows. M5 did not access,
 back up, change or deploy the live AWS system. Never substitute production targets
 into tests. The application is not certified forensic software.
@@ -80,6 +85,13 @@ references separately through a trusted channel. Store original-containing packa
 as confidential evidence and apply appropriate access controls/encryption outside the tool.
 
 ## Private system backups
+
+**Schema compatibility:** the current backup CLI requires its exact Alembic head,
+`ee5b99eb5ce4`. It cannot back up an older production schema before upgrade. Do not
+migrate merely to enable backup. Follow the [legacy backup decision](deployment-readiness-m6.md)
+and rehearse a native PostgreSQL plus quiesced-storage backup/restore first when the
+source predates M5. The current restore CLI likewise refuses a different manifest
+revision; a native legacy dump is not a Provena-format backup archive.
 
 These contain application account hashes and all persistent evidence, not merely a case
 export. Protect and encrypt them outside this tool, keep independent copies and record

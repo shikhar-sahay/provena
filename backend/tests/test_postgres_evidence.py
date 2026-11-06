@@ -95,6 +95,85 @@ def test_postgres_parallel_registration_retry(tmp_path, monkeypatch):
         engine.dispose()
 
 
+@pytest.mark.parametrize('baseline', ['000a8976b7f1', '9b6e5c4d3a21'])
+def test_deployment_legacy_upgrade_preserves_history(tmp_path, baseline):
+    """Synthetic legacy schemas are not proof of the unknown production schema."""
+    import hashlib
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    from sqlalchemy import MetaData
+    from app.ops.recovery import backup
+
+    url = os.getenv('M1_POSTGRES_TEST_URL')
+    if not url:
+        pytest.skip('Disposable PostgreSQL database not configured.')
+    parsed = make_url(url)
+    assert parsed.database == 'provena_ci' and parsed.host in {'127.0.0.1', 'localhost'}
+    schema = 'deployment_upgrade_' + uuid.uuid4().hex
+    control = create_engine(url)
+    with control.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    control.dispose()
+    isolated = parsed.update_query_dict({'options': f'-csearch_path={schema}'}).render_as_string(hide_password=False)
+    environment = {**os.environ, 'DATABASE_URL': isolated, 'APP_ENV': 'test'}
+    def migrate(*args):
+        result = subprocess.run([sys.executable, '-m', 'alembic', *args], env=environment,
+            cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, result.stdout + result.stderr
+    migrate('upgrade', '000a8976b7f1')
+    engine = create_engine(isolated)
+    metadata = MetaData()
+    metadata.reflect(bind=engine)
+    content = {'synthetic': 'Legacy immutable report'}
+    report_hash = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
+    original_digest = hashlib.sha256(b'Synthetic legacy metadata fixture').hexdigest()
+    try:
+        with engine.begin() as connection:
+            def insert(name, **values):
+                table = metadata.tables[name]
+                return connection.scalar(table.insert().values(**values).returning(table.c.id))
+            uid = insert('users', username='legacy_synthetic', email='legacy@example.test', full_name='Synthetic',
+                password_hash='unused-synthetic-hash', role='admin', is_active=True)
+            iid = insert('investigations', case_number='LEGACY-SYNTHETIC', title='Synthetic legacy case',
+                description='', status='open', priority='medium', created_by_id=uid, lead_investigator_id=uid)
+            eid = insert('evidence', investigation_id=iid, evidence_number='E001', title='Synthetic metadata',
+                description='', evidence_type='log', original_filename='synthetic.log', source='Synthetic',
+                registered_by_id=uid, file_size=len(b'Synthetic legacy metadata fixture'), storage_key='synthetic-legacy-key', sha256=original_digest,
+                integrity_status='verified')
+            for index, decision in enumerate(('accepted', 'rejected')):
+                insert('findings', investigation_id=iid, rule_id='legacy.synthetic', rule_version='1',
+                    title='Historical decision', summary='Synthetic', severity='low', confidence=10,
+                    factors=[], evidence_ids=[eid], artifact_ids=[], correlation_ids=[],
+                    inputs_key=str(index) * 64, recommendations=[], status=decision)
+            insert('reports', investigation_id=iid, report_number=1, generated_by_id=uid,
+                content=content, content_sha256=report_hash)
+        if baseline != '000a8976b7f1':
+            migrate('upgrade', baseline)
+        # Rejection must occur before evidence access: this backup tool is not a
+        # legacy pre-upgrade backup strategy and must never be presented as one.
+        with pytest.raises(ValueError, match='Backup schema must match'):
+            backup(isolated, tmp_path / 'must-not-create.zip')
+        assert not (tmp_path / 'must-not-create.zip').exists()
+        migrate('upgrade', 'head')
+        migrate('check')
+        with engine.connect() as connection:
+            from sqlalchemy import text
+            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == 'ee5b99eb5ce4'
+            assert connection.scalar(text('SELECT content_sha256 FROM reports')) == report_hash
+            assert connection.scalar(text('SELECT content FROM reports')) == content
+            assert set(connection.scalars(text('SELECT status FROM findings'))) == {'accepted', 'rejected'}
+            assert connection.scalar(text('SELECT count(*) FROM findings WHERE support_snapshot IS NOT NULL')) == 0
+            assert connection.scalar(text('SELECT sha256 FROM evidence')) == original_digest
+            assert connection.scalar(text('SELECT registration_status FROM evidence')) == 'ready'
+            assert connection.scalar(text('SELECT count(*) FROM workspace_memberships')) == 1
+            assert connection.scalar(text('SELECT workspace_id FROM investigations')) is not None
+            assert connection.scalar(text('SELECT count(*) FROM security_events')) == 0
+    finally:
+        engine.dispose()
+
+
 def test_postgres_parallel_authentication_selection_and_detection(tmp_path, monkeypatch):
     url=os.getenv('M1_POSTGRES_TEST_URL')
     if not url:

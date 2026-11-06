@@ -60,6 +60,12 @@ checks cover identical environment builds, not arbitrary OS/compiler combination
 
 ## Operational prerequisites, separately authorized
 
+The [M6 EC2 deployment assessment](deployment-readiness-m6.md) is the current gated
+upgrade/rollback preparation document. The deployed revision and paths must be verified;
+historical AWS examples are not a production inventory. In particular, choose a compatible
+pre-upgrade backup strategy before running any migration. Deployment approval remains
+separate from public-release, license and infrastructure approval.
+
 - Select a staging environment, configure strong secrets/TLS/proxy/storage permissions
   and validate health with the actual deployment owner.
 - Install encrypted off-host backup/retention procedures and complete a controlled restore

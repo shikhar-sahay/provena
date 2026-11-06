@@ -130,6 +130,7 @@ network-failure case. See [browser setup](docs/development.md) before running it
 
 - [Investigator workflow](docs/investigator-guide.md)
 - [Operator setup, backup, restore and troubleshooting](docs/operations.md)
+- [Production upgrade readiness and gated rollback runbook](docs/deployment-readiness-m6.md)
 - [Developer and browser testing guide](docs/development.md)
 - [M6 implementation and readiness assessment](docs/m6-implementation.md)
 - [Release process and blockers](docs/releases.md)
