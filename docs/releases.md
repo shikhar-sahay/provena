@@ -66,6 +66,14 @@ historical AWS examples are not a production inventory. In particular, choose a 
 pre-upgrade backup strategy before running any migration. Deployment approval remains
 separate from public-release, license and infrastructure approval.
 
+Require sign-off of the [execution checklist](deployment-execution-checklist.md) before
+any production action. The frozen deployment candidate is source 36763611139923236e981da6cd66beeae56145cf,
+verified by CI #61; subsequent preparation commits are not an implicit replacement.
+The CI candidate's actual bytes and manifest were checked locally. Rebuilding the
+same source can change the archive hash; record the new digest instead of reusing an
+old one. No production-consistent backup or real-baseline restore has been completed
+by this assessment, so production execution remains gated.
+
 - Select a staging environment, configure strong secrets/TLS/proxy/storage permissions
   and validate health with the actual deployment owner.
 - Install encrypted off-host backup/retention procedures and complete a controlled restore

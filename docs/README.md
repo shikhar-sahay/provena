@@ -10,6 +10,7 @@
 - [Security architecture](security.md) and [evidence integrity](evidence-integrity.md)
 - [Release policy and checklist](releases.md)
 - [M6 production deployment assessment and gated upgrade/rollback runbook](deployment-readiness-m6.md)
+- [Operator deployment execution and rollback checklist](deployment-execution-checklist.md)
 - [Contributing](../CONTRIBUTING.md) and [private security reporting](../SECURITY.md)
 - [M6 implementation and release-readiness evidence](m6-implementation.md)
 

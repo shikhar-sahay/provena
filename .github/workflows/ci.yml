@@ -69,7 +69,7 @@ jobs:
         working-directory: backend
       - run: python -m alembic check
         working-directory: backend
-      - run: python -m pytest tests/test_postgres_evidence.py tests/test_m5_recovery.py -q
+      - run: python -m pytest tests/test_postgres_evidence.py tests/test_m5_recovery.py tests/test_legacy_recovery.py -q
         working-directory: backend
         env:
           M1_POSTGRES_TEST_URL: postgresql+psycopg2://provena_ci:synthetic_ci_only@127.0.0.1:5432/provena_ci

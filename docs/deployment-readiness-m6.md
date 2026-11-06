@@ -3,26 +3,30 @@
 Assessment date: 2026-11-06 (India). Target application source:
 `b9ad5c50421337b8b1364a13e407cca00fd2c75d`, version `0.1.0-beta.0`, schema
 `ee5b99eb5ce4`. [CI #60](https://github.com/shikhar-sahay/provena/actions/runs/42106948839)
-passed all eight jobs on that exact commit. Subsequent documentation/test commits do
-not identify the version installed on EC2. Record their exact SHA separately when
-choosing the eventual deployment artifact.
+passed all eight jobs on that exact commit. The final inventory below identifies the
+production checkout and the pinned CI #61 deployment candidate. The newer preparation
+commit is a handoff/tooling revision, not an instruction to deploy moving main.
 
 ## 1. Decision and assessment boundary
 
-**NO-GO for a production upgrade now. GO for separately approved inventory and
-isolated rehearsal.** The deployed commit, database revision, runtime, real paths,
-capacity and recoverable backup are unknown. A working login is not migration proof.
-This document prepares an upgrade; it does not authorize execution.
+**NO-GO for deployment now.** Live inventory and the six-migration path are established;
+production-consistent backup, real-baseline restore, capacity/configuration acceptance
+and owner authorization remain open. See section 13 and the
+[execution checklist](deployment-execution-checklist.md). A working login is not
+migration proof. This document prepares an upgrade; it does not authorize execution.
 
-Only public unauthenticated HTTPS GETs and a TLS handshake were performed. No SSH,
-SSM, AWS API, authenticated application action, private record query, evidence read,
-production backup, service change or migration was performed. No authorized host/AWS
-connector was available; local SSH configuration and credential stores were not searched.
-Pre-existing private environment, infrastructure and backup material was not opened or
-changed. Repository changes are documentation, packaging inclusion and synthetic tests.
+The initial pass used only public HTTPS. The continuation used an owner-opened authorized
+SSM session for bounded read-only metadata queries and AWS Console inventory. Nonsecret
+configuration fields were projected through an explicit allowlist; credentials, signing
+secrets and investigation contents were not returned. No original evidence bytes or
+backup contents were read. No production backup, migration, file/configuration change,
+service restart, certificate renewal or infrastructure mutation was performed. Browser
+automation later stopped because its safety check could not determine the current URL;
+that blocked navigation was not retried. The session was not terminated.
 
 Evidence labels used below: **R** repository-verified; **P** public observation;
-**H** historical team documentation; **U** unknown; **D** disposable validation.
+**H** historical team documentation; **U** unknown; **D** disposable validation;
+**L** authorized live metadata observed in the continuation.
 
 ## 2. Current-state evidence
 
@@ -35,12 +39,12 @@ normal certificate/hostname validation and bounded response reads:
 | P: `/api/health` | HTTPS 200, JSON with `status=ok`, `db=ok`; no Cache-Control header observed |
 | P: `/api/live`, `/api/ready` | Both HTTPS 404, JSON content type; no authenticated probes attempted |
 | P: TLS | TLS 1.3 handshake passed hostname/CA validation; leaf validity October 19, 2026 04:52:29 GMT to January 17, 2027 04:52:28 GMT |
-| U: build/schema | No deployed SHA, Python version or Alembic revision established by these responses |
+| L: checkout/schema | Continuation established checkout 9024ccd55c89c84876aeb5d7ea3b352f108fb5c1 and schema 9b6e5c4d3a21; public responses alone did not establish them |
 
-The two 404s are incompatible with an externally reachable current M6 health interface,
-but do not prove a particular old commit: routing or a different backend could also
-explain them. A server header is a declaration, not an independently verified binary
-inventory. TLS success does not establish automatic renewal, origin isolation or IAM.
+The deployed source's health module defines only /health. Its old implementation explains
+the missing M6 routes; inspected Nginx preserves /api/. A source checkout is not a signed
+runtime attestation. Nginx 1.30.5 was also confirmed on the host, rather than inferred
+only from a header. TLS success does not establish renewal, origin isolation or IAM.
 The web browsing connector could not retrieve the site; direct bounded Python HTTPS
 requests succeeded. No availability incident is inferred from the connector failure.
 
@@ -49,21 +53,22 @@ requests succeeded. No availability incident is inferred from the connector fail
 Amazon Linux 2023, a t3.micro, 20 GB root EBS, 2 GB swap, Mumbai, Session Manager,
 Nginx, `provena.service` on loopback 8000, local PostgreSQL 16 and local evidence.
 They also describe three S3 buckets, a gateway endpoint, DuckDNS timer and Certbot.
-**These are H, not current host observations.** The Ubuntu assumption in the assignment
-conflicts with these records. Do not use Ubuntu package commands on an unverified AMI.
+**These records remain H; section 13 independently verifies selected current facts.**
+Amazon Linux 2023.12, rather than Ubuntu, is now confirmed. Do not use Ubuntu package
+commands on this host.
 S3 resource existence would not prove S3-backed evidence or actual backup retention.
 
 ## 3. Repository architecture and path inventory
 
 | Concern | R: implementation | H/U: live value to resolve |
 | --- | --- | --- |
-| API | `backend/app/main.py`, modular monolith; no automatic startup migrations | Unit, service identity, working directory, venv and deployed SHA unknown |
-| Startup | `uvicorn app.main:app`; historical example uses one worker, 127.0.0.1:8000 | `/opt/provena`, `/etc/provena/api.env` are examples, not verified paths |
-| Frontend | React 19, Vite 8, TypeScript 6; locked npm graph; `frontend/dist` output | Nginx document root, installed asset SHA and cache rules unknown |
+| API | `backend/app/main.py`, modular monolith; no automatic startup migrations | L: provena.service, ssm-user, existing backend working directory and .venv/bin/python; record resolved paths privately before execution |
+| Startup | `uvicorn app.main:app`; retain one worker for the proposed deployment | L: Python 3.13.15 and loopback 8000; do not substitute historical example paths |
+| Frontend | React 19, Vite 8, TypeScript 6; locked npm graph; `frontend/dist` output | L: static document root and index digest verified; private document-root path withheld here; cache directives still require rollout smoke tests |
 | API origin | `frontend/src/api/client.ts` uses same-origin when VITE_API_URL is unset | Preserve `/api/` prefix in proxy; do not use an E2E build with ephemeral API port |
-| Database | SQLAlchemy 2, Alembic; PostgreSQL/psycopg2 tested | H: local PostgreSQL 16/database provena; actual version, role, data directory unknown |
-| Originals | `backend/app/modules/evidence/storage.py`, generated keys | H: local; actual absolute root and mount unknown; never move it during code checkout |
-| Exports | `backend/app/modules/exports/artifacts.py`, separate private root | New EXPORT_STORAGE_ROOT must be absolute, separate and non-nested |
+| Database | SQLAlchemy 2, Alembic; PostgreSQL/psycopg2 tested | L: PostgreSQL 16.15, database provena, schema 9b6e5c4d3a21; DB directory and secret/grant recovery still private operator responsibilities |
+| Originals | `backend/app/modules/evidence/storage.py`, generated keys | L: local root outside checkout, owned by service user, mode 700; do not commit its actual path or move it during checkout |
+| Exports | `backend/app/modules/exports/artifacts.py`, separate private root | L: old backend default cache directory absent; explicitly approve a new absolute, separate, non-nested root |
 | Reports | Immutable JSON and content hashes in PostgreSQL | No independent report directory is required by current code; preserve legacy extra files if any |
 | Temporary copies | Verified snapshots use Python TemporaryFile; export builders use private cache subdirectories | Service TMPDIR/filesystem capacity and access policy unknown |
 | Logs | Safe structured request logs and correlation IDs; preparation duration only | systemd/journal/Nginx rotation, retention and disk alerts unknown |
@@ -79,7 +84,8 @@ Do not place mutable evidence, cache or configuration inside versioned release r
 
 ## 4. Deferred read-only inspection checklist
 
-An authorized operator must fill every U before approving deployment. Run only against
+Section 13 supersedes the earlier unknown baseline. Recheck changed facts and fill the
+remaining U fields, rather than repeating completed inspection. Run only against
 the positively identified host, with existing authorized access. Commands below are
 inspection templates, **not commands executed in this assessment**. Never paste raw
 environment, process command lines, Nginx configuration or journals into this repository.
@@ -190,6 +196,9 @@ Do not expose ports 8000 or 5432 publicly. No Nginx/TLS setting was changed here
 
 R: one linear chain, eleven revisions. Apply only the suffix after the verified source
 revision. M6 itself adds no migration. Full source is in `backend/alembic/versions/`.
+The confirmed source is already 9b6e5c4d3a21: only the final six rows below apply.
+The workspace backfill is not pending and must not be repeated or reseeded. All five
+source-era migration files match the target history byte-for-byte in Git.
 
 | Revision, predecessor | Upgrade behavior and populated-data risk |
 | --- | --- |
@@ -576,6 +585,202 @@ and production infrastructure changes remain separate owner decisions. A deploym
 approval must explicitly authorize private backup/evidence access and mutations; this
 assessment does not. Until those gates are met, the production upgrade remains NO-GO.
 
+## 13. Final authorized production inventory and decision record
+
+The owner supplied an active SSM session on 2026-11-06. Inspection began around
+14:04 IST (08:34 UTC); the public health response was rechecked at 14:21 IST.
+Resource IDs, account identifiers, IP addresses, original storage paths, session IDs,
+secrets and backup contents are intentionally absent from this public document.
+Resolved live paths belong in the owner's private execution worksheet. No production
+credentials were requested, discovered or copied. SSM metadata queries used read-only transactions
+with five-second statement timeouts; no investigation records were queried.
+
+| L: fact | Verified result |
+| --- | --- |
+| Host | Amazon Linux 2023.12.20261016, x86-64; t3.micro in Mumbai, ap-south-1a |
+| Root volume | 20 GiB encrypted EBS; DeleteOnTermination enabled; about 16 GiB available at inspection |
+| Memory | 913 MiB total, about 442 MiB available; 2 GiB swap, about 24 MiB in use |
+| Temporary filesystem | /tmp is roughly 457 MiB tmpfs; not an appropriate default for large verification/restore copies |
+| Inodes | Root about 1% used, 10396763 free; /tmp 1048559 free at inspection |
+| Service | provena.service active/running as ssm-user; backend working directory and .venv/bin/python confirmed |
+| Production checkout | 9024ccd55c89c84876aeb5d7ea3b352f108fb5c1; no tracked changes reported with optional Git index writes disabled; untracked files not enumerated |
+| Python/dependencies | Python 3.13.15; FastAPI 0.116.2, Starlette 0.48.0, multipart 0.0.19, SQLAlchemy 2.0.55, Alembic 1.20.0, psycopg2-binary 2.9.13 |
+| Database | provena, PostgreSQL 16.15, 10607639 bytes; schema 9b6e5c4d3a21; API PID/socket-to-catalog correlation confirmed this is the application's DB without reading a connection string |
+| Schema/WAL metadata | 19 public base tables, consistent with this revision; current WAL files total 33554432 bytes; neither count proves zero schema drift or peak migration WAL |
+| Native utilities | /usr/bin/pg_dump and /usr/bin/pg_restore, both 16.15 |
+| Evidence | Local root outside checkout, service-user ownership, mode 700; 147456 allocated bytes; no filenames or original bytes returned |
+| Current release disk | Checkout 409886720 allocated bytes, including its 121806848-byte venv; static frontend 1949696 bytes separately; do not count the venv twice |
+| Frontend fingerprint | index.html SHA-256 da41fd67070a762878bab4b026ef514e6df41e8f4ad860de4330b3dc8b217474; this does not prove which source generated the static files |
+| Host Node tooling | Node 24.21.0, npm 11.19.0; M6 CI/build uses Node 22, so build off-host rather than relying on untested equivalence |
+| Network | API/PG listen on loopback 8000/5432; SSH binds all interfaces but attached SG ingress contains only public TCP 80/443 |
+| Proxy | Nginx 1.30.5, /api/ retained, upstream loopback 8000, SPA index fallback, TLS 443 and HTTP 80; body limit 100M, read timeout 120 s |
+| Forwarding/cache | Host, real IP, forwarded-for and scheme directives observed; no cache-control directive found in the inspected site allowlist; authenticated pass-through/cache behavior still needs smoke testing |
+| Nonsecret settings | APP_ENV=production; CORS_ORIGINS=http://localhost:5173; preserved absolute evidence root; no allowlisted process-level override found |
+| Existing export root | Legacy default cache directory absent; no explicit new export root observed |
+| Renewal | Certbot renewal service installed/static; certbot-renew.timer disabled; crontab unavailable to the inspected sudo command and no /etc/cron.d entries available; no other active renewal mechanism established |
+| Scheduling/backup | DuckDNS update timer active; no backup-named active timer identified; EC2 Owned by me snapshot view reports none in this region |
+| Off-host metadata | Existing operations-purpose S3 bucket has SSE-S3 default encryption, versioning and Object Lock disabled, no lifecycle or replication rules; its root lists one migration prefix |
+
+The operations bucket was inspected only for inventory/policy metadata. The attempted
+prefix navigation was stopped by Computer Use's URL-confidence safety check. No backup
+object was opened or downloaded, so last successful backup, coverage, independent digest,
+client-side encryption, deletion protection, retention and recoverability remain unknown.
+SSE-S3 at-rest policy and a folder name do not establish a current complete backup.
+No snapshots in this view does not exclude other-region or other-system backups.
+
+### Actual migration suffix
+
+```text
+9b6e5c4d3a21 (source, already includes workspace backfill)
+  -> b72a1e84c903  evidence registration lifecycle and input verification links
+  -> c83d2f95a014  nullable parser coverage
+  -> d94e30a6b125  run/artifact membership, stable correlation and support snapshots
+  -> 294d21d0205e  profiles, ingestion runs, normalized events and memberships
+  -> 53d6b8a0e88b  explicit event sets, detection runs and support memberships
+  -> ee5b99eb5ce4  durable investigation exports (target)
+```
+
+Section 6 describes their columns, indexes, uniqueness/FKs and locking risks. None of
+these six transforms historical report content or invents event interpretations.
+Registration defaults do not validate old bytes; missing historical support remains
+null/stale. Preserve custody/verification rows and accepted/rejected decisions. Existing
+workspace assignments must be preserved, not recreated. Actual-baseline drift and data
+compatibility still require the privately authorized restore rehearsal, not a production
+alembic check or migration in this assessment.
+
+### Frozen deployment candidate, separate from this handoff
+
+Use source **36763611139923236e981da6cd66beeae56145cf**, whose application modules,
+frontend source and dependency declarations match M6 b9ad5c5. Its changes added the
+earlier assessment and synthetic migration checks. [CI #61](https://github.com/shikhar-sahay/provena/actions/runs/42133630009)
+passed all eight jobs on this source. Do not substitute whatever main points to later.
+
+The actual GitHub Actions artifact `provena-validated-candidate` from #61 was downloaded
+locally through the GitHub connector, without deployment. The outer transport archive
+matched GitHub's SHA-256 d463f3611d2dd3e787abc4a691113c1d1f5c00fad6c04a3467733204e45a9ebc.
+The enclosed candidate was independently checked with the offline tool:
+
+- Source commit: 36763611139923236e981da6cd66beeae56145cf.
+- Inner ZIP SHA-256: b43522ee5a86f6588daf9ba60c3ed906aab254e2f770af9b0e3a30dbfced5e03.
+- Size: 5065486 bytes; 336 files, including 309 source files and 27 web assets.
+- Every source blob matched that Git commit; all manifest file digests/paths passed.
+- Private-path/secret-pattern checks passed; no loopback API URL found in web scripts.
+- CI built with Node 22 and VITE_API_URL unset; this is not Playwright's ephemeral build.
+- Version 0.1.0-beta.0, unsigned, validation-only, publishable=false; no tag/public release.
+
+Artifact retention expires November 13, 2026 at approximately 05:34 IST. Preserve a
+verified private copy before expiry or rebuild the exact source in an approved clean
+environment and record its new digest. Do not relabel a different build with this digest.
+The previous Windows-built candidate has a different hash; it is not the CI binary.
+The new checklist/tooling commit is a preparation revision, not the chosen application
+candidate. Verify its own CI in the handoff separately.
+
+```sh
+# Local artifact inspection only. Use a trusted private candidate path.
+python -B tools/deployment_gate.py --source-revision 9b6e5c4d3a21 --candidate CANDIDATE_ZIP --expect-commit 36763611139923236e981da6cd66beeae56145cf --expect-sha256 b43522ee5a86f6588daf9ba60c3ed906aab254e2f770af9b0e3a30dbfced5e03
+```
+
+The tool has no DB/network/shell execution path. It parses migration metadata without
+executing it and validates a bounded private snapshot of the archive without extraction.
+Unknown source returns exit 2; invalid input returns 1; exit 0 means offline checks passed,
+never deployment approval. It always emits deployment_authorized=false. Pins supplied
+by a caller are not signatures or independent evidence of their trustworthiness.
+
+### Proposed operating budget and configuration, not applied
+
+Keep one worker, build elsewhere and serialize large investigative/export operations
+initially. Preserve current signing and DB secrets privately; operator validation of
+M6 secret-strength requirements must not print values. A weak key needs an explicitly
+approved rotation/session-invalidation plan, not silent replacement.
+
+| Setting | Proposed after approval |
+| --- | --- |
+| APP_ENV | production |
+| CORS_ORIGINS | https://provena-app.duckdns.org; the current localhost HTTP value fails M6 validation |
+| TRUSTED_PROXY_IPS | 127.0.0.1 for the verified local Nginx hop; review actual Uvicorn forwarding flags |
+| DATABASE_URL | Retain privately, using installed psycopg2 driver; preserve database identity |
+| SECRET_KEY | Preserve privately if it passes M6 checks; no value committed or displayed |
+| EVIDENCE_STORAGE_BACKEND/ROOT | local and the existing absolute root from the private worksheet; no relocation |
+| EXPORT_STORAGE_ROOT | New private absolute, separate/non-nested disk-backed root; never static web or release directory |
+| TMPDIR | New private service-writable disk-backed directory; confirm with Python tempfile diagnostics after authorized startup |
+| EVIDENCE_MAX_UPLOAD_BYTES | Proposed 10485760 (10 MiB), matching normalized-log input byte limit |
+| EXPORT_MAX_BYTES / EXPORT_METADATA_MAX_BYTES | Proposed 67108864 / 16777216 (64 MiB / 16 MiB) |
+| EXPORT_RETENTION_HOURS | 24, with explicitly approved maintenance scheduling and disk monitoring |
+| BUILD_ID / LLM_ENABLED | Frozen deployment SHA / false |
+
+The 100M proxy limit can remain for the proposed 10 MiB upload cap. If retaining the
+100 MiB application default instead, explicitly raise/review proxy allowance for multipart
+overhead, for example 110m, and test the boundary. Do not enlarge synchronous timeouts
+blindly: a lost response may leave a completed durable operation. Keep old hashed static
+assets through the observation period and require index/API cache smoke tests.
+
+The current disk allocation looks favorable for this small baseline, but no unconditional
+capacity GO follows from a rounded df reading. Budget separately for new venv/release,
+backup plaintext plus encrypted copy, DB/WAL/index growth, restore clone, retained old
+release, cache and temp. The old venv is already included in checkout usage. Peak WAL,
+new Linux venv size, restore duration and RSS remain unmeasured. Do not invent a fixed
+GB reserve; approve headroom after the rehearsal's measured peaks and rollback needs.
+
+An individual snapshot is bounded by its source size; the proposed upload cap limits new
+ones to 10 MiB but does not shrink legacy evidence. Original exports build under the
+private cache, not wholly in RAM. Verification can require a copy up to its archive budget;
+M5 system restore can copy up to 4 GiB, far beyond /tmp's 457 MiB. Prefer disk-backed
+temporary storage for both application and recovery operators. A 64 MiB export cap is
+per package, not a total cache quota; retention is not automatic without scheduling.
+With roughly 442 MiB available RAM, simultaneous parsers/DB/cache/swap pressure must be
+measured on a protected low-volume rehearsal. Local Windows results are not t3 capacity.
+
+### Gates and minimum next authorized work
+
+| Gate | Current decision |
+| --- | --- |
+| A: live inventory | Largely resolved: host, runtime, checkout, service, roots, DB and proxy verified; private paths retained by owner |
+| B: compatibility | Source and six-step suffix confirmed; populated synthetic upgrade/native restore checks run; actual restored-baseline drift check still required |
+| C: backup consistency | BLOCKED: correct legacy procedure defined, but no authorized complete current production backup verified |
+| D: recoverability | BLOCKED: synthetic restore is not an actual production-baseline restore rehearsal |
+| E: capacity | CONDITIONAL: small observed data/disk fit is encouraging; disk-temp, limits, RSS/peak-space and operator reserve acceptance pending |
+| F: configuration | BLOCKED: CORS correction, new private cache/temp roots, secret validation and renewal-plan acceptance are prepared, not applied |
+| G: authorization | BLOCKED: no maintenance, backup access, migration, service/proxy switch or rollback execution approved |
+
+Next authorize a controlled **backup and rehearsal stage first**: fence all writers,
+perform/verify a native PostgreSQL 16 dump plus matching quiesced originals and protected
+configuration references, encrypt and verify an off-host copy, restore the old baseline
+into fresh isolated targets, compare metadata/digests/report hashes and permissions,
+then migrate the clone through the six revisions and measure capacity/smoke tests.
+Only after signed acceptance should the same or a later explicitly authorized window
+correct configuration and switch the retained API/frontend releases. Keep real backup
+and original bytes outside CI and this repository. No owner should approve an
+unconditional upgrade merely from the successful synthetic tests or this checklist.
+
+The disabled renewal timer is a concrete operations issue. Authorize review of the
+installed renewal unit and an actual approved renewal mechanism separately; do not
+infer that cron or external automation compensates for it. No certificate renewal,
+timer enablement or TLS change was attempted here.
+
+### Additional disposable recovery proof
+
+The focused synthetic suite previously passed 50 tests, including the exact source
+upgrade, native M5 recovery and offline candidate-negative tests. A new native legacy
+rehearsal also passed independently: it creates an isolated source at 9b6e5c4d3a21,
+seeds synthetic accounts/workspace/case/evidence/custody/verification/review/report data,
+quiesces its only writer, runs pg_dump and copies a verified original, then restores
+into fresh private targets. All old table fingerprints and the report hash match; a
+post-boundary annotation is absent. The restored clone upgrades through all six
+migrations and passes alembic check while retaining identities, reviews and custody.
+This proves the tested procedure against synthetic data, not Gate D for real production.
+The test is explicitly included in the PostgreSQL CI job; default backend runs skip it
+unless a guarded localhost provena_ci control DB and native binaries are supplied.
+
+Final reviewed-index export, excluding unrelated local work, passed **51 tests in
+65.05 s** using PostgreSQL 16.15. The command from backend/ was
+`python -m pytest tests/test_postgres_evidence.py tests/test_m5_recovery.py tests/test_m5_operations.py tests/test_m6_tools.py tests/test_deployment_gate.py tests/test_legacy_recovery.py -q`.
+This includes nine PostgreSQL cases, operational/configuration regressions and fifteen
+new offline-tool cases. One existing Starlette test-client deprecation warning remains.
+The earlier 50-test and independent legacy runs are intermediate results, not extra tests
+to add to this count. Documentation checks cover 31 tracked Markdown documents. Final
+preparation commit, push and exact CI conclusions accompany the handoff; they do not
+change the frozen CI #61 application candidate.
+
 ## Repository evidence index
 
 - [Settings and production validation](../backend/app/core/config.py),
@@ -589,4 +794,7 @@ assessment does not. Until those gates are met, the production upgrade remains N
 - [Frontend API origin](../frontend/src/api/client.ts), [Dockerfile](../backend/Dockerfile),
   [local Compose](../docker-compose.yml), [CI](../.github/workflows/ci.yml).
 - [Legacy and concurrent PostgreSQL checks](../backend/tests/test_postgres_evidence.py),
-  [native recovery demonstration](../backend/tests/test_m5_recovery.py).
+  [M5 recovery demonstration](../backend/tests/test_m5_recovery.py),
+  [native legacy restore/upgrade rehearsal](../backend/tests/test_legacy_recovery.py).
+- [Offline candidate and migration gate tool](../tools/deployment_gate.py),
+  [negative tool tests](../backend/tests/test_deployment_gate.py).

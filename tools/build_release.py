@@ -40,7 +40,7 @@ SOURCE=['backend/app','backend/alembic','backend/tests','backend/requirements.tx
 DOCS=['docs/architecture.md','docs/ai-architecture.md','docs/evidence-integrity.md','docs/development.md',
     'docs/security.md','docs/m2-implementation.md','docs/m3-implementation.md',
     'docs/m4-implementation.md','docs/m5-implementation.md','docs/m6-implementation.md','docs/README.md','docs/investigator-guide.md','docs/operations.md','docs/releases.md',
-    'docs/deployment-readiness-m6.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','CHANGELOG.md','LICENSE']
+    'docs/deployment-readiness-m6.md','docs/deployment-execution-checklist.md','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','CHANGELOG.md','LICENSE']
 
 
 def build(frontend,output):

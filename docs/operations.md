@@ -5,6 +5,15 @@ It separates public observations from historical host claims and defines the unk
 legacy backup branch, maintenance gates and fresh-target rollback. No production action
 is approved by these instructions or by passing CI.
 
+The [execution checklist](deployment-execution-checklist.md) records the confirmed
+legacy source 9b6e5c4d3a21, frozen application candidate and six-step migration suffix.
+The source already includes workspace backfill. Use native legacy backup/recovery
+before upgrading it; current M5 backup is not compatible with that old schema.
+Production inspection found HTTP-localhost CORS and a disabled renewal timer. Their
+corrections, private disk-backed TMPDIR/cache roots and operating limits are prepared
+in the assessment, not applied. Original storage paths belong only in the private
+operator worksheet. Synthetic restore success is not a real-baseline restore drill.
+
 These commands describe implemented local/disposable workflows. M5 did not access,
 back up, change or deploy the live AWS system. Never substitute production targets
 into tests. The application is not certified forensic software.
